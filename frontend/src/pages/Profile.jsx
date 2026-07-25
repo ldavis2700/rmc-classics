@@ -38,11 +38,12 @@ export default function Profile() {
           </button>
         </div>
 
-        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-5">
           <StatTile label="Total wins" value={user.total_wins || 0} color="#FFD100" />
           <StatTile label="Games played" value={user.total_plays || 0} color="#00F0FF" />
           <StatTile label="Win rate" value={`${winRate}%`} color="#39FF14" />
-          <StatTile label="Rank" value="—" color="#FF479A" />
+          <StatTile label="XP" value={user.xp || 0} color="#FF479A" />
+          <StatTile label="Streak" value={`${user.streak || 0}d`} color="#FFD100" />
         </div>
       </div>
 

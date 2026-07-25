@@ -54,7 +54,7 @@ export default function DailyChallenge() {
   }
 
   if (!data) return null;
-  const { challenge, progress, claimed, xp_reward } = data;
+  const { challenge, progress, claimed, xp_reward, streak = 0, multiplier = 1 } = data;
   const game = challenge.game_id ? GAME_MAP[challenge.game_id] : null;
   const pct = Math.min(100, Math.round(((progress || 0) / challenge.goal) * 100));
 
@@ -89,6 +89,26 @@ export default function DailyChallenge() {
             {challenge.title}
           </h3>
           <p className="mt-1 text-sm text-[#c9c8e2]">{challenge.desc}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <span
+              className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-pixel"
+              style={{
+                borderColor: streak > 0 ? "rgba(255,71,154,0.45)" : "rgba(255,255,255,0.15)",
+                color: streak > 0 ? "#FF479A" : "#a3a1c6",
+              }}
+              data-testid="daily-streak"
+            >
+              🔥 {streak}d streak
+            </span>
+            {multiplier > 1 && (
+              <span
+                className="rounded-full border border-neon-yellow/50 bg-neon-yellow/10 px-2 py-0.5 font-pixel text-neon-yellow"
+                data-testid="daily-multiplier"
+              >
+                {multiplier}× XP
+              </span>
+            )}
+          </div>
           <div className="mt-3">
             <div className="h-2 w-full overflow-hidden rounded-full bg-white/5">
               <div

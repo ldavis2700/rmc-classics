@@ -20,6 +20,10 @@ import CrazyEights from "@/pages/games/CrazyEights";
 import Chess from "@/pages/games/Chess";
 import Uno from "@/pages/games/Uno";
 import Ludo from "@/pages/games/Ludo";
+import Scrabble from "@/pages/games/Scrabble";
+import Dominoes from "@/pages/games/Dominoes";
+import Battles from "@/pages/Battles";
+import BattlePlay from "@/pages/BattlePlay";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -63,6 +67,24 @@ function App() {
               <Route path="/play/chess" element={<Chess />} />
               <Route path="/play/uno" element={<Uno />} />
               <Route path="/play/ludo" element={<Ludo />} />
+              <Route path="/play/scrabble" element={<Scrabble />} />
+              <Route path="/play/dominoes" element={<Dominoes />} />
+              <Route
+                path="/battles"
+                element={
+                  <ProtectedRoute>
+                    <Battles />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/battle/:roomId"
+                element={
+                  <ProtectedRoute>
+                    <BattlePlay />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Layout>

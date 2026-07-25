@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 3 testing: Scrabble Solo + Dominoes + Streak/Multiplier + Friend Battles (Connect Four 1v1). Backend: 17/17 pytest tests passed. games/meta returns exactly 11 games including scrabble & dominoes. POST /games/submit accepts scrabble & dominoes and tracks plays/wins/best_score. /challenge/today includes streak(int)+multiplier(float)+xp_reward and requires auth; streak=0/mult=1.0/xp_reward=100 for fresh user; completing challenge sets streak=1 and streak_last_date=today. Battles: create returns 6x7 zero board + status=waiting + turn=host; join by different user flips to playing; host-idempotent join returns 200; 3rd user gets 400 'Battle already full'; unknown room -> 404; wrong-turn/invalid-column/full-column all -> 400; vertical 4-in-a-row detected as host win with win_cells; both players' connect4 stats incremented (winner also gets wins++). Frontend: Home shows 11 game cards including Scrabble Solo & Dominoes, 'Eleven timeless classics', '11 CLASSIC GAMES' stat, Battles nav item, and 'Challenge a friend / Open lobby' teaser. /play/scrabble loads with 7 tiles (values shown), Play/Shuffle/Skip buttons; Validity chip toggles VALID/NOT IN DICT; Skip advances round counter. /play/dominoes loads with CPU-hand backs, chain (opener double 6|6 shown), 7-tile you-hand, Play left/right disabled until tile selected, 'Tile doesn't match that end.' message on mismatch. /battles (auth) works; battle-create-btn navigates to /battle/<6-uppercase-hex>; battle-status shows 'Waiting for opponent…' with drop buttons disabled; Copy link + Share buttons present. When a 2nd logged-in user opens the URL, status flips to playing; guest's drop buttons re-enable after host moves; polling refresh confirmed within ~2s.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "public/index.html", "issue": "Still missing <link rel=\"manifest\"> and duplicate posthog block / stray </body></html> below line 110 (carry-over from iteration 2). Not blocking gameplay but breaks PWA install and produces malformed HTML tail.", "selector": "index.html", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "(Optional / carry-over) Fix index.html: add <link rel=\"manifest\" href=\"%PUBLIC_URL%/manifest.json\" /> and remove duplicated script/closing tags below line 110."
+  ],
+  "critical_code_review_comments": [
+    "server.py: _battle_rooms is an in-memory dict — rooms are lost on backend restart and are not shared across multiple backend workers. Fine for MVP/single-process; note for scale.",
+    "server.py streak logic correctly increments only when last_claim == yesterday; on gap it resets to 1. Verified via test_challenge_completion_streak_increments (streak 0 -> 1).",
+    "server.py XP multiplier is applied to the just-earned base XP AND to the daily bonus using post-increment new_streak — this is intentional and consistent with spec.",
+    "battle_move: player_marker=1 for host, 2 for guest — matches BattlePlay.jsx colouring (v===1 pink, v===2 cyan). Confirmed visually.",
+    "battle move endpoint returns 400 for wrong-turn instead of 403 — spec matches; acceptable."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "100% for iteration-3 scope (scrabble/dominoes/battles/streak chips all functional)"},
+  "test_credentials": "admin@rmc.com / admin123 (seeded). Guest UI user registered via API: guest_<hex>@rmc.com / pass1234.",
+  "seed_data_creation": "Backend pytest registers ~6 users per run (test_, usera_, userb_, userc_, sub_, streak_). Playwright registered 1 additional guest_ user for 2-user battle E2E.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 3 fully covered by /app/backend/tests/backend_test.py (17 tests). Key testids: scrabble-{score,word,rack,tile-<i>,validity,submit,shuffle,skip,note}; dominoes-{turn,cpu-hand,chain,you-hand,tile-<i>,play-left,play-right,draw,message}; battles-page: battle-{create-btn,code-input,join-btn}; battle room: battle-{room-id,back,copy-link,share,board,drop-<c>,status}; daily-streak/daily-multiplier chips (multiplier chip only renders when >1). Room IDs are 6-char uppercase hex from uuid4().hex[:6].upper(). Battle polling ~1500ms. In-memory _battle_rooms dict — restart backend to reset. On the frontend register form: /register renders a form with fields Name (label 'name'), Email, Password. During this run we bypassed UI registration by calling API directly because the form field selectors were tricky; API register works.",
+  "rca of the issue": "No new bugs identified in iteration 3 scope. Only outstanding issue is the index.html PWA manifest link + duplicated tail carried over from iteration 2."
+}

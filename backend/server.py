@@ -22,7 +22,7 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_MINUTES = 60 * 24 * 7  # 7 days for MVP simplicity
 
-GAME_IDS = {"memory", "snakes", "connect4", "checkers", "rps", "crazy8", "chess", "uno", "ludo"}
+GAME_IDS = {"memory", "snakes", "connect4", "checkers", "rps", "crazy8", "chess", "uno", "ludo", "scrabble", "dominoes"}
 GAME_META = {
     "memory": {"name": "Memory Match", "score_dir": "asc"},   # lower moves better
     "snakes": {"name": "Snakes & Ladders", "score_dir": "desc"},
@@ -33,6 +33,8 @@ GAME_META = {
     "chess": {"name": "Chess", "score_dir": "desc"},
     "uno": {"name": "Uno", "score_dir": "desc"},
     "ludo": {"name": "Ludo", "score_dir": "desc"},
+    "scrabble": {"name": "Scrabble Solo", "score_dir": "desc"},
+    "dominoes": {"name": "Dominoes", "score_dir": "desc"},
 }
 
 # XP awarded
@@ -50,9 +52,23 @@ DAILY_CHALLENGES = [
     {"id": "win-chess", "title": "Grandmaster", "desc": "Win 1 Chess game", "game_id": "chess", "type": "win", "goal": 1},
     {"id": "win-uno", "title": "Wild Card", "desc": "Win 1 Uno game", "game_id": "uno", "type": "win", "goal": 1},
     {"id": "win-ludo", "title": "Home Run", "desc": "Get all your Ludo tokens home", "game_id": "ludo", "type": "win", "goal": 1},
+    {"id": "win-scrabble", "title": "Word Wizard", "desc": "Beat par in Scrabble Solo", "game_id": "scrabble", "type": "win", "goal": 1},
+    {"id": "win-dominoes", "title": "Chain Reaction", "desc": "Win 1 Dominoes match", "game_id": "dominoes", "type": "win", "goal": 1},
     {"id": "play-3", "title": "Warm Up", "desc": "Play any 3 games today", "game_id": None, "type": "plays", "goal": 3},
     {"id": "win-2", "title": "Double Down", "desc": "Win any 2 games today", "game_id": None, "type": "wins", "goal": 2},
 ]
+
+
+def streak_multiplier(streak: int) -> float:
+    if streak >= 100:
+        return 5.0
+    if streak >= 30:
+        return 3.0
+    if streak >= 7:
+        return 2.0
+    if streak >= 3:
+        return 1.5
+    return 1.0
 
 
 def today_str() -> str:
@@ -127,6 +143,8 @@ def public_user(doc: dict) -> dict:
         "total_wins": doc.get("total_wins", 0),
         "total_plays": doc.get("total_plays", 0),
         "xp": doc.get("xp", 0),
+        "streak": doc.get("streak", 0),
+        "streak_last_date": doc.get("streak_last_date"),
         "created_at": doc.get("created_at"),
     }
 
@@ -247,8 +265,11 @@ async def submit_score(body: SubmitScoreIn, user: dict = Depends(get_current_use
     total_plays = sum(int(s.get("plays", 0)) for s in stats.values())
     total_wins = sum(int(s.get("wins", 0)) for s in stats.values())
 
-    # XP
-    xp_gain = XP_PLAY + (XP_WIN if body.won else 0)
+    # XP with streak multiplier
+    streak = int(user.get("streak", 0))
+    mult = streak_multiplier(streak)
+    base_xp = XP_PLAY + (XP_WIN if body.won else 0)
+    xp_gain = int(base_xp * mult)
 
     # Daily challenge progress
     today = today_str()
@@ -268,23 +289,37 @@ async def submit_score(body: SubmitScoreIn, user: dict = Depends(get_current_use
             daily["progress"] = int(daily.get("progress", 0)) + 1
             matches = True
     challenge_completed = False
+    new_streak = streak
     if matches and not daily.get("claimed") and int(daily.get("progress", 0)) >= int(challenge["goal"]):
         daily["claimed"] = True
-        xp_gain += XP_DAILY_BONUS
+        # Streak logic
+        last_claim = user.get("streak_last_date")
+        yesterday = (datetime.now(timezone.utc).date() - timedelta(days=1)).strftime("%Y-%m-%d")
+        if last_claim == yesterday:
+            new_streak = streak + 1
+        elif last_claim == today:
+            new_streak = streak  # already counted (edge)
+        else:
+            new_streak = 1
+        mult_after = streak_multiplier(new_streak)
+        bonus = int(XP_DAILY_BONUS * mult_after)
+        xp_gain += bonus
         challenge_completed = True
 
     new_xp = int(user.get("xp", 0)) + xp_gain
 
-    await db.users.update_one(
-        {"id": user["id"]},
-        {"$set": {
-            "stats": stats,
-            "total_wins": total_wins,
-            "total_plays": total_plays,
-            "xp": new_xp,
-            "daily": daily,
-        }},
-    )
+    update_fields = {
+        "stats": stats,
+        "total_wins": total_wins,
+        "total_plays": total_plays,
+        "xp": new_xp,
+        "daily": daily,
+    }
+    if challenge_completed:
+        update_fields["streak"] = new_streak
+        update_fields["streak_last_date"] = today
+
+    await db.users.update_one({"id": user["id"]}, {"$set": update_fields})
     await db.game_events.insert_one({
         "id": str(uuid.uuid4()),
         "user_id": user["id"],
@@ -308,11 +343,15 @@ async def challenge_today(user: dict = Depends(get_current_user)):
     daily = user.get("daily") or {}
     if daily.get("date") != today:
         daily = {"date": today, "progress": 0, "claimed": False}
+    streak = int(user.get("streak", 0))
+    mult = streak_multiplier(streak)
     return {
         "challenge": ch,
         "progress": int(daily.get("progress", 0)),
         "claimed": bool(daily.get("claimed", False)),
-        "xp_reward": XP_DAILY_BONUS,
+        "xp_reward": int(XP_DAILY_BONUS * mult),
+        "streak": streak,
+        "multiplier": mult,
     }
 
 
@@ -365,6 +404,180 @@ async def game_leaderboard(game_id: str, limit: int = 20):
 @api.get("/games/meta")
 async def games_meta():
     return {"games": GAME_META}
+
+
+# ---------- Friend Battles (Connect Four PvP) ----------
+# In-memory battle rooms. Keep it simple; polling API.
+BATTLE_ROWS = 6
+BATTLE_COLS = 7
+_battle_rooms: Dict[str, Dict[str, Any]] = {}
+
+
+def _empty_board():
+    return [[0 for _ in range(BATTLE_COLS)] for _ in range(BATTLE_ROWS)]
+
+
+def _c4_drop(board, col, player):
+    for r in range(BATTLE_ROWS - 1, -1, -1):
+        if board[r][col] == 0:
+            board[r][col] = player
+            return r
+    return None
+
+
+def _c4_win(board, player):
+    dirs = [(0, 1), (1, 0), (1, 1), (1, -1)]
+    for r in range(BATTLE_ROWS):
+        for c in range(BATTLE_COLS):
+            if board[r][c] != player:
+                continue
+            for dr, dc in dirs:
+                cells = []
+                ok = True
+                for k in range(4):
+                    nr, nc = r + dr * k, c + dc * k
+                    if not (0 <= nr < BATTLE_ROWS and 0 <= nc < BATTLE_COLS) or board[nr][nc] != player:
+                        ok = False
+                        break
+                    cells.append([nr, nc])
+                if ok:
+                    return cells
+    return None
+
+
+def _c4_full(board):
+    return all(board[0][c] != 0 for c in range(BATTLE_COLS))
+
+
+def _public_room(room: dict) -> dict:
+    return {
+        "id": room["id"],
+        "host_id": room["host_id"],
+        "host_name": room["host_name"],
+        "guest_id": room.get("guest_id"),
+        "guest_name": room.get("guest_name"),
+        "board": room["board"],
+        "turn": room["turn"],
+        "winner": room["winner"],
+        "win_cells": room.get("win_cells"),
+        "moves": room["moves"],
+        "status": room["status"],
+        "created_at": room["created_at"],
+        "last_move_at": room.get("last_move_at"),
+    }
+
+
+class MoveIn(BaseModel):
+    col: int
+
+
+@api.post("/battle/create")
+async def create_battle(user: dict = Depends(get_current_user)):
+    rid = uuid.uuid4().hex[:6].upper()
+    room = {
+        "id": rid,
+        "host_id": user["id"],
+        "host_name": user.get("name", "Host"),
+        "guest_id": None,
+        "guest_name": None,
+        "board": _empty_board(),
+        "turn": "host",
+        "winner": None,
+        "win_cells": None,
+        "moves": 0,
+        "status": "waiting",  # waiting -> playing -> ended
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _battle_rooms[rid] = room
+    return _public_room(room)
+
+
+@api.post("/battle/{room_id}/join")
+async def join_battle(room_id: str, user: dict = Depends(get_current_user)):
+    room = _battle_rooms.get(room_id.upper())
+    if not room:
+        raise HTTPException(status_code=404, detail="Battle not found")
+    if room["host_id"] == user["id"]:
+        return _public_room(room)
+    if room.get("guest_id") and room["guest_id"] != user["id"]:
+        raise HTTPException(status_code=400, detail="Battle already full")
+    room["guest_id"] = user["id"]
+    room["guest_name"] = user.get("name", "Guest")
+    room["status"] = "playing"
+    return _public_room(room)
+
+
+@api.get("/battle/{room_id}")
+async def get_battle(room_id: str, user: dict = Depends(get_current_user)):
+    room = _battle_rooms.get(room_id.upper())
+    if not room:
+        raise HTTPException(status_code=404, detail="Battle not found")
+    return _public_room(room)
+
+
+@api.post("/battle/{room_id}/move")
+async def battle_move(room_id: str, body: MoveIn, user: dict = Depends(get_current_user)):
+    room = _battle_rooms.get(room_id.upper())
+    if not room:
+        raise HTTPException(status_code=404, detail="Battle not found")
+    if room["status"] != "playing":
+        raise HTTPException(status_code=400, detail="Battle not active")
+    is_host = user["id"] == room["host_id"]
+    is_guest = user["id"] == room.get("guest_id")
+    if not (is_host or is_guest):
+        raise HTTPException(status_code=403, detail="Not a player in this battle")
+    my_turn = (is_host and room["turn"] == "host") or (is_guest and room["turn"] == "guest")
+    if not my_turn:
+        raise HTTPException(status_code=400, detail="Not your turn")
+    col = int(body.col)
+    if col < 0 or col >= BATTLE_COLS:
+        raise HTTPException(status_code=400, detail="Invalid column")
+    player_marker = 1 if is_host else 2
+    dropped = _c4_drop(room["board"], col, player_marker)
+    if dropped is None:
+        raise HTTPException(status_code=400, detail="Column full")
+    room["moves"] += 1
+    room["last_move_at"] = datetime.now(timezone.utc).isoformat()
+    win = _c4_win(room["board"], player_marker)
+    if win:
+        room["winner"] = "host" if is_host else "guest"
+        room["win_cells"] = win
+        room["status"] = "ended"
+    elif _c4_full(room["board"]):
+        room["winner"] = "draw"
+        room["status"] = "ended"
+    else:
+        room["turn"] = "guest" if room["turn"] == "host" else "host"
+    # Award XP/stats on win (both players get plays; winner gets win)
+    if room["status"] == "ended":
+        await _award_battle_result(room)
+    return _public_room(room)
+
+
+async def _award_battle_result(room: dict):
+    winner = room.get("winner")
+    for uid, is_h in [(room["host_id"], True), (room.get("guest_id"), False)]:
+        if not uid:
+            continue
+        u = await db.users.find_one({"id": uid}, {"_id": 0})
+        if not u:
+            continue
+        stats = u.get("stats") or empty_stats()
+        gstat = stats.get("connect4") or {"plays": 0, "wins": 0, "best_score": None}
+        gstat["plays"] += 1
+        won = (winner == "host" and is_h) or (winner == "guest" and not is_h)
+        if won:
+            gstat["wins"] += 1
+        stats["connect4"] = gstat
+        total_wins = sum(int(s.get("wins", 0)) for s in stats.values())
+        total_plays = sum(int(s.get("plays", 0)) for s in stats.values())
+        streak = int(u.get("streak", 0))
+        mult = streak_multiplier(streak)
+        base = XP_PLAY + (XP_WIN if won else 0)
+        new_xp = int(u.get("xp", 0)) + int(base * mult)
+        await db.users.update_one({"id": uid}, {"$set": {
+            "stats": stats, "total_wins": total_wins, "total_plays": total_plays, "xp": new_xp,
+        }})
 
 
 @api.get("/")

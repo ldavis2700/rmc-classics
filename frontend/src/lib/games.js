@@ -98,6 +98,28 @@ export const GAMES = [
       "Get all your tokens home before the CPU does. Land on the CPU to send them back.",
     era: "6th Century India",
   },
+  {
+    id: "scrabble",
+    name: "Scrabble Solo",
+    tagline: "Seven letters. One word.",
+    color: "#39FF14",
+    accent: "#FFD100",
+    path: "/play/scrabble",
+    description:
+      "Five rounds. Seven random tiles each round. Build the highest scoring word you can.",
+    era: "1938",
+  },
+  {
+    id: "dominoes",
+    name: "Dominoes",
+    tagline: "Match the ends. Empty first.",
+    color: "#FFD100",
+    accent: "#00F0FF",
+    path: "/play/dominoes",
+    description:
+      "Classic block dominoes. Chain your tiles, block the CPU, empty your hand to win.",
+    era: "12th Century China",
+  },
 ];
 
 export const GAME_MAP = Object.fromEntries(GAMES.map((g) => [g.id, g]));
