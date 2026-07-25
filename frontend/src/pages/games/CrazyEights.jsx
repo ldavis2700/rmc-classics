@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import GameShell from "@/components/rmc/GameShell";
+import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import { GAME_MAP } from "@/lib/games";
 
 const SUITS = [
   { id: "♠", color: "#FFFFFF" },
@@ -41,6 +43,8 @@ export default function CrazyEights() {
   const [winner, setWinner] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [message, setMessage] = useState("Play a card that matches suit or rank.");
+  const [shareOpen, setShareOpen] = useState(false);
+  const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
 
   const init = () => {
     let deck = buildDeck();
@@ -54,6 +58,7 @@ export default function CrazyEights() {
     setPickSuit(false);
     setWinner(null);
     setSubmitted(false);
+    setShareOpen(false);
     setMessage("Play a card that matches suit or rank.");
   };
 
@@ -66,10 +71,14 @@ export default function CrazyEights() {
       const won = winner === "you";
       won ? sfx.win() : sfx.lose();
       toast[won ? "success" : "error"](won ? "Empty hand — you win!" : "CPU emptied first.");
+      setSubmitted(true);
       if (user) {
-        submitScore({ game_id: "crazy8", won, score: won ? 1 : 0 }).then(() => setSubmitted(true));
+        submitScore({ game_id: "crazy8", won, score: won ? 1 : 0 }).then((res) => {
+          if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed });
+          setShareOpen(true);
+        });
       } else {
-        setSubmitted(true);
+        setShareOpen(true);
       }
     }
   }, [winner, submitted, user, submitScore]);
@@ -286,6 +295,16 @@ export default function CrazyEights() {
           );
         })}
       </div>
+      <ShareCard
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        game={GAME_MAP.crazy8}
+        won={winner === "you"}
+        statLabel="Cards left"
+        statValue={winner === "cpu" ? state.you.length : 0}
+        xpGained={xpInfo.xp}
+        challengeCompleted={xpInfo.done}
+      />
     </GameShell>
   );
 }

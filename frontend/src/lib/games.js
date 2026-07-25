@@ -65,6 +65,39 @@ export const GAMES = [
       "The card game that started sleepovers. Match suit or rank - 8s are wild.",
     era: "1930s",
   },
+  {
+    id: "chess",
+    name: "Chess",
+    tagline: "The eternal duel.",
+    color: "#FFFFFF",
+    accent: "#FFD100",
+    path: "/play/chess",
+    description:
+      "The 1500-year-old strategy classic. Take on the arcade CPU one piece at a time.",
+    era: "6th Century",
+  },
+  {
+    id: "uno",
+    name: "Uno",
+    tagline: "Skip. Reverse. WILD!",
+    color: "#FF479A",
+    accent: "#FFD100",
+    path: "/play/uno",
+    description:
+      "The chaotic card party. Match colours or numbers, throw wilds, don't forget to shout it.",
+    era: "1971",
+  },
+  {
+    id: "ludo",
+    name: "Ludo",
+    tagline: "Roll six or go home.",
+    color: "#00F0FF",
+    accent: "#FF479A",
+    path: "/play/ludo",
+    description:
+      "Get all your tokens home before the CPU does. Land on the CPU to send them back.",
+    era: "6th Century India",
+  },
 ];
 
 export const GAME_MAP = Object.fromEntries(GAMES.map((g) => [g.id, g]));

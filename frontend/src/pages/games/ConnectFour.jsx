@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import GameShell from "@/components/rmc/GameShell";
+import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import { GAME_MAP } from "@/lib/games";
 
 const ROWS = 6;
 const COLS = 7;
@@ -81,16 +83,22 @@ export default function ConnectFour() {
   const [winCells, setWinCells] = useState(null);
   const [winner, setWinner] = useState(0);
   const [submitted, setSubmitted] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
 
   useEffect(() => {
     if (winner && !submitted) {
       const won = winner === 1;
       won ? sfx.win() : sfx.lose();
       toast[won ? "success" : "error"](won ? "Four in a row!" : "CPU got four.");
+      setSubmitted(true);
       if (user) {
-        submitScore({ game_id: "connect4", won, score: won ? 1 : 0 }).then(() => setSubmitted(true));
+        submitScore({ game_id: "connect4", won, score: won ? 1 : 0 }).then((res) => {
+          if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed });
+          setShareOpen(true);
+        });
       } else {
-        setSubmitted(true);
+        setShareOpen(true);
       }
     }
   }, [winner, submitted, user, submitScore]);
@@ -142,6 +150,7 @@ export default function ConnectFour() {
     setWinCells(null);
     setWinner(0);
     setSubmitted(false);
+    setShareOpen(false);
   };
 
   const cellHighlight = (r, c) => winCells?.some(([wr, wc]) => wr === r && wc === c);
@@ -201,6 +210,14 @@ export default function ConnectFour() {
           )}
         </div>
       </div>
+      <ShareCard
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        game={GAME_MAP.connect4}
+        won={winner === 1}
+        xpGained={xpInfo.xp}
+        challengeCompleted={xpInfo.done}
+      />
     </GameShell>
   );
 }

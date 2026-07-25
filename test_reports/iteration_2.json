@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 2 testing: Chess/Uno/Ludo + Daily Challenge + Share Card + PWA. Backend: 18/18 pytest tests passed (games/meta returns 9 games; POST /games/submit accepts chess/uno/ludo with correct XP; xp_gained/challenge_completed booleans present; unknown game_id rejected 400; /challenge/today shape+auth+deterministic; challenge completion awards +100 XP bonus once and sets claimed=true). Frontend: /play/chess loads chess-board with all 32 pieces, e2->e4 move works; /play/uno loads with top card visible, hand of 7 cards, uno-draw button; /play/ludo loads with track, You/CPU panels, ludo-roll works and CPU takes turn when not-6 with all tokens home; ShareCard modal auto-opens after game (verified via RPS series) with share-native-btn/share-copy-btn/share-close-btn all present; Home shows 9 game cards + DailyChallenge banner + '9 CLASSIC GAMES' stat; manifest.json + logo.svg + service-worker.js all served 200.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "public/index.html", "issue": "Missing <link rel=\"manifest\" href=\"/manifest.json\"> tag. Comment says 'manifest.json is linked above' but no actual link element exists. Chrome will not fire beforeinstallprompt without it, breaking PWA install.", "selector": "link[rel=manifest]", "priority": "HIGH"},
+      {"component": "public/index.html", "issue": "Malformed file: duplicate posthog init script and stray content after </html> on lines 111-131 (second </body></html>). File should end at line 110.", "selector": "index.html:111-131", "priority": "MEDIUM"},
+      {"component": "ShareCard.jsx (Radix Dialog)", "issue": "Console warning: 'DialogContent requires a DialogTitle for accessibility'. Add a <DialogTitle> (or VisuallyHidden wrapper) inside DialogContent.", "selector": "[data-testid=share-card-modal]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Add <link rel=\"manifest\" href=\"%PUBLIC_URL%/manifest.json\" /> inside <head> of /app/frontend/public/index.html (currently missing).",
+    "Remove duplicate content after </html> on lines 111-131 of index.html.",
+    "Add DialogTitle (VisuallyHidden if not visually needed) inside ShareCard DialogContent to satisfy Radix a11y."
+  ],
+  "critical_code_review_comments": [
+    "server.py: XP_DAILY_BONUS logic looks correct — checked-after-progress guard via 'daily.get(claimed)' prevents double-award.",
+    "server.py: get_todays_challenge uses date.toordinal() % len(DAILY_CHALLENGES) — deterministic per UTC day, verified.",
+    "public_user does not expose 'daily' field. Frontend DailyChallenge component must fetch /api/challenge/today separately (verified working)."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "~95% (all core flows work; index.html manifest link + malformed tail need main-agent fix)"},
+  "test_credentials": "admin@rmc.com / admin123 (seeded). E2E users created per run (test_<uuid>@rmc.com / pass1234, e2e_<ts>@rmc.com / pass1234).",
+  "seed_data_creation": "Backend pytest registers ~7 new test_/mem_/e2e_ users per run. Playwright registered 2 additional e2e users. All namespaced.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend fully covered by /app/backend/tests/backend_test.py (18 tests). New tests: test_games_meta_has_9, test_submit_new_games[chess|uno|ludo], test_challenge_today_*, test_challenge_completion_awards_bonus, test_leaderboard_new_games[*]. Chess uses data-testid chess-cell-<algebraic> (e.g. chess-cell-e2). UNO top card has no data-testid (visible via layout). Ludo testids: ludo-roll, ludo-dice, ludo-message, ludo-{side}-token-{i}. Share modal testids: share-card-modal, share-native-btn, share-copy-btn, share-close-btn. DailyChallenge testid: daily-challenge, daily-play-cta, daily-login-cta. Only outstanding items are index.html manifest link + tail garbage + Dialog a11y warning.",
+  "rca of the issue": "index.html: developer left comment '<!-- manifest.json is linked above -->' but never inserted the actual <link rel=manifest> element. Fix: insert <link rel=\"manifest\" href=\"%PUBLIC_URL%/manifest.json\" /> before the comment. Also delete stray lines 111-131 (duplicated posthog snippet + extra </body></html>)."
+}

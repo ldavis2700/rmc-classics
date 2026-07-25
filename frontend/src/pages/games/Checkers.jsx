@@ -101,6 +101,8 @@ export default function Checkers() {
   const [turn, setTurn] = useState("you");
   const [winner, setWinner] = useState(null);
   const [submitted, setSubmitted] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
 
   const legal = useMemo(() => (turn === "you" ? allMoves(board, "you") : []), [board, turn]);
   const highlightForSelected = useMemo(() => {
@@ -113,10 +115,14 @@ export default function Checkers() {
       const won = winner === "you";
       won ? sfx.win() : sfx.lose();
       toast[won ? "success" : "error"](won ? "You cleaned the board!" : "CPU cleaned the board.");
+      setSubmitted(true);
       if (user) {
-        submitScore({ game_id: "checkers", won, score: won ? 1 : 0 }).then(() => setSubmitted(true));
+        submitScore({ game_id: "checkers", won, score: won ? 1 : 0 }).then((res) => {
+          if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed });
+          setShareOpen(true);
+        });
       } else {
-        setSubmitted(true);
+        setShareOpen(true);
       }
     }
   }, [winner, submitted, user, submitScore]);
@@ -201,6 +207,7 @@ export default function Checkers() {
     setTurn("you");
     setWinner(null);
     setSubmitted(false);
+    setShareOpen(false);
   };
 
   const isTarget = (r, c) => highlightForSelected.some((m) => m.to[0] === r && m.to[1] === c);

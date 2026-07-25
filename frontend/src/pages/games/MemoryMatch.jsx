@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import GameShell from "@/components/rmc/GameShell";
+import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import { GAME_MAP } from "@/lib/games";
 
 const SYMBOLS = ["★", "◆", "▲", "●", "♥", "♣", "☀", "☾"];
 
@@ -20,6 +22,8 @@ export default function MemoryMatch() {
   const [moves, setMoves] = useState(0);
   const [locked, setLocked] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
 
   const won = useMemo(() => deck.every((c) => c.matched), [deck]);
 
@@ -27,10 +31,14 @@ export default function MemoryMatch() {
     if (won && !submitted) {
       sfx.win();
       toast.success(`Cleared in ${moves} moves!`);
+      setSubmitted(true);
       if (user) {
-        submitScore({ game_id: "memory", won: true, score: moves }).then(() => setSubmitted(true));
+        submitScore({ game_id: "memory", won: true, score: moves }).then((res) => {
+          if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed });
+          setShareOpen(true);
+        });
       } else {
-        setSubmitted(true);
+        setShareOpen(true);
       }
     }
   }, [won, submitted, moves, user, submitScore]);
@@ -68,6 +76,7 @@ export default function MemoryMatch() {
     setMoves(0);
     setLocked(false);
     setSubmitted(false);
+    setShareOpen(false);
   };
 
   return (
@@ -116,6 +125,16 @@ export default function MemoryMatch() {
           </p>
         </div>
       )}
+      <ShareCard
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        game={GAME_MAP.memory}
+        won={won}
+        statLabel="Moves"
+        statValue={moves}
+        xpGained={xpInfo.xp}
+        challengeCompleted={xpInfo.done}
+      />
     </GameShell>
   );
 }

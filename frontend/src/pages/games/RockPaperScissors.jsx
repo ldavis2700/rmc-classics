@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import GameShell from "@/components/rmc/GameShell";
+import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import { GAME_MAP } from "@/lib/games";
 
 const CHOICES = [
   { id: "rock", label: "Rock", emoji: "✊", color: "#FF479A" },
@@ -24,16 +26,22 @@ export default function RockPaperScissors() {
   const [finished, setFinished] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
 
   useEffect(() => {
     if (finished && !submitted) {
       const won = finished === "you";
       won ? sfx.win() : sfx.lose();
       toast[won ? "success" : "error"](won ? "Series won!" : "Series lost.");
+      setSubmitted(true);
       if (user) {
-        submitScore({ game_id: "rps", won, score: won ? 1 : 0 }).then(() => setSubmitted(true));
+        submitScore({ game_id: "rps", won, score: won ? 1 : 0 }).then((res) => {
+          if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed });
+          setShareOpen(true);
+        });
       } else {
-        setSubmitted(true);
+        setShareOpen(true);
       }
     }
   }, [finished, submitted, user, submitScore]);
@@ -66,7 +74,7 @@ export default function RockPaperScissors() {
 
   const reset = () => {
     setYou(0); setCpu(0); setRound(1); setLastYou(null); setLastCpu(null); setResult(null);
-    setFinished(null); setSubmitted(false);
+    setFinished(null); setSubmitted(false); setShareOpen(false);
   };
 
   return (
@@ -132,6 +140,16 @@ export default function RockPaperScissors() {
           </p>
         </div>
       )}
+      <ShareCard
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        game={GAME_MAP.rps}
+        won={finished === "you"}
+        statLabel="Rounds won"
+        statValue={you}
+        xpGained={xpInfo.xp}
+        challengeCompleted={xpInfo.done}
+      />
     </GameShell>
   );
 }

@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/sonner";
 
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import Layout from "@/components/rmc/Layout";
+import InstallPrompt from "@/components/rmc/InstallPrompt";
 import Home from "@/pages/Home";
 import Library from "@/pages/Library";
 import Leaderboard from "@/pages/Leaderboard";
@@ -16,6 +17,9 @@ import ConnectFour from "@/pages/games/ConnectFour";
 import Checkers from "@/pages/games/Checkers";
 import RockPaperScissors from "@/pages/games/RockPaperScissors";
 import CrazyEights from "@/pages/games/CrazyEights";
+import Chess from "@/pages/games/Chess";
+import Uno from "@/pages/games/Uno";
+import Ludo from "@/pages/games/Ludo";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -56,9 +60,13 @@ function App() {
               <Route path="/play/checkers" element={<Checkers />} />
               <Route path="/play/rps" element={<RockPaperScissors />} />
               <Route path="/play/crazy8" element={<CrazyEights />} />
+              <Route path="/play/chess" element={<Chess />} />
+              <Route path="/play/uno" element={<Uno />} />
+              <Route path="/play/ludo" element={<Ludo />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Layout>
+          <InstallPrompt />
           <Toaster theme="dark" richColors position="top-center" />
         </BrowserRouter>
       </AuthProvider>

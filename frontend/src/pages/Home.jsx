@@ -2,12 +2,13 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Sparkles, Gamepad2, Trophy, Zap } from "lucide-react";
 import GameCard from "@/components/rmc/GameCard";
+import DailyChallenge from "@/components/rmc/DailyChallenge";
 import { GAMES } from "@/lib/games";
 import { sfx } from "@/lib/sound";
 import { useAuth } from "@/context/AuthContext";
 
 const stats = [
-  { label: "Classic games", value: "6", icon: Gamepad2, color: "#00F0FF" },
+  { label: "Classic games", value: "9", icon: Gamepad2, color: "#00F0FF" },
   { label: "Live leaderboards", value: "∞", icon: Trophy, color: "#FFD100" },
   { label: "Retro sounds", value: "8-bit", icon: Zap, color: "#39FF14" },
 ];
@@ -144,6 +145,11 @@ export default function Home() {
         </div>
       </section>
 
+      {/* DAILY CHALLENGE */}
+      <section className="mt-10">
+        <DailyChallenge />
+      </section>
+
       {/* GAME GRID */}
       <section className="mt-14">
         <div className="mb-6 flex items-end justify-between">
@@ -178,7 +184,7 @@ export default function Home() {
       <section className="mt-16 rounded-3xl border border-white/10 bg-[#16152b] p-8 text-center">
         <p className="font-pixel text-xs text-neon-yellow">// COMING SOON</p>
         <h3 className="mt-2 font-display text-xl font-black uppercase tracking-tight text-white sm:text-2xl">
-          Ludo · Uno · Chess · Scrabble · Dominoes · Go Fish
+          Scrabble · Dominoes · Go Fish · Old Maid · Jenga
         </h3>
         <p className="mt-3 text-sm text-[#a3a1c6]">
           More childhood classics dropping soon. Sign up to get notified.

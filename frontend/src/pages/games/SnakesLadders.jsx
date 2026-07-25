@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import GameShell from "@/components/rmc/GameShell";
+import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import { GAME_MAP } from "@/lib/games";
 
 const LADDERS = { 3: 22, 8: 30, 20: 42, 27: 84, 51: 67, 71: 91, 80: 100 };
 const SNAKES = { 17: 4, 54: 34, 62: 19, 64: 60, 87: 24, 93: 73, 98: 79 };
@@ -35,6 +37,8 @@ export default function SnakesLadders() {
   const [busy, setBusy] = useState(false);
   const [finished, setFinished] = useState(null); // 'you' or 'cpu'
   const [submitted, setSubmitted] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
 
   const appendLog = (msg) => setLog((l) => [msg, ...l].slice(0, 6));
 
@@ -101,7 +105,7 @@ export default function SnakesLadders() {
   };
 
   const reset = () => {
-    setYou(0); setCpu(0); setTurn("you"); setDice(null); setLog([]); setFinished(null); setSubmitted(false);
+    setYou(0); setCpu(0); setTurn("you"); setDice(null); setLog([]); setFinished(null); setSubmitted(false); setShareOpen(false);
   };
 
   // Board rendering: 10x10 grid, zig-zag numbering

@@ -22,7 +22,7 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_MINUTES = 60 * 24 * 7  # 7 days for MVP simplicity
 
-GAME_IDS = {"memory", "snakes", "connect4", "checkers", "rps", "crazy8"}
+GAME_IDS = {"memory", "snakes", "connect4", "checkers", "rps", "crazy8", "chess", "uno", "ludo"}
 GAME_META = {
     "memory": {"name": "Memory Match", "score_dir": "asc"},   # lower moves better
     "snakes": {"name": "Snakes & Ladders", "score_dir": "desc"},
@@ -30,7 +30,39 @@ GAME_META = {
     "checkers": {"name": "Checkers", "score_dir": "desc"},
     "rps": {"name": "Rock Paper Scissors", "score_dir": "desc"},
     "crazy8": {"name": "Crazy Eights", "score_dir": "desc"},
+    "chess": {"name": "Chess", "score_dir": "desc"},
+    "uno": {"name": "Uno", "score_dir": "desc"},
+    "ludo": {"name": "Ludo", "score_dir": "desc"},
 }
+
+# XP awarded
+XP_PLAY = 5
+XP_WIN = 25
+XP_DAILY_BONUS = 100
+
+# Rotating daily challenges keyed by day-of-year % N
+DAILY_CHALLENGES = [
+    {"id": "win-memory", "title": "Match Master", "desc": "Win 1 Memory Match game", "game_id": "memory", "type": "win", "goal": 1},
+    {"id": "win-connect4", "title": "Four in a Row", "desc": "Win 1 Connect Four game", "game_id": "connect4", "type": "win", "goal": 1},
+    {"id": "win-rps", "title": "Hands of Fate", "desc": "Win 1 Rock Paper Scissors series", "game_id": "rps", "type": "win", "goal": 1},
+    {"id": "win-checkers", "title": "Board Sweep", "desc": "Win 1 Checkers game", "game_id": "checkers", "type": "win", "goal": 1},
+    {"id": "win-crazy8", "title": "Empty Hand", "desc": "Win 1 Crazy Eights game", "game_id": "crazy8", "type": "win", "goal": 1},
+    {"id": "win-chess", "title": "Grandmaster", "desc": "Win 1 Chess game", "game_id": "chess", "type": "win", "goal": 1},
+    {"id": "win-uno", "title": "Wild Card", "desc": "Win 1 Uno game", "game_id": "uno", "type": "win", "goal": 1},
+    {"id": "win-ludo", "title": "Home Run", "desc": "Get all your Ludo tokens home", "game_id": "ludo", "type": "win", "goal": 1},
+    {"id": "play-3", "title": "Warm Up", "desc": "Play any 3 games today", "game_id": None, "type": "plays", "goal": 3},
+    {"id": "win-2", "title": "Double Down", "desc": "Win any 2 games today", "game_id": None, "type": "wins", "goal": 2},
+]
+
+
+def today_str() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def get_todays_challenge() -> Dict[str, Any]:
+    d = datetime.now(timezone.utc).date()
+    day_index = d.toordinal() % len(DAILY_CHALLENGES)
+    return DAILY_CHALLENGES[day_index]
 
 # ---------- DB ----------
 mongo_url = os.environ['MONGO_URL']
@@ -94,6 +126,7 @@ def public_user(doc: dict) -> dict:
         "stats": doc.get("stats", empty_stats()),
         "total_wins": doc.get("total_wins", 0),
         "total_plays": doc.get("total_plays", 0),
+        "xp": doc.get("xp", 0),
         "created_at": doc.get("created_at"),
     }
 
@@ -161,6 +194,8 @@ async def register(body: RegisterIn):
         "stats": empty_stats(),
         "total_wins": 0,
         "total_plays": 0,
+        "xp": 0,
+        "daily": {"date": None, "progress": 0, "claimed": False},
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.users.insert_one(doc)
@@ -211,15 +246,45 @@ async def submit_score(body: SubmitScoreIn, user: dict = Depends(get_current_use
     stats[gid] = gstat
     total_plays = sum(int(s.get("plays", 0)) for s in stats.values())
     total_wins = sum(int(s.get("wins", 0)) for s in stats.values())
+
+    # XP
+    xp_gain = XP_PLAY + (XP_WIN if body.won else 0)
+
+    # Daily challenge progress
+    today = today_str()
+    daily = user.get("daily") or {}
+    if daily.get("date") != today:
+        daily = {"date": today, "progress": 0, "claimed": False}
+    challenge = get_todays_challenge()
+    matches = False
+    if not daily.get("claimed"):
+        if challenge["type"] == "win" and body.won and challenge.get("game_id") == gid:
+            daily["progress"] = int(daily.get("progress", 0)) + 1
+            matches = True
+        elif challenge["type"] == "wins" and body.won:
+            daily["progress"] = int(daily.get("progress", 0)) + 1
+            matches = True
+        elif challenge["type"] == "plays":
+            daily["progress"] = int(daily.get("progress", 0)) + 1
+            matches = True
+    challenge_completed = False
+    if matches and not daily.get("claimed") and int(daily.get("progress", 0)) >= int(challenge["goal"]):
+        daily["claimed"] = True
+        xp_gain += XP_DAILY_BONUS
+        challenge_completed = True
+
+    new_xp = int(user.get("xp", 0)) + xp_gain
+
     await db.users.update_one(
         {"id": user["id"]},
         {"$set": {
             "stats": stats,
             "total_wins": total_wins,
             "total_plays": total_plays,
+            "xp": new_xp,
+            "daily": daily,
         }},
     )
-    # append lightweight history for potential future features
     await db.game_events.insert_one({
         "id": str(uuid.uuid4()),
         "user_id": user["id"],
@@ -229,7 +294,26 @@ async def submit_score(body: SubmitScoreIn, user: dict = Depends(get_current_use
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
     updated = await db.users.find_one({"id": user["id"]}, {"_id": 0})
-    return {"user": public_user(updated)}
+    return {
+        "user": public_user(updated),
+        "xp_gained": xp_gain,
+        "challenge_completed": challenge_completed,
+    }
+
+
+@api.get("/challenge/today")
+async def challenge_today(user: dict = Depends(get_current_user)):
+    ch = get_todays_challenge()
+    today = today_str()
+    daily = user.get("daily") or {}
+    if daily.get("date") != today:
+        daily = {"date": today, "progress": 0, "claimed": False}
+    return {
+        "challenge": ch,
+        "progress": int(daily.get("progress", 0)),
+        "claimed": bool(daily.get("claimed", False)),
+        "xp_reward": XP_DAILY_BONUS,
+    }
 
 
 @api.get("/games/leaderboard")
@@ -307,6 +391,8 @@ async def startup():
             "stats": empty_stats(),
             "total_wins": 0,
             "total_plays": 0,
+            "xp": 0,
+            "daily": {"date": None, "progress": 0, "claimed": False},
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
         logger.info("Seeded admin user %s", admin_email)

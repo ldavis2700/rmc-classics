@@ -60,7 +60,12 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await api.post("/games/submit", payload);
       setUser(data.user);
-      return { ok: true, user: data.user };
+      return {
+        ok: true,
+        user: data.user,
+        xp_gained: data.xp_gained || 0,
+        challenge_completed: !!data.challenge_completed,
+      };
     } catch (e) {
       return { ok: false, error: formatApiErrorDetail(e.response?.data?.detail) };
     }
