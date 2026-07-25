@@ -4,65 +4,57 @@
 > Build Me, a public game app, named "RMC CLASSICS", that contains and makes playable, all the most popular games from childhood. The "RMC" in the name stands for "Remembering My Childhood".
 
 ## Vision
-A mobile-first, installable web app that resurrects childhood classic games in one nostalgic, app-store-worthy destination. Users compete on global leaderboards, chase daily challenges, and share their wins to grow the community organically.
+A mobile-first, installable web app that resurrects childhood classic games in one nostalgic, app-store-worthy destination. Users compete on global leaderboards, chase daily challenges (with escalating streak multipliers), play head-to-head with friends via shareable links, and share their wins to grow the community organically.
 
 ## User Personas
 - **The Nostalgic Adult (25-45)** — plays during downtime to relive childhood memories
 - **The Casual Mobile Gamer** — quick 2-5 minute sessions between tasks
 - **The Competitor** — chases leaderboard rank across all games
-- **The Daily Grinder** — logs in every day for the daily challenge & XP
-
-## Core Requirements
-- Mobile-first responsive design (bottom nav on mobile, top nav on desktop)
-- User accounts + global leaderboards (overall + per-game)
-- Daily challenge rotation with bonus XP
-- Share Card for organic growth (Web Share API)
-- Installable PWA (add to home screen)
-- Retro / modern / cartoon fusion aesthetic
-- 8-bit sound effects via Web Audio API
-- JWT Bearer auth (token in localStorage)
+- **The Daily Grinder** — logs in every day to keep their streak alive for XP multipliers
+- **The Party Host** — invites friends via link to 1v1 battles
 
 ## Architecture
-- **Frontend**: React 19 + React Router 7 + Tailwind + Shadcn/UI + framer-motion + chess.js. Web Audio API for SFX. Service worker + manifest for PWA.
-- **Backend**: FastAPI + Motor MongoDB + PyJWT + bcrypt.
-- **DB collections**: `users` (with embedded stats/xp/daily), `game_events` (history).
+- **Frontend**: React 19 + React Router 7 + Tailwind + Shadcn/UI + framer-motion + chess.js. Web Audio API SFX. Service worker + manifest for PWA. Polling for Friend Battles.
+- **Backend**: FastAPI + Motor MongoDB + PyJWT + bcrypt. In-memory battle rooms dict.
+- **DB collections**: `users` (with embedded stats/xp/daily/streak), `game_events`.
 
 ## What's Been Implemented
 
-### Iteration 1 (Feb 2026)
-- Auth: register/login/me/logout with JWT Bearer
-- Seeded admin (`admin@rmc.com` / `admin123`)
-- 6 games: Memory Match, Snakes & Ladders, Connect Four, Checkers, Rock Paper Scissors, Crazy Eights
-- Overall + per-game leaderboards
-- Mobile-first layout with bottom nav + sound toggle
+### Iteration 1 (Feb 2026) — MVP
+- Auth (JWT Bearer), 6 games, leaderboards, mobile-first layout, admin seed.
 
-### Iteration 2 (Feb 2026 — this session)
-- **3 new games**: Chess (chess.js + greedy AI), Uno (all specials + wild-color picker + +2/+4 stacking), Ludo (simplified 2-token perimeter track with capture)
-- **XP system**: 5 XP/play, 25 XP/win, 100 XP daily-challenge bonus
-- **Daily Challenge**: 10 rotating challenges deterministic per UTC day, auto-tracked on score submission, shown on Home page for logged-in users
-- **Share Card modal**: opens after every finished game with Web Share API + Copy fallback
-- **PWA**: manifest.json, logo.svg, service worker, InstallPrompt banner (triggers on beforeinstallprompt)
-- **Testing**: 18/18 backend tests pass, ~95% frontend E2E (all issues resolved before finish)
+### Iteration 2 (Feb 2026)
+- Added Chess, Uno, Ludo → 9 games total
+- XP system + rotating daily challenges (100 XP bonus)
+- Share Card modal after every game
+- PWA (manifest + logo + service worker + InstallPrompt)
+
+### Iteration 3 (Feb 2026 — this session)
+- **Scrabble Solo** (5 rounds, ~1000-word bundled dictionary, tile scoring)
+- **Dominoes** (double-6, chain matching, capture + boneyard, blocked-game pip tiebreak)
+- **XP Streaks with multipliers**: 3d = 1.5×, 7d = 2×, 30d = 3×, 100d = 5× — applied to both per-game XP and daily-challenge bonus
+- **Friend Battles**: create/join by 6-char code, shareable link, Connect Four 1v1 with 1.5s polling, turn enforcement, win detection, XP + leaderboard credit
+- **11 games total** covering the full childhood nostalgia stack
+- **Testing**: 17/17 backend pytest, 100% frontend E2E for iteration-3 scope
 
 ## Prioritized Backlog
 
-### P1 - grow the library (remaining childhood picks)
-- Scrabble
-- Dominoes
-- Card games: Go Fish, Old Maid
+### P1 - remaining games
+- Go Fish / Old Maid (2-player card games)
 - Jenga (needs physics)
-- Obstacle course mini-game
+- Obstacle Course mini-game
 
-### P2 - engagement + retention
-- Streaks (consecutive days with a daily challenge completed)
-- XP levels + level-up cosmetics
+### P2 - retention + social
+- Streak recovery items (skip one day without breaking streak)
 - Achievements & badges
-- Themes / skins (retro CRT, Gameboy, arcade)
+- XP levels + unlockable themes (retro CRT, Gameboy, arcade)
+- Persistent Friend Battle history & rematch
 
-### P3 - viral / social
-- Friends & private lobbies (WebSocket real-time)
-- Weekly seasonal leaderboards with prizes
-- Downloadable/OG-shareable score card image (html2canvas)
+### P3 - platform + monetization
+- Persist battle rooms to MongoDB / Redis so restarts don't clear
+- WebSocket instead of polling for lower latency
+- Seasonal weekly leaderboards + prizes
+- Cosmetic tile-set skins
 
 ## Test Credentials
 See `/app/memory/test_credentials.md`.
