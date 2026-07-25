@@ -246,7 +246,10 @@ async def game_leaderboard(game_id: str, limit: int = 20):
         raise HTTPException(status_code=400, detail="Unknown game_id")
     direction = GAME_META[game_id]["score_dir"]
     # Sort by wins desc, then by best_score in appropriate direction
-    users = await db.users.find({}, {"_id": 0}).to_list(1000)
+    users = await db.users.find(
+        {f"stats.{game_id}.plays": {"$gt": 0}},
+        {"_id": 0, "id": 1, "name": 1, "avatar": 1, f"stats.{game_id}": 1},
+    ).to_list(1000)
     rows = []
     for u in users:
         s = (u.get("stats") or {}).get(game_id) or {}
