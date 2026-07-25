@@ -720,6 +720,8 @@ async def _award_battle_result(room: dict):
 
 @app.websocket("/api/ws/battle/{room_id}")
 async def ws_battle(websocket: WebSocket, room_id: str, token: str = Query(None)):
+    # Accept first so we can send custom close codes to the client
+    await websocket.accept()
     # Authenticate via token query param
     if not token:
         await websocket.close(code=4401)
@@ -737,10 +739,8 @@ async def ws_battle(websocket: WebSocket, room_id: str, token: str = Query(None)
         return
     # user must be host or (allowed) guest slot
     if user_id != room["host_id"] and user_id != room.get("guest_id"):
-        # allow to observe? For MVP: only players.
         await websocket.close(code=4403)
         return
-    await websocket.accept()
     conns = _battle_connections.setdefault(rid, set())
     conns.add(websocket)
     try:
