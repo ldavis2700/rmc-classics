@@ -1,0 +1,159 @@
+{
+  "theme": "dark",
+  "app_name": "RMC CLASSICS (Remembering My Childhood)",
+  "design_concept": "Neo-Arcade Fusion: Blending deep 8-bit nostalgia with smooth, contemporary bento layouts and bouncy cartoon interactions. A premium, mobile-first gaming platform built to dominate the app store.",
+  "typography": {
+    "fonts": {
+      "headings": {
+        "family": "'Unbounded', sans-serif",
+        "rationale": "A contemporary wide display font that feels gamer-centric, bold, and playful without resorting to overused retro cliches.",
+        "weights": ["700", "900"]
+      },
+      "body": {
+        "family": "'Outfit', sans-serif",
+        "rationale": "Ultra-clean geometric sans that ensures high readability for rules, descriptions, and UI text.",
+        "weights": ["400", "500", "600"]
+      },
+      "accents": {
+        "family": "'Silkscreen', cursive",
+        "rationale": "Used sparingly for purely nostalgic elements: High scores, retro 'GAME OVER' tags, and leader board ranks.",
+        "weights": ["400"]
+      }
+    },
+    "scale_rules": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter uppercase font-black",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight uppercase font-bold",
+      "h3": "text-xl sm:text-2xl tracking-tight font-bold",
+      "scores": "text-3xl sm:text-4xl font-['Silkscreen'] text-arcade-yellow drop-shadow-[0_0_8px_rgba(255,209,0,0.6)]",
+      "body": "text-base leading-relaxed font-['Outfit']"
+    }
+  },
+  "colors": {
+    "palette": {
+      "background": {
+        "base": "#0B0A1A",
+        "surface": "#16152B",
+        "description": "Deepest Midnight Indigo. Never use pure black. Tinted blue/purple to feel like a glowing arcade cabinet in the dark."
+      },
+      "primary": {
+        "hex": "#FF479A",
+        "tailwind": "pink-500",
+        "description": "Bubblegum Pink. Bouncy, vibrant, and energetic. Used for primary CTAs and active states."
+      },
+      "accents": {
+        "cyan": "#00F0FF",
+        "yellow": "#FFD100",
+        "green": "#39FF14",
+        "description": "Electric Cyan, Arcade Yellow, Gameboy Green. Use as glowing accents for game cards, player stats, and success states."
+      },
+      "text": {
+        "primary": "#FFFFFF",
+        "secondary": "#A3A1C6",
+        "description": "High contrast white for primary text, cool lavender-grey for secondary text."
+      }
+    },
+    "rules": {
+      "contrast": "Ensure minimum 4.5:1 ratio. Glow effects (drop-shadow) must not replace actual contrast.",
+      "gradients": "NO flat gradients. Use CSS radial-gradients with opacity for background 'glow' behind bento cards, simulating CRT screen light bleed."
+    }
+  },
+  "visual_enhancers": {
+    "surfaces": {
+      "glassmorphism": "Used for floating bottom nav and sticky headers. bg-[#16152B]/80 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)]",
+      "cards": "Solid surface (#16152B) with a sharp 2px border inside, slightly rounded (rounded-2xl) but feeling chunky and tactile."
+    },
+    "textures": {
+      "grain": "Apply a subtle SVG noise overlay (opacity-5) globally to eliminate digital flatness and evoke CRT screen feel.",
+      "scanlines": "Optional repeating-linear-gradient overlay on the hero banner for intense retro effect."
+    }
+  },
+  "layouts": {
+    "mobile_first": {
+      "navigation": "Thumb-reachable Bottom Navigation Bar for mobile (Home, Library, Leaderboard, Profile). Hide on desktop in favor of a top sticky nav.",
+      "spacing": "Generous touch targets (min 48px). Use p-4 on mobile, p-8 on tablet/desktop."
+    },
+    "grids": {
+      "home_bento": "grid-cols-1 md:grid-cols-12 gap-4 md:gap-6. Hero section spanning col-span-full md:col-span-8 row-span-2. Game cards spanning col-span-4.",
+      "leaderboard": "Dense list layout. flex-col gap-2 with strict optical alignment. Avatar left, Rank right-aligned, Score in Silkscreen font."
+    }
+  },
+  "component_patterns": {
+    "GameCard": {
+      "structure": "Relative wrapper, responsive image background max-h-[250px], dark gradient overlay (bg-gradient-to-t from-[#0B0A1A] to-transparent), absolute bottom-left text.",
+      "interaction": "Hover/Tap: hover:-translate-y-2 hover:shadow-[0_0_20px_rgba(0,240,255,0.4)] transition-all duration-300. Adds a cartoon 'bounce' via framer-motion."
+    },
+    "PlayButton": {
+      "style": "Chunky pill-shaped button. bg-[#FF479A] text-white font-['Unbounded'] uppercase tracking-widest px-8 py-4 rounded-full border-b-4 border-[#C11264] active:border-b-0 active:translate-y-1 transition-all.",
+      "interaction": "Tactile 'arcade button' press effect."
+    },
+    "LeaderboardRow": {
+      "style": "Glassy row bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between. Top 3 ranks get special glowing borders (Gold/Yellow for #1)."
+    }
+  },
+  "motion": {
+    "library": "framer-motion",
+    "animations": {
+      "page_transition": "Fade in and slide up slightly (y: 20 -> 0, opacity: 0 -> 1) with spring physics for bounce.",
+      "micro_interactions": "Tap scale down (scale: 0.95). Hover scale up (scale: 1.05)."
+    }
+  },
+  "media": {
+    "sound_design": {
+      "library": "use-sound",
+      "effects": {
+        "hover": "Short 8-bit 'blip'",
+        "click": "Tactile arcade button 'clack' or coin insert 'ding'",
+        "success": "Retro level-up arpeggio",
+        "toggle": "Provide a global sound toggle switch (Mute/Unmute) prominently in the header/profile."
+      }
+    }
+  },
+  "image_urls": {
+    "hero_background": {
+      "url": "https://images.unsplash.com/photo-1780193724876-7ca5083d1004?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHw0fHxwaXhlbCUyMGFydCUyMGFyY2FkZSUyMG1hY2hpbmUlMjBuZW9ufGVufDB8fHx8MTc4NTAwNzM0MHww&ixlib=rb-4.1.0&q=85",
+      "description": "Glowing Pac-man arcade game screen, perfect for the hero section background with a heavy dark overlay."
+    },
+    "snakes_and_ladders_thumbnail": {
+      "url": "https://images.pexels.com/photos/20152634/pexels-photo-20152634.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Checkered Snake and Ladders board for the game selection card."
+    },
+    "playing_cards_thumbnail": {
+      "url": "https://images.pexels.com/photos/36000858/pexels-photo-36000858.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Vintage attire poker/cards playing scene for Crazy Eights game card."
+    },
+    "arcade_cabinet_general": {
+      "url": "https://images.pexels.com/photos/4836510/pexels-photo-4836510.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Close-up of vintage arcade machine lit by neon lights, for general app background or empty states."
+    }
+  },
+  "accessibility": {
+    "contrast": "Use APCA calculator. Ensure dark pinks/blues have white text on top.",
+    "aria": "Add aria-label to all game cards and icon-only buttons (like the sound toggle).",
+    "motion": "Respect prefers-reduced-motion via framer-motion useReducedMotion hook."
+  },
+  "instructions_to_main_agent": [
+    "Install custom fonts via Google Fonts in index.css: @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&family=Silkscreen&family=Unbounded:wght@700;900&display=swap');",
+    "Ensure 'RMC' vibe is present: the UI should feel incredibly nostalgic but operate smoothly. Do not make the UI look broken or purely 8-bit.",
+    "Implement the bottom navigation bar for mobile screens (< md breakpoint) using fixed bottom-0 positioning with safe-area padding.",
+    "Do NOT use HTML <select> or standard date pickers; use Shadcn equivalents heavily customized with Tailwind.",
+    "For the game screens themselves (the game board area), reserve a large flex-1 container that scales responsively without scrolling on mobile."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements.",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN.",
+    "Prioritize using pre-existing components from src/components/ui when applicable.",
+    "All interactive and key informational elements MUST include a data-testid attribute to facilitate robust automated testing.",
+    "Use 'sonner' for toasts located in /app/frontend/src/components/ui/sonner.js (Note: use .js extension as per the repository setup)."
+  ]
+}
