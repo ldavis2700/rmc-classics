@@ -4,68 +4,65 @@
 > Build Me, a public game app, named "RMC CLASSICS", that contains and makes playable, all the most popular games from childhood. The "RMC" in the name stands for "Remembering My Childhood".
 
 ## Vision
-A mobile-first web app that resurrects childhood classic games in one nostalgic, app-store-worthy destination. Users compete on global leaderboards while enjoying retro-arcade fusion visuals and 8-bit sound effects.
+A mobile-first, installable web app that resurrects childhood classic games in one nostalgic, app-store-worthy destination. Users compete on global leaderboards, chase daily challenges, and share their wins to grow the community organically.
 
 ## User Personas
 - **The Nostalgic Adult (25-45)** — plays during downtime to relive childhood memories
 - **The Casual Mobile Gamer** — quick 2-5 minute sessions between tasks
 - **The Competitor** — chases leaderboard rank across all games
+- **The Daily Grinder** — logs in every day for the daily challenge & XP
 
-## Core Requirements (locked)
+## Core Requirements
 - Mobile-first responsive design (bottom nav on mobile, top nav on desktop)
 - User accounts + global leaderboards (overall + per-game)
-- Retro / modern / cartoon fusion aesthetic (Unbounded + Outfit + Silkscreen fonts, neon pink/cyan/yellow on midnight indigo)
-- 8-bit sound effects via Web Audio API (no external audio files)
+- Daily challenge rotation with bonus XP
+- Share Card for organic growth (Web Share API)
+- Installable PWA (add to home screen)
+- Retro / modern / cartoon fusion aesthetic
+- 8-bit sound effects via Web Audio API
 - JWT Bearer auth (token in localStorage)
 
 ## Architecture
-- **Frontend**: React 19 + React Router 7 + Tailwind + Shadcn/UI + framer-motion. Sonner for toasts. Sound helper using Web Audio API.
-- **Backend**: FastAPI + Motor MongoDB. JWT (PyJWT) + bcrypt. All endpoints under `/api`.
-- **DB collections**: `users` (with embedded per-game stats), `game_events` (history).
+- **Frontend**: React 19 + React Router 7 + Tailwind + Shadcn/UI + framer-motion + chess.js. Web Audio API for SFX. Service worker + manifest for PWA.
+- **Backend**: FastAPI + Motor MongoDB + PyJWT + bcrypt.
+- **DB collections**: `users` (with embedded stats/xp/daily), `game_events` (history).
 
-## What's Been Implemented (Feb 2026 - Iteration 1)
-- Auth: register, login, /me, logout with JWT Bearer
+## What's Been Implemented
+
+### Iteration 1 (Feb 2026)
+- Auth: register/login/me/logout with JWT Bearer
 - Seeded admin (`admin@rmc.com` / `admin123`)
-- Score submission `/api/games/submit` with best-score tracking (asc for memory, desc for others)
-- Overall + per-game leaderboards (`/api/games/leaderboard`, `/api/games/leaderboard/{id}`)
-- 6 fully-playable games:
-  1. Memory Match (single-player, moves-based scoring)
-  2. Snakes & Ladders (vs CPU, dice-based, 100-square board)
-  3. Connect Four (vs AI with win/block logic)
-  4. Checkers (vs random AI with kings & multi-jump)
-  5. Rock Paper Scissors (best-of-5 vs CPU)
-  6. Crazy Eights (vs CPU, wild 8s with suit picker)
-- Pages: Home (hero + game grid), Library, Leaderboard (7 tabs), Profile (stats + per-game breakdown), Login, Register
-- Layout with top nav (desktop) + bottom nav (mobile) + sound toggle
-- 100% backend test pass, 100% frontend E2E pass, deployment readiness ✅
+- 6 games: Memory Match, Snakes & Ladders, Connect Four, Checkers, Rock Paper Scissors, Crazy Eights
+- Overall + per-game leaderboards
+- Mobile-first layout with bottom nav + sound toggle
+
+### Iteration 2 (Feb 2026 — this session)
+- **3 new games**: Chess (chess.js + greedy AI), Uno (all specials + wild-color picker + +2/+4 stacking), Ludo (simplified 2-token perimeter track with capture)
+- **XP system**: 5 XP/play, 25 XP/win, 100 XP daily-challenge bonus
+- **Daily Challenge**: 10 rotating challenges deterministic per UTC day, auto-tracked on score submission, shown on Home page for logged-in users
+- **Share Card modal**: opens after every finished game with Web Share API + Copy fallback
+- **PWA**: manifest.json, logo.svg, service worker, InstallPrompt banner (triggers on beforeinstallprompt)
+- **Testing**: 18/18 backend tests pass, ~95% frontend E2E (all issues resolved before finish)
 
 ## Prioritized Backlog
 
-### P0 - launch polish
-- Custom favicon + PWA manifest with icons (add-to-home-screen)
-- SEO meta tags for shareability
-
-### P1 - additional games (user's original list)
-- Ludo (4-player vs CPU)
-- Uno
-- Chess (with chess.js engine)
+### P1 - grow the library (remaining childhood picks)
 - Scrabble
 - Dominoes
-- Go Fish / Old Maid card games
-- Jenga (physics)
+- Card games: Go Fish, Old Maid
+- Jenga (needs physics)
 - Obstacle course mini-game
 
-### P2 - engagement + monetization
-- Daily challenges & streaks
-- Friends / private lobbies (multiplayer via WebSocket)
+### P2 - engagement + retention
+- Streaks (consecutive days with a daily challenge completed)
+- XP levels + level-up cosmetics
 - Achievements & badges
-- Themes / skins unlocks (retro CRT, Gameboy, arcade)
-- Share result cards (referral loop for app-store discovery)
+- Themes / skins (retro CRT, Gameboy, arcade)
 
-## Next Tasks
-- Ship a PWA manifest so users can install to home screen
-- Add daily-challenge rotation to drive retention
-- Design & ship 3 more classics (Chess, Uno, Ludo) as Phase 2
+### P3 - viral / social
+- Friends & private lobbies (WebSocket real-time)
+- Weekly seasonal leaderboards with prizes
+- Downloadable/OG-shareable score card image (html2canvas)
 
 ## Test Credentials
 See `/app/memory/test_credentials.md`.

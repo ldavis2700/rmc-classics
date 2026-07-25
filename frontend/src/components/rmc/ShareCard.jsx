@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Share2, Copy, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { sfx } from "@/lib/sound";
@@ -46,7 +46,10 @@ export default function ShareCard({ open, onClose, game, won, statLabel, statVal
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md border-white/10 bg-[#16152b] text-white sm:rounded-3xl" data-testid="share-card-modal">
-        <DialogHeader className="sr-only">Share your result</DialogHeader>
+        <DialogHeader className="sr-only">
+          <DialogTitle>Share your result</DialogTitle>
+          <DialogDescription>Share your {game.name} result with friends.</DialogDescription>
+        </DialogHeader>
         <div className="relative overflow-hidden rounded-2xl border-2 p-6" style={{ borderColor: `${game.color}88` }}>
           <div
             className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full opacity-50 blur-3xl"
