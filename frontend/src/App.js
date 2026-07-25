@@ -1,54 +1,67 @@
-import { useEffect } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
-import { HOME } from "@/constants/testIds";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Toaster } from "@/components/ui/sonner";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import Layout from "@/components/rmc/Layout";
+import Home from "@/pages/Home";
+import Library from "@/pages/Library";
+import Leaderboard from "@/pages/Leaderboard";
+import Profile from "@/pages/Profile";
+import Login from "@/pages/Login";
+import Register from "@/pages/Register";
+import MemoryMatch from "@/pages/games/MemoryMatch";
+import SnakesLadders from "@/pages/games/SnakesLadders";
+import ConnectFour from "@/pages/games/ConnectFour";
+import Checkers from "@/pages/games/Checkers";
+import RockPaperScissors from "@/pages/games/RockPaperScissors";
+import CrazyEights from "@/pages/games/CrazyEights";
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
-
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
-
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          data-testid={HOME.emergentLink}
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="grid min-h-[60vh] place-items-center">
+        <div className="font-pixel text-neon-cyan">LOADING…</div>
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
 
 function App() {
   return (
     <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+      <AuthProvider>
+        <BrowserRouter>
+          <Layout>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/library" element={<Library />} />
+              <Route path="/leaderboard" element={<Leaderboard />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <Profile />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/play/memory" element={<MemoryMatch />} />
+              <Route path="/play/snakes" element={<SnakesLadders />} />
+              <Route path="/play/connect4" element={<ConnectFour />} />
+              <Route path="/play/checkers" element={<Checkers />} />
+              <Route path="/play/rps" element={<RockPaperScissors />} />
+              <Route path="/play/crazy8" element={<CrazyEights />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Layout>
+          <Toaster theme="dark" richColors position="top-center" />
+        </BrowserRouter>
+      </AuthProvider>
     </div>
   );
 }
