@@ -1,8 +1,9 @@
 import { useAuth } from "@/context/AuthContext";
 import { GAMES } from "@/lib/games";
 import { Link } from "react-router-dom";
-import { LogOut, Sparkles } from "lucide-react";
+import { LogOut, Sparkles, Snowflake } from "lucide-react";
 import { sfx } from "@/lib/sound";
+import { BadgeShelf } from "@/components/rmc/Badge";
 
 export default function Profile() {
   const { user, logout } = useAuth();
@@ -38,12 +39,30 @@ export default function Profile() {
           </button>
         </div>
 
-        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-6">
           <StatTile label="Total wins" value={user.total_wins || 0} color="#FFD100" />
           <StatTile label="Games played" value={user.total_plays || 0} color="#00F0FF" />
           <StatTile label="Win rate" value={`${winRate}%`} color="#39FF14" />
           <StatTile label="XP" value={user.xp || 0} color="#FF479A" />
           <StatTile label="Streak" value={`${user.streak || 0}d`} color="#FFD100" />
+          <div className="rounded-2xl border border-neon-cyan/40 bg-neon-cyan/5 p-4" data-testid="profile-freezes">
+            <div className="flex items-center gap-1">
+              <Snowflake className="h-3.5 w-3.5 text-neon-cyan" />
+              <span className="font-pixel text-2xl leading-none text-neon-cyan">{user.freezes_available ?? 1}</span>
+            </div>
+            <div className="mt-2 text-[10px] uppercase tracking-widest text-[#a3a1c6]">Streak freeze</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Badges */}
+      <div className="mt-10">
+        <p className="font-pixel text-xs text-neon-pink">// BADGES</p>
+        <h2 className="mt-1 font-display text-xl font-black uppercase tracking-tight text-white sm:text-2xl">
+          Trophy shelf
+        </h2>
+        <div className="mt-4 rounded-3xl border border-white/10 bg-[#16152b] p-6">
+          <BadgeShelf userBadges={user.badges || []} />
         </div>
       </div>
 

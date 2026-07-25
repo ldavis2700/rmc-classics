@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import GameShell from "@/components/rmc/GameShell";
+import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import { GAME_MAP } from "@/lib/games";
 
 // Cell: 0 empty, 1 you-man, 2 cpu-man, 3 you-king, 4 cpu-king
 const SIZE = 8;
@@ -118,7 +120,7 @@ export default function Checkers() {
       setSubmitted(true);
       if (user) {
         submitScore({ game_id: "checkers", won, score: won ? 1 : 0 }).then((res) => {
-          if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed });
+          if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
           setShareOpen(true);
         });
       } else {
@@ -277,6 +279,15 @@ export default function Checkers() {
           )}
         </div>
       </div>
+      <ShareCard
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        game={GAME_MAP.checkers}
+        won={winner === "you"}
+        xpGained={xpInfo.xp}
+        challengeCompleted={xpInfo.done}
+        newlyUnlockedBadges={xpInfo.badges}
+      />
     </GameShell>
   );
 }

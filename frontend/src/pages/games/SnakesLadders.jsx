@@ -47,10 +47,14 @@ export default function SnakesLadders() {
       const won = finished === "you";
       won ? sfx.win() : sfx.lose();
       toast[won ? "success" : "error"](won ? "You won!" : "CPU won");
+      setSubmitted(true);
       if (user) {
-        submitScore({ game_id: "snakes", won, score: won ? 1 : 0 }).then(() => setSubmitted(true));
+        submitScore({ game_id: "snakes", won, score: won ? 1 : 0 }).then((res) => {
+          if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
+          setShareOpen(true);
+        });
       } else {
-        setSubmitted(true);
+        setShareOpen(true);
       }
     }
   }, [finished, submitted, user, submitScore]);
@@ -229,6 +233,15 @@ export default function SnakesLadders() {
           )}
         </div>
       </div>
+      <ShareCard
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        game={GAME_MAP.snakes}
+        won={finished === "you"}
+        xpGained={xpInfo.xp}
+        challengeCompleted={xpInfo.done}
+        newlyUnlockedBadges={xpInfo.badges}
+      />
     </GameShell>
   );
 }

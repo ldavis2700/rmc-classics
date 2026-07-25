@@ -56,7 +56,7 @@ export default function Chess() {
     if (!user) return;
     const res = await submitScore({ game_id: "chess", won, score: won ? 1 : 0 });
     if (res.ok) {
-      setXpInfo({ xp: res.xp_gained, done: res.challenge_completed });
+      setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
       setShareOpen(true);
     }
   }, [user, submitScore]);
@@ -200,6 +200,7 @@ export default function Chess() {
         won={finished === "you"}
         xpGained={xpInfo.xp}
         challengeCompleted={xpInfo.done}
+        newlyUnlockedBadges={xpInfo.badges}
       />
     </GameShell>
   );

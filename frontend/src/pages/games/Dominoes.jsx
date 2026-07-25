@@ -90,7 +90,7 @@ export default function Dominoes() {
     toast[won ? "success" : "error"](won ? "Empty hand — you win!" : "CPU emptied first.");
     if (user && !submitted) {
       const res = await submitScore({ game_id: "dominoes", won, score: won ? 1 : 0 });
-      if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed });
+      if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
       setSubmitted(true);
     }
     setShareOpen(true);
@@ -296,6 +296,7 @@ export default function Dominoes() {
         statValue={you.length}
         xpGained={xpInfo.xp}
         challengeCompleted={xpInfo.done}
+        newlyUnlockedBadges={xpInfo.badges}
       />
     </GameShell>
   );

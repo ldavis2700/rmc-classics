@@ -22,6 +22,8 @@ import Uno from "@/pages/games/Uno";
 import Ludo from "@/pages/games/Ludo";
 import Scrabble from "@/pages/games/Scrabble";
 import Dominoes from "@/pages/games/Dominoes";
+import GoFish from "@/pages/games/GoFish";
+import OldMaid from "@/pages/games/OldMaid";
 import Battles from "@/pages/Battles";
 import BattlePlay from "@/pages/BattlePlay";
 
@@ -69,6 +71,8 @@ function App() {
               <Route path="/play/ludo" element={<Ludo />} />
               <Route path="/play/scrabble" element={<Scrabble />} />
               <Route path="/play/dominoes" element={<Dominoes />} />
+              <Route path="/play/gofish" element={<GoFish />} />
+              <Route path="/play/oldmaid" element={<OldMaid />} />
               <Route
                 path="/battles"
                 element={

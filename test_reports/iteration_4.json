@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 4 backend + frontend testing. Backend: 19/19 pytest passing including new coverage for 13-game meta, /api/badges (14 badges, no auth), submit newly_unlocked_badges (first_win, chess_win, scrabble_win), badge persistence & de-dup, streak freeze consumption on 2-day gap (streak++, freezes_available-=1, freeze_used=true) and streak reset when no freeze available, and WebSocket /api/ws/battle/{room_id}?token=<jwt> (missing token / unknown room / non-player rejected; valid host+guest receive {type:'state'} on connect; move via WS broadcasts new state to both sockets with turn flipped and moves incremented). Frontend: Home shows 'Thirteen classics. Endless replays.' hero + 13 game cards including Go Fish & Old Maid; Library shows 13 cards. /profile renders freezes tile (data-testid=profile-freezes) showing 1 for fresh user, and badge-shelf with all 14 badge-<id> chips (grayed for new user). /play/gofish renders 7 CPU-hand card backs, pool count (38 cards after books), Your hand with suit colors, and ask-<rank> buttons for unique ranks; clicking an ask rank triggers Go Fish/CPU turn and updates gofish-message. /play/oldmaid renders 7 CPU pink-striped card backs (oldmaid-cpu-card-<i>), you-hand, and oldmaid-turn chip. BattlePlay opens WS on join; header shows LIVE when wsOpen; drops sent via WS when open (verified via backend test that host WS move triggers broadcast to guest WS within 5s).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/ws/battle/{room_id}", "issue": "Server closes WS with custom code (4401/4404/4403) BEFORE websocket.accept(), which in Starlette results in an HTTP 403 handshake rejection instead of a WS close frame with the custom code. Clients cannot read 4401/4404/4403 close codes reliably — they see an HTTP 403 on the handshake. Behaviour is still secure (rejected), but the review spec expects the code to be readable. Fix: call `await websocket.accept()` first, then `await websocket.close(code=4404)` etc."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/pytest.ini",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Minor / optional) In /api/ws/battle/{room_id}, call websocket.accept() before websocket.close(code=...) so the custom 4401/4404/4403 close codes are actually transmitted to WS clients. Current handshake-level 403 rejection is functionally secure but does not match the exact spec."
+  ],
+  "critical_code_review_comments": [
+    "server.py public_user always returns freezes_available defaulting to 1 even for older users that don't have the field in Mongo yet — good. Registration doc does NOT persist freezes_available/freezes_last_refill, which is fine because they're initialised on first /games/submit.",
+    "server.py streak freeze logic: consumes only when last_streak_date == day_before (exact 2-day gap) AND freezes_available > 0. Verified. Correct.",
+    "server.py badge persistence: newly-earned badges are merged with existing user['badges'] and stored; subsequent submits return empty newly_unlocked_badges. Verified. Correct.",
+    "server.py WebSocket handler correctly reuses connection tracking and broadcasts to all sockets in _battle_connections[rid] on any state change (join broadcast in join_battle + move broadcast). REST /battle/move also broadcasts. Good bidirectional sync.",
+    "server.py: _battle_rooms is still in-memory only (carry-over from iter 3). Restarting backend loses all rooms.",
+    "BattlePlay.jsx: has 3s polling fallback when WS disconnects; correctly prefers WS.send when readyState==OPEN. Good pattern.",
+    "Badge.jsx: uses module-level `cache` to memoise catalog, but no invalidation. Fine for MVP.",
+    "backend/.env values are quoted (MONGO_URL=\"mongodb://...\"). Tests must use dotenv.load_dotenv rather than raw shell parsing."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/pytest.ini"
+  ],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "100% for iteration-4 scope"},
+  "test_credentials": "admin@rmc.com / admin123 (seeded). Fresh users registered via /api/auth/register per test.",
+  "seed_data_creation": "pytest registers ~9 fresh users per run (usera_, userb_, freeze_, fresh_, chess_, scrab_, frz_, nofrz_, outsider_) + 1 UI test user (testui_<ts>).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 4 fully covered in /app/backend/tests/backend_test.py (19 tests, pytest-asyncio + websockets). Key new testids: profile-freezes, badge-shelf, badge-<id> (14), share-badges, share-badge-<id>, gofish-{books,cpu-hand,pool,message,ask-<rank>,you-hand}, oldmaid-{turn,cpu-hand,cpu-card-<i>,you-hand,message}. WS URL wss://<host>/api/ws/battle/<RID>?token=<jwt>. To simulate streak-gap scenarios, tests directly mutate Mongo via pymongo (MONGO_URL+DB_NAME from backend/.env). ~1 minor spec-vs-impl gap on WS: close codes are 403 handshake rejects, not 4401/4404/4403 close frames, because server closes before accept().",
+  "rca of the issue": "No blocking bugs. Only one spec deviation: WS custom close codes are not transmitted to clients because server closes before websocket.accept(). Fix by calling accept() first. Streak freeze/badges/13-games all implemented and verified end-to-end."
+}

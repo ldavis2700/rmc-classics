@@ -8,7 +8,7 @@ import { sfx } from "@/lib/sound";
 import { useAuth } from "@/context/AuthContext";
 
 const stats = [
-  { label: "Classic games", value: "11", icon: Gamepad2, color: "#00F0FF" },
+  { label: "Classic games", value: "13", icon: Gamepad2, color: "#00F0FF" },
   { label: "Live leaderboards", value: "∞", icon: Trophy, color: "#FFD100" },
   { label: "Retro sounds", value: "8-bit", icon: Zap, color: "#39FF14" },
 ];
@@ -47,7 +47,7 @@ export default function Home() {
             </h1>
             <p className="mt-5 max-w-xl text-base leading-relaxed text-[#c9c8e2]">
               RMC CLASSICS is a pocket-sized shrine to the games that filled every
-              rainy afternoon and family road trip. Eleven timeless classics, real-time
+              rainy afternoon and family road trip. Thirteen timeless classics, real-time
               friend battles, and one global leaderboard — zero downloads.
             </p>
 
@@ -211,7 +211,7 @@ export default function Home() {
       <section className="mt-16 rounded-3xl border border-white/10 bg-[#16152b] p-8 text-center">
         <p className="font-pixel text-xs text-neon-yellow">// COMING SOON</p>
         <h3 className="mt-2 font-display text-xl font-black uppercase tracking-tight text-white sm:text-2xl">
-          Go Fish · Old Maid · Jenga · Obstacle Course
+          Jenga · Hopscotch · Marbles · Obstacle Course
         </h3>
         <p className="mt-3 text-sm text-[#a3a1c6]">
           More childhood classics dropping soon. Sign up to get notified.

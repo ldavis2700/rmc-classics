@@ -42,7 +42,7 @@ export default function Ludo() {
     won ? sfx.win() : sfx.lose();
     if (user && !submitted) {
       const res = await submitScore({ game_id: "ludo", won, score: won ? 1 : 0 });
-      if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed });
+      if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
       setSubmitted(true);
     }
     setShareOpen(true);
@@ -300,6 +300,7 @@ export default function Ludo() {
         won={finished === "you"}
         xpGained={xpInfo.xp}
         challengeCompleted={xpInfo.done}
+        newlyUnlockedBadges={xpInfo.badges}
       />
     </GameShell>
   );

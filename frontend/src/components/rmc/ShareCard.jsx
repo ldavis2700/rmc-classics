@@ -4,7 +4,7 @@ import { Share2, Copy, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { sfx } from "@/lib/sound";
 
-export default function ShareCard({ open, onClose, game, won, statLabel, statValue, xpGained, challengeCompleted }) {
+export default function ShareCard({ open, onClose, game, won, statLabel, statValue, xpGained, challengeCompleted, newlyUnlockedBadges = [], freezeUsed = false }) {
   const [copied, setCopied] = useState(false);
 
   const shareText = useMemo(() => {
@@ -87,6 +87,40 @@ export default function ShareCard({ open, onClose, game, won, statLabel, statVal
                 <div className="col-span-2 flex items-center gap-2 rounded-xl border border-neon-yellow/40 bg-neon-yellow/10 p-3">
                   <Trophy className="h-4 w-4 text-neon-yellow" />
                   <span className="text-sm font-semibold text-neon-yellow">Daily Challenge complete!</span>
+                </div>
+              )}
+              {freezeUsed && (
+                <div className="col-span-2 flex items-center gap-2 rounded-xl border border-neon-cyan/40 bg-neon-cyan/10 p-3">
+                  <span className="text-sm font-semibold text-neon-cyan">
+                    ❄ Streak freeze used — your streak is safe!
+                  </span>
+                </div>
+              )}
+              {newlyUnlockedBadges.length > 0 && (
+                <div className="col-span-2 rounded-xl border border-neon-pink/40 bg-neon-pink/10 p-3" data-testid="share-badges">
+                  <div className="mb-2 font-pixel text-[10px] uppercase tracking-widest text-neon-pink">
+                    // NEW BADGES
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    {newlyUnlockedBadges.map((b) => (
+                      <div key={b.id} className="flex items-center gap-2" data-testid={`share-badge-${b.id}`}>
+                        <div
+                          className="grid h-9 w-9 place-items-center rounded-lg border-2 text-lg"
+                          style={{
+                            backgroundColor: `${b.color}22`,
+                            borderColor: `${b.color}88`,
+                            boxShadow: `0 0 14px ${b.color}55`,
+                          }}
+                        >
+                          {b.icon}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-white">{b.name}</div>
+                          <div className="text-[10px] text-[#a3a1c6]">{b.desc}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

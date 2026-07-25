@@ -87,7 +87,7 @@ export default function Uno() {
     if (user && !submitted) {
       const res = await submitScore({ game_id: "uno", won, score: won ? 1 : 0 });
       if (res.ok) {
-        setXpInfo({ xp: res.xp_gained, done: res.challenge_completed });
+        setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
       }
       setSubmitted(true);
     }
@@ -323,6 +323,7 @@ export default function Uno() {
         statValue={finished === "cpu" ? you.length : 0}
         xpGained={xpInfo.xp}
         challengeCompleted={xpInfo.done}
+        newlyUnlockedBadges={xpInfo.badges}
       />
     </GameShell>
   );

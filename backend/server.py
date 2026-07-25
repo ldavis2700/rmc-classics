@@ -12,7 +12,7 @@ from typing import Optional, List, Dict, Any
 
 import bcrypt
 import jwt as pyjwt
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -22,7 +22,7 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_MINUTES = 60 * 24 * 7  # 7 days for MVP simplicity
 
-GAME_IDS = {"memory", "snakes", "connect4", "checkers", "rps", "crazy8", "chess", "uno", "ludo", "scrabble", "dominoes"}
+GAME_IDS = {"memory", "snakes", "connect4", "checkers", "rps", "crazy8", "chess", "uno", "ludo", "scrabble", "dominoes", "gofish", "oldmaid"}
 GAME_META = {
     "memory": {"name": "Memory Match", "score_dir": "asc"},   # lower moves better
     "snakes": {"name": "Snakes & Ladders", "score_dir": "desc"},
@@ -35,7 +35,68 @@ GAME_META = {
     "ludo": {"name": "Ludo", "score_dir": "desc"},
     "scrabble": {"name": "Scrabble Solo", "score_dir": "desc"},
     "dominoes": {"name": "Dominoes", "score_dir": "desc"},
+    "gofish": {"name": "Go Fish", "score_dir": "desc"},
+    "oldmaid": {"name": "Old Maid", "score_dir": "desc"},
 }
+
+# ---------- Badges ----------
+# List of badges. Each badge: {id, name, desc, icon, check(user, ctx)->bool}
+BADGES = [
+    {"id": "first_win", "name": "First Blood", "desc": "Win your first game", "icon": "🩸", "color": "#FF479A"},
+    {"id": "wins_5", "name": "Hot Streak", "desc": "Win 5 games total", "icon": "🔥", "color": "#FFD100"},
+    {"id": "wins_25", "name": "Champion", "desc": "Win 25 games total", "icon": "🏆", "color": "#FFD100"},
+    {"id": "wins_100", "name": "Legend", "desc": "Win 100 games total", "icon": "👑", "color": "#39FF14"},
+    {"id": "plays_10", "name": "Regular", "desc": "Play 10 games", "icon": "🎮", "color": "#00F0FF"},
+    {"id": "plays_50", "name": "Enthusiast", "desc": "Play 50 games", "icon": "🎯", "color": "#00F0FF"},
+    {"id": "streak_3", "name": "Warmed Up", "desc": "3-day daily-challenge streak", "icon": "🕯", "color": "#FF479A"},
+    {"id": "streak_7", "name": "On Fire", "desc": "7-day daily-challenge streak", "icon": "🔥", "color": "#FF479A"},
+    {"id": "streak_30", "name": "Devotee", "desc": "30-day daily-challenge streak", "icon": "🌟", "color": "#FFD100"},
+    {"id": "streak_100", "name": "Immortal", "desc": "100-day daily-challenge streak", "icon": "💎", "color": "#00F0FF"},
+    {"id": "chess_win", "name": "Grandmaster", "desc": "Win a Chess game", "icon": "♛", "color": "#FFFFFF"},
+    {"id": "scrabble_win", "name": "Word Smith", "desc": "Beat par in Scrabble Solo", "icon": "🔤", "color": "#39FF14"},
+    {"id": "battle_win", "name": "Duelist", "desc": "Win a Friend Battle", "icon": "⚔", "color": "#FF479A"},
+    {"id": "all_games", "name": "Collector", "desc": "Play every game at least once", "icon": "🎪", "color": "#FFD100"},
+]
+BADGE_BY_ID = {b["id"]: b for b in BADGES}
+
+
+def compute_earned_badges(user: dict, ctx: Optional[Dict[str, Any]] = None) -> list:
+    """Return badge ids the user qualifies for right now."""
+    stats = user.get("stats") or {}
+    ctx = ctx or {}
+    earned = []
+    total_wins = int(user.get("total_wins", 0))
+    total_plays = int(user.get("total_plays", 0))
+    streak = int(user.get("streak", 0))
+    if total_wins >= 1:
+        earned.append("first_win")
+    if total_wins >= 5:
+        earned.append("wins_5")
+    if total_wins >= 25:
+        earned.append("wins_25")
+    if total_wins >= 100:
+        earned.append("wins_100")
+    if total_plays >= 10:
+        earned.append("plays_10")
+    if total_plays >= 50:
+        earned.append("plays_50")
+    if streak >= 3:
+        earned.append("streak_3")
+    if streak >= 7:
+        earned.append("streak_7")
+    if streak >= 30:
+        earned.append("streak_30")
+    if streak >= 100:
+        earned.append("streak_100")
+    if int((stats.get("chess") or {}).get("wins", 0)) >= 1:
+        earned.append("chess_win")
+    if int((stats.get("scrabble") or {}).get("wins", 0)) >= 1:
+        earned.append("scrabble_win")
+    if ctx.get("battle_win"):
+        earned.append("battle_win")
+    if all(int((stats.get(g) or {}).get("plays", 0)) >= 1 for g in GAME_IDS):
+        earned.append("all_games")
+    return earned
 
 # XP awarded
 XP_PLAY = 5
@@ -54,6 +115,8 @@ DAILY_CHALLENGES = [
     {"id": "win-ludo", "title": "Home Run", "desc": "Get all your Ludo tokens home", "game_id": "ludo", "type": "win", "goal": 1},
     {"id": "win-scrabble", "title": "Word Wizard", "desc": "Beat par in Scrabble Solo", "game_id": "scrabble", "type": "win", "goal": 1},
     {"id": "win-dominoes", "title": "Chain Reaction", "desc": "Win 1 Dominoes match", "game_id": "dominoes", "type": "win", "goal": 1},
+    {"id": "win-gofish", "title": "Angler", "desc": "Win 1 Go Fish match", "game_id": "gofish", "type": "win", "goal": 1},
+    {"id": "win-oldmaid", "title": "Not Today", "desc": "Avoid the Old Maid", "game_id": "oldmaid", "type": "win", "goal": 1},
     {"id": "play-3", "title": "Warm Up", "desc": "Play any 3 games today", "game_id": None, "type": "plays", "goal": 3},
     {"id": "win-2", "title": "Double Down", "desc": "Win any 2 games today", "game_id": None, "type": "wins", "goal": 2},
 ]
@@ -145,6 +208,9 @@ def public_user(doc: dict) -> dict:
         "xp": doc.get("xp", 0),
         "streak": doc.get("streak", 0),
         "streak_last_date": doc.get("streak_last_date"),
+        "freezes_available": int(doc.get("freezes_available", 1)),
+        "freezes_last_refill": doc.get("freezes_last_refill"),
+        "badges": doc.get("badges", []),
         "created_at": doc.get("created_at"),
     }
 
@@ -290,15 +356,39 @@ async def submit_score(body: SubmitScoreIn, user: dict = Depends(get_current_use
             matches = True
     challenge_completed = False
     new_streak = streak
+    freeze_used = False
+    freezes_available = int(user.get("freezes_available", 1))
+    freezes_last_refill = user.get("freezes_last_refill")
+    today_date = datetime.now(timezone.utc).date()
+
+    # Refill: 1 freeze available every 7 days
+    if not freezes_last_refill:
+        freezes_available = 1
+        freezes_last_refill = today
+    else:
+        try:
+            last_refill_date = datetime.strptime(freezes_last_refill, "%Y-%m-%d").date()
+            if (today_date - last_refill_date).days >= 7:
+                freezes_available = 1
+                freezes_last_refill = today
+        except Exception:
+            freezes_available = 1
+            freezes_last_refill = today
+
     if matches and not daily.get("claimed") and int(daily.get("progress", 0)) >= int(challenge["goal"]):
         daily["claimed"] = True
-        # Streak logic
         last_claim = user.get("streak_last_date")
-        yesterday = (datetime.now(timezone.utc).date() - timedelta(days=1)).strftime("%Y-%m-%d")
+        yesterday = (today_date - timedelta(days=1)).strftime("%Y-%m-%d")
+        day_before = (today_date - timedelta(days=2)).strftime("%Y-%m-%d")
         if last_claim == yesterday:
             new_streak = streak + 1
         elif last_claim == today:
-            new_streak = streak  # already counted (edge)
+            new_streak = streak
+        elif last_claim == day_before and freezes_available > 0:
+            # Use a streak freeze to preserve
+            new_streak = streak + 1
+            freezes_available -= 1
+            freeze_used = True
         else:
             new_streak = 1
         mult_after = streak_multiplier(new_streak)
@@ -314,6 +404,8 @@ async def submit_score(body: SubmitScoreIn, user: dict = Depends(get_current_use
         "total_plays": total_plays,
         "xp": new_xp,
         "daily": daily,
+        "freezes_available": freezes_available,
+        "freezes_last_refill": freezes_last_refill,
     }
     if challenge_completed:
         update_fields["streak"] = new_streak
@@ -329,10 +421,22 @@ async def submit_score(body: SubmitScoreIn, user: dict = Depends(get_current_use
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
     updated = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+
+    # Compute newly earned badges
+    prev_badges = set(user.get("badges") or [])
+    earned = set(compute_earned_badges(updated))
+    newly_unlocked = list(earned - prev_badges)
+    if newly_unlocked:
+        merged = list(earned)
+        await db.users.update_one({"id": user["id"]}, {"$set": {"badges": merged}})
+        updated["badges"] = merged
+
     return {
         "user": public_user(updated),
         "xp_gained": xp_gain,
         "challenge_completed": challenge_completed,
+        "freeze_used": freeze_used,
+        "newly_unlocked_badges": [BADGE_BY_ID[b] for b in newly_unlocked if b in BADGE_BY_ID],
     }
 
 
@@ -406,11 +510,35 @@ async def games_meta():
     return {"games": GAME_META}
 
 
+@api.get("/badges")
+async def list_badges():
+    return {"badges": BADGES}
+
+
 # ---------- Friend Battles (Connect Four PvP) ----------
-# In-memory battle rooms. Keep it simple; polling API.
+# In-memory battle rooms. Keep it simple; polling API + WebSocket push.
 BATTLE_ROWS = 6
 BATTLE_COLS = 7
 _battle_rooms: Dict[str, Dict[str, Any]] = {}
+_battle_connections: Dict[str, set] = {}  # room_id -> set of WebSocket
+
+
+async def broadcast_battle_state(room_id: str):
+    conns = _battle_connections.get(room_id, set())
+    if not conns:
+        return
+    room = _battle_rooms.get(room_id)
+    if not room:
+        return
+    payload = {"type": "state", "room": _public_room(room)}
+    dead = []
+    for ws in list(conns):
+        try:
+            await ws.send_json(payload)
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        conns.discard(ws)
 
 
 def _empty_board():
@@ -504,6 +632,7 @@ async def join_battle(room_id: str, user: dict = Depends(get_current_user)):
     room["guest_id"] = user["id"]
     room["guest_name"] = user.get("name", "Guest")
     room["status"] = "playing"
+    await broadcast_battle_state(room["id"])
     return _public_room(room)
 
 
@@ -551,6 +680,7 @@ async def battle_move(room_id: str, body: MoveIn, user: dict = Depends(get_curre
     # Award XP/stats on win (both players get plays; winner gets win)
     if room["status"] == "ended":
         await _award_battle_result(room)
+    await broadcast_battle_state(room_id.upper())
     return _public_room(room)
 
 
@@ -575,9 +705,91 @@ async def _award_battle_result(room: dict):
         mult = streak_multiplier(streak)
         base = XP_PLAY + (XP_WIN if won else 0)
         new_xp = int(u.get("xp", 0)) + int(base * mult)
+        # Compute badges for this user
+        interim = {**u, "stats": stats, "total_wins": total_wins, "total_plays": total_plays}
+        earned = set(compute_earned_badges(interim, {"battle_win": won}))
+        merged = list(set(u.get("badges") or []) | earned)
         await db.users.update_one({"id": uid}, {"$set": {
-            "stats": stats, "total_wins": total_wins, "total_plays": total_plays, "xp": new_xp,
+            "stats": stats,
+            "total_wins": total_wins,
+            "total_plays": total_plays,
+            "xp": new_xp,
+            "badges": merged,
         }})
+
+
+@app.websocket("/api/ws/battle/{room_id}")
+async def ws_battle(websocket: WebSocket, room_id: str, token: str = Query(None)):
+    # Authenticate via token query param
+    if not token:
+        await websocket.close(code=4401)
+        return
+    try:
+        payload = pyjwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
+        user_id = payload["sub"]
+    except Exception:
+        await websocket.close(code=4401)
+        return
+    rid = room_id.upper()
+    room = _battle_rooms.get(rid)
+    if not room:
+        await websocket.close(code=4404)
+        return
+    # user must be host or (allowed) guest slot
+    if user_id != room["host_id"] and user_id != room.get("guest_id"):
+        # allow to observe? For MVP: only players.
+        await websocket.close(code=4403)
+        return
+    await websocket.accept()
+    conns = _battle_connections.setdefault(rid, set())
+    conns.add(websocket)
+    try:
+        # send initial state
+        await websocket.send_json({"type": "state", "room": _public_room(room)})
+        while True:
+            data = await websocket.receive_json()
+            if data.get("type") == "move":
+                col = int(data.get("col", -1))
+                if room["status"] != "playing":
+                    await websocket.send_json({"type": "error", "detail": "Battle not active"})
+                    continue
+                is_host = user_id == room["host_id"]
+                is_guest = user_id == room.get("guest_id")
+                my_turn = (is_host and room["turn"] == "host") or (is_guest and room["turn"] == "guest")
+                if not my_turn:
+                    await websocket.send_json({"type": "error", "detail": "Not your turn"})
+                    continue
+                if col < 0 or col >= BATTLE_COLS:
+                    await websocket.send_json({"type": "error", "detail": "Invalid column"})
+                    continue
+                marker = 1 if is_host else 2
+                dropped = _c4_drop(room["board"], col, marker)
+                if dropped is None:
+                    await websocket.send_json({"type": "error", "detail": "Column full"})
+                    continue
+                room["moves"] += 1
+                room["last_move_at"] = datetime.now(timezone.utc).isoformat()
+                win = _c4_win(room["board"], marker)
+                if win:
+                    room["winner"] = "host" if is_host else "guest"
+                    room["win_cells"] = win
+                    room["status"] = "ended"
+                elif _c4_full(room["board"]):
+                    room["winner"] = "draw"
+                    room["status"] = "ended"
+                else:
+                    room["turn"] = "guest" if room["turn"] == "host" else "host"
+                if room["status"] == "ended":
+                    await _award_battle_result(room)
+                await broadcast_battle_state(rid)
+            elif data.get("type") == "ping":
+                await websocket.send_json({"type": "pong"})
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.warning("WS battle error: %s", e)
+    finally:
+        conns.discard(websocket)
 
 
 @api.get("/")

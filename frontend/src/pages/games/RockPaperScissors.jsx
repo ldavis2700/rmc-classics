@@ -37,7 +37,7 @@ export default function RockPaperScissors() {
       setSubmitted(true);
       if (user) {
         submitScore({ game_id: "rps", won, score: won ? 1 : 0 }).then((res) => {
-          if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed });
+          if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
           setShareOpen(true);
         });
       } else {
@@ -149,6 +149,7 @@ export default function RockPaperScissors() {
         statValue={you}
         xpGained={xpInfo.xp}
         challengeCompleted={xpInfo.done}
+        newlyUnlockedBadges={xpInfo.badges}
       />
     </GameShell>
   );

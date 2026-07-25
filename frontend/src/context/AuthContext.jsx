@@ -65,6 +65,8 @@ export function AuthProvider({ children }) {
         user: data.user,
         xp_gained: data.xp_gained || 0,
         challenge_completed: !!data.challenge_completed,
+        freeze_used: !!data.freeze_used,
+        newly_unlocked_badges: data.newly_unlocked_badges || [],
       };
     } catch (e) {
       return { ok: false, error: formatApiErrorDetail(e.response?.data?.detail) };

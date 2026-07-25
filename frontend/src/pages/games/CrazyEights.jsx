@@ -74,7 +74,7 @@ export default function CrazyEights() {
       setSubmitted(true);
       if (user) {
         submitScore({ game_id: "crazy8", won, score: won ? 1 : 0 }).then((res) => {
-          if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed });
+          if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
           setShareOpen(true);
         });
       } else {
@@ -304,6 +304,7 @@ export default function CrazyEights() {
         statValue={winner === "cpu" ? state.you.length : 0}
         xpGained={xpInfo.xp}
         challengeCompleted={xpInfo.done}
+        newlyUnlockedBadges={xpInfo.badges}
       />
     </GameShell>
   );

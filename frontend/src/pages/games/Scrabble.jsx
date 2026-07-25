@@ -78,7 +78,7 @@ export default function Scrabble() {
       );
       if (user && !submitted) {
         const res = await submitScore({ game_id: "scrabble", won, score: finalScore });
-        if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed });
+        if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
         setSubmitted(true);
       }
       setShareOpen(true);

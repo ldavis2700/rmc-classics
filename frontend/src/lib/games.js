@@ -120,6 +120,28 @@ export const GAMES = [
       "Classic block dominoes. Chain your tiles, block the CPU, empty your hand to win.",
     era: "12th Century China",
   },
+  {
+    id: "gofish",
+    name: "Go Fish",
+    tagline: "Got any threes?",
+    color: "#00F0FF",
+    accent: "#39FF14",
+    path: "/play/gofish",
+    description:
+      "Ask for a rank, collect the whole set. Land four of a kind and bank the book. Most books wins.",
+    era: "1800s",
+  },
+  {
+    id: "oldmaid",
+    name: "Old Maid",
+    tagline: "Don't get stuck with her.",
+    color: "#FF479A",
+    accent: "#FFD100",
+    path: "/play/oldmaid",
+    description:
+      "Draw cards from the CPU's hand and match pairs. Whoever's left with the odd Queen loses.",
+    era: "1700s",
+  },
 ];
 
 export const GAME_MAP = Object.fromEntries(GAMES.map((g) => [g.id, g]));
