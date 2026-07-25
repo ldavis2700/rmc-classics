@@ -16,26 +16,26 @@ function rankBadge(i) {
 
 export default function Leaderboard() {
   const [tab, setTab] = useState("overall");
+  const [scope, setScope] = useState("all");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const url = tab === "overall" ? "/games/leaderboard" : `/games/leaderboard/${tab}`;
+    let url;
+    if (scope === "week") {
+      url = tab === "overall" ? "/games/leaderboard-week" : `/games/leaderboard-week?game_id=${tab}`;
+    } else {
+      url = tab === "overall" ? "/games/leaderboard" : `/games/leaderboard/${tab}`;
+    }
     api
       .get(url)
-      .then((res) => {
-        if (!cancelled) setRows(res.data.rows || []);
-      })
-      .catch(() => {
-        if (!cancelled) setRows([]);
-      })
+      .then((res) => { if (!cancelled) setRows(res.data.rows || []); })
+      .catch(() => { if (!cancelled) setRows([]); })
       .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
-  }, [tab]);
+    return () => { cancelled = true; };
+  }, [tab, scope]);
 
   return (
     <div className="mx-auto max-w-4xl px-4 pt-8 md:px-8 md:pt-14">
@@ -49,7 +49,27 @@ export default function Leaderboard() {
         </p>
       </div>
 
-      {/* Tabs */}
+      {/* Scope toggle */}
+      <div className="mb-4 inline-flex rounded-full border border-white/10 bg-white/5 p-1" data-testid="lb-scope-toggle">
+        {[
+          { id: "all", label: "All-time" },
+          { id: "week", label: "This week" },
+        ].map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            data-testid={`lb-scope-${s.id}`}
+            onClick={() => { sfx.click(); setScope(s.id); }}
+            className={`rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-widest transition-colors ${
+              scope === s.id ? "bg-[#ff479a] text-white" : "text-[#a3a1c6]"
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Game tabs */}
       <div className="mb-6 flex flex-wrap gap-2">
         {TABS.map((t) => {
           const active = tab === t.id;
@@ -76,62 +96,63 @@ export default function Leaderboard() {
         {!loading && rows.length === 0 && (
           <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-10 text-center">
             <p className="font-pixel text-neon-yellow">NO SCORES YET</p>
-            <p className="mt-2 text-sm text-[#a3a1c6]">Be the first to set the high score!</p>
+            <p className="mt-2 text-sm text-[#a3a1c6]">
+              {scope === "week" ? "Be the first to win this week!" : "Be the first to set the high score!"}
+            </p>
           </div>
         )}
-        {!loading &&
-          rows.map((row, i) => {
-            const badge = rankBadge(i);
-            const RankIcon = badge?.icon;
-            const isOverall = tab === "overall";
-            const game = GAME_MAP[tab];
-            return (
-              <motion.div
-                key={(row.user_id || row.id) + i}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.03 }}
-                className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4"
-                style={badge ? { borderColor: `${badge.color}55`, boxShadow: `0 0 20px ${badge.color}22` } : {}}
-              >
-                <div className="flex items-center gap-4">
-                  <div
-                    className="grid h-10 w-10 place-items-center rounded-full font-pixel text-sm"
-                    style={{
-                      backgroundColor: badge ? `${badge.color}22` : "rgba(255,255,255,0.05)",
-                      color: badge ? badge.color : "#ffffff",
-                    }}
-                  >
-                    {RankIcon ? <RankIcon className="h-4 w-4" /> : `#${i + 1}`}
+        {!loading && rows.map((row, i) => {
+          const badge = rankBadge(i);
+          const RankIcon = badge?.icon;
+          const isOverall = tab === "overall";
+          return (
+            <motion.div
+              key={(row.user_id || row.id) + i}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.03 }}
+              className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4"
+              style={badge ? { borderColor: `${badge.color}55`, boxShadow: `0 0 20px ${badge.color}22` } : {}}
+            >
+              <div className="flex items-center gap-4">
+                <div
+                  className="grid h-10 w-10 place-items-center rounded-full font-pixel text-sm"
+                  style={{
+                    backgroundColor: badge ? `${badge.color}22` : "rgba(255,255,255,0.05)",
+                    color: badge ? badge.color : "#ffffff",
+                  }}
+                >
+                  {RankIcon ? <RankIcon className="h-4 w-4" /> : `#${i + 1}`}
+                </div>
+                <div>
+                  <div className="font-semibold text-white">{row.name || "Player"}</div>
+                  <div className="mt-0.5 text-xs uppercase tracking-widest text-[#a3a1c6]">
+                    {isOverall
+                      ? `${scope === "week" ? row.plays : (row.total_plays || 0)} games ${scope === "week" ? "this week" : "played"}`
+                      : `${row.plays} plays · ${row.wins} wins`}
                   </div>
+                </div>
+              </div>
+              <div className="text-right">
+                {isOverall ? (
+                  <div className="font-pixel text-xl text-neon-yellow">
+                    {scope === "week" ? row.wins : (row.total_wins || 0)}
+                    <span className="ml-1 text-xs text-[#a3a1c6]">W</span>
+                  </div>
+                ) : (
                   <div>
-                    <div className="font-semibold text-white">{row.name || "Player"}</div>
-                    <div className="mt-0.5 text-xs uppercase tracking-widest text-[#a3a1c6]">
-                      {isOverall
-                        ? `${row.total_plays || 0} games played`
-                        : `${row.plays} plays · ${row.wins} wins`}
-                    </div>
+                    <div className="font-pixel text-xl text-neon-yellow">{row.wins} W</div>
+                    {row.best_score != null && (
+                      <div className="text-[10px] uppercase tracking-widest text-[#a3a1c6]">
+                        Best {row.best_score}
+                      </div>
+                    )}
                   </div>
-                </div>
-                <div className="text-right">
-                  {isOverall ? (
-                    <div className="font-pixel text-xl text-neon-yellow">
-                      {row.total_wins || 0}<span className="ml-1 text-xs text-[#a3a1c6]">W</span>
-                    </div>
-                  ) : (
-                    <div>
-                      <div className="font-pixel text-xl text-neon-yellow">{row.wins} W</div>
-                      {row.best_score != null && (
-                        <div className="text-[10px] uppercase tracking-widest text-[#a3a1c6]">
-                          Best {row.best_score}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            );
-          })}
+                )}
+              </div>
+            </motion.div>
+          );
+        })}
       </div>
 
       {tab !== "overall" && (

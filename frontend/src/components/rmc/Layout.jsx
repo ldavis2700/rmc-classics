@@ -1,5 +1,5 @@
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { Home, Gamepad2, Trophy, User, Volume2, VolumeX, Swords } from "lucide-react";
+import { Home, Gamepad2, Trophy, User, Volume2, VolumeX, Swords, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { isSoundEnabled, setSoundEnabled, sfx } from "@/lib/sound";
 import { useAuth } from "@/context/AuthContext";
@@ -8,6 +8,7 @@ const navItems = [
   { to: "/", label: "Home", icon: Home, id: "nav-home" },
   { to: "/library", label: "Library", icon: Gamepad2, id: "nav-library" },
   { to: "/battles", label: "Battles", icon: Swords, id: "nav-battles" },
+  { to: "/friends", label: "Friends", icon: Users, id: "nav-friends" },
   { to: "/leaderboard", label: "Ranks", icon: Trophy, id: "nav-leaderboard" },
   { to: "/profile", label: "Profile", icon: User, id: "nav-profile" },
 ];

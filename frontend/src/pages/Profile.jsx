@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { LogOut, Sparkles, Snowflake } from "lucide-react";
 import { sfx } from "@/lib/sound";
 import { BadgeShelf } from "@/components/rmc/Badge";
+import ThemePicker from "@/components/rmc/ThemePicker";
 
 export default function Profile() {
   const { user, logout } = useAuth();
@@ -65,6 +66,9 @@ export default function Profile() {
           <BadgeShelf userBadges={user.badges || []} />
         </div>
       </div>
+
+      {/* Theme picker */}
+      <ThemePicker />
 
       <div className="mt-10">
         <p className="font-pixel text-xs text-neon-cyan">// GAME BREAKDOWN</p>

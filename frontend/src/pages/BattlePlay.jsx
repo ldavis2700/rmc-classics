@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Copy, Share2 } from "lucide-react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { ArrowLeft, Copy, Share2, Swords } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import { sfx } from "@/lib/sound";
@@ -22,11 +22,13 @@ function wsUrlFor(roomId) {
 export default function BattlePlay() {
   const { roomId } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [room, setRoom] = useState(null);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
   const [joined, setJoined] = useState(false);
   const [wsOpen, setWsOpen] = useState(false);
+  const [rematchBusy, setRematchBusy] = useState(false);
   const wsRef = useRef(null);
   const pollRef = useRef(null);
 
@@ -159,6 +161,31 @@ export default function BattlePlay() {
     }
   };
 
+  // Auto-navigate to rematch room when host creates one
+  useEffect(() => {
+    if (room?.rematch_id) {
+      // Delay just enough to show "rematch started"
+      const t = setTimeout(() => {
+        navigate(`/battle/${room.rematch_id}`);
+      }, 600);
+      return () => clearTimeout(t);
+    }
+  }, [room?.rematch_id, navigate]);
+
+  const startRematch = async () => {
+    if (!room || rematchBusy) return;
+    setRematchBusy(true);
+    sfx.click();
+    try {
+      const { data } = await api.post(`/battle/${roomId}/rematch`);
+      navigate(`/battle/${data.id}`);
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    } finally {
+      setRematchBusy(false);
+    }
+  };
+
   if (error) {
     return (
       <div className="mx-auto max-w-md px-4 pt-10 text-center">
@@ -267,6 +294,16 @@ export default function BattlePlay() {
               <div>
                 <p className="font-pixel text-xs text-neon-yellow">// GAME OVER</p>
                 <p className="mt-1 font-display text-lg font-black text-white">{winnerText()}</p>
+                <button
+                  type="button"
+                  onClick={startRematch}
+                  disabled={rematchBusy || !!room.rematch_id}
+                  data-testid="battle-rematch-btn"
+                  className="btn-arcade mt-3 w-full rounded-full py-2 text-xs font-black disabled:opacity-50"
+                >
+                  <Swords className="mr-1.5 inline h-3.5 w-3.5" />
+                  {room.rematch_id ? "Rematch loading…" : rematchBusy ? "…" : "Rematch"}
+                </button>
               </div>
             )}
           </div>

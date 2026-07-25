@@ -39,6 +39,20 @@ GAME_META = {
     "oldmaid": {"name": "Old Maid", "score_dir": "desc"},
 }
 
+# ---------- Themes ----------
+THEMES = [
+    {"id": "neon", "name": "Neon Arcade", "unlock_xp": 0, "primary": "#FF479A", "accent": "#00F0FF"},
+    {"id": "gameboy", "name": "Gameboy", "unlock_xp": 250, "primary": "#9BBC0F", "accent": "#8BAC0F"},
+    {"id": "crt", "name": "Retro CRT", "unlock_xp": 750, "primary": "#39FF14", "accent": "#00F0FF"},
+    {"id": "arcade", "name": "Coin-op Arcade", "unlock_xp": 1500, "primary": "#FF3B3B", "accent": "#FFD100"},
+]
+THEME_BY_ID = {t["id"]: t for t in THEMES}
+
+
+def unlocked_themes_for(xp: int) -> list:
+    return [t["id"] for t in THEMES if int(xp) >= int(t["unlock_xp"])]
+
+
 # ---------- Badges ----------
 # List of badges. Each badge: {id, name, desc, icon, check(user, ctx)->bool}
 BADGES = [
@@ -197,6 +211,8 @@ def empty_stats() -> Dict[str, Any]:
 
 
 def public_user(doc: dict) -> dict:
+    xp = int(doc.get("xp", 0))
+    unlocked_themes = list(set((doc.get("unlocked_themes") or []) + unlocked_themes_for(xp)))
     return {
         "id": doc["id"],
         "email": doc["email"],
@@ -205,12 +221,14 @@ def public_user(doc: dict) -> dict:
         "stats": doc.get("stats", empty_stats()),
         "total_wins": doc.get("total_wins", 0),
         "total_plays": doc.get("total_plays", 0),
-        "xp": doc.get("xp", 0),
+        "xp": xp,
         "streak": doc.get("streak", 0),
         "streak_last_date": doc.get("streak_last_date"),
         "freezes_available": int(doc.get("freezes_available", 1)),
         "freezes_last_refill": doc.get("freezes_last_refill"),
         "badges": doc.get("badges", []),
+        "theme": doc.get("theme", "neon"),
+        "unlocked_themes": unlocked_themes,
         "created_at": doc.get("created_at"),
     }
 
@@ -299,7 +317,13 @@ async def login(body: LoginIn):
 
 @api.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
-    return {"user": public_user(user)}
+    # heartbeat: update last_seen
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"last_seen": datetime.now(timezone.utc).isoformat()}},
+    )
+    updated = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return {"user": public_user(updated or user)}
 
 
 @api.post("/auth/logout")
@@ -790,6 +814,172 @@ async def ws_battle(websocket: WebSocket, room_id: str, token: str = Query(None)
         logger.warning("WS battle error: %s", e)
     finally:
         conns.discard(websocket)
+
+
+@api.post("/battle/{room_id}/rematch")
+async def rematch_battle(room_id: str, user: dict = Depends(get_current_user)):
+    old = _battle_rooms.get(room_id.upper())
+    if not old:
+        raise HTTPException(status_code=404, detail="Battle not found")
+    if old["status"] != "ended":
+        raise HTTPException(status_code=400, detail="Battle not finished yet")
+    if user["id"] != old["host_id"] and user["id"] != old.get("guest_id"):
+        raise HTTPException(status_code=403, detail="Not a player in this battle")
+    if old.get("rematch_id"):
+        return _public_room(_battle_rooms.get(old["rematch_id"], old))
+    # Preserve prior host role for the person who won (or original host if draw)
+    new_host_id = old["host_id"]
+    new_host_name = old["host_name"]
+    new_guest_id = old.get("guest_id")
+    new_guest_name = old.get("guest_name")
+    if old.get("winner") == "guest":
+        new_host_id, new_guest_id = new_guest_id, new_host_id
+        new_host_name, new_guest_name = new_guest_name, new_host_name
+    rid = uuid.uuid4().hex[:6].upper()
+    new_room = {
+        "id": rid,
+        "host_id": new_host_id,
+        "host_name": new_host_name,
+        "guest_id": new_guest_id,
+        "guest_name": new_guest_name,
+        "board": _empty_board(),
+        "turn": "host",
+        "winner": None,
+        "win_cells": None,
+        "moves": 0,
+        "status": "playing" if new_guest_id else "waiting",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _battle_rooms[rid] = new_room
+    old["rematch_id"] = rid
+    await broadcast_battle_state(old["id"])  # notify old room subscribers
+    return _public_room(new_room)
+
+
+# ---------- Weekly leaderboard (from game_events) ----------
+def _week_start_utc() -> datetime:
+    now = datetime.now(timezone.utc)
+    # Monday as start of week
+    d = now - timedelta(days=now.weekday())
+    return datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+
+
+@api.get("/games/leaderboard-week")
+async def weekly_leaderboard(game_id: Optional[str] = None, limit: int = 20):
+    start = _week_start_utc().isoformat()
+    q = {"created_at": {"$gte": start}}
+    if game_id:
+        if game_id not in GAME_IDS:
+            raise HTTPException(status_code=400, detail="Unknown game_id")
+        q["game_id"] = game_id
+    events = await db.game_events.find(q, {"_id": 0}).to_list(20000)
+    tally = {}
+    for e in events:
+        uid = e["user_id"]
+        t = tally.setdefault(uid, {"plays": 0, "wins": 0})
+        t["plays"] += 1
+        if e.get("won"):
+            t["wins"] += 1
+    if not tally:
+        return {"window": "week", "since": start, "rows": []}
+    users = await db.users.find({"id": {"$in": list(tally.keys())}}, {"_id": 0, "id": 1, "name": 1, "avatar": 1}).to_list(1000)
+    name_map = {u["id"]: u for u in users}
+    rows = []
+    for uid, t in tally.items():
+        u = name_map.get(uid, {})
+        rows.append({
+            "user_id": uid,
+            "name": u.get("name", "Player"),
+            "avatar": u.get("avatar"),
+            "plays": t["plays"],
+            "wins": t["wins"],
+        })
+    rows.sort(key=lambda r: (-r["wins"], -r["plays"]))
+    return {"window": "week", "since": start, "rows": rows[:limit]}
+
+
+# ---------- Friends ----------
+class FriendAddIn(BaseModel):
+    email: EmailStr
+
+
+@api.post("/friends/add")
+async def add_friend(body: FriendAddIn, user: dict = Depends(get_current_user)):
+    email = body.email.lower().strip()
+    if email == user["email"]:
+        raise HTTPException(status_code=400, detail="Cannot add yourself")
+    friend = await db.users.find_one({"email": email}, {"_id": 0})
+    if not friend:
+        raise HTTPException(status_code=404, detail="No player with that email")
+    friend_ids = list(set((user.get("friend_ids") or []) + [friend["id"]]))
+    # Mutual: also add current user to friend's list
+    their_ids = list(set((friend.get("friend_ids") or []) + [user["id"]]))
+    await db.users.update_one({"id": user["id"]}, {"$set": {"friend_ids": friend_ids}})
+    await db.users.update_one({"id": friend["id"]}, {"$set": {"friend_ids": their_ids}})
+    return {"ok": True, "friend": {"id": friend["id"], "name": friend.get("name", ""), "email": friend["email"]}}
+
+
+@api.get("/friends")
+async def list_friends(user: dict = Depends(get_current_user)):
+    ids = user.get("friend_ids") or []
+    if not ids:
+        return {"friends": []}
+    friends = await db.users.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1, "email": 1, "avatar": 1, "last_seen": 1, "total_wins": 1, "xp": 1}).to_list(1000)
+    now = datetime.now(timezone.utc)
+    out = []
+    for f in friends:
+        online = False
+        try:
+            if f.get("last_seen"):
+                ls = datetime.fromisoformat(f["last_seen"])
+                online = (now - ls).total_seconds() < 90
+        except Exception:
+            online = False
+        out.append({
+            "id": f["id"],
+            "name": f.get("name", ""),
+            "email": f["email"],
+            "avatar": f.get("avatar"),
+            "total_wins": f.get("total_wins", 0),
+            "xp": f.get("xp", 0),
+            "online": online,
+        })
+    out.sort(key=lambda r: (0 if r["online"] else 1, -r["total_wins"]))
+    return {"friends": out}
+
+
+@api.delete("/friends/{friend_id}")
+async def remove_friend(friend_id: str, user: dict = Depends(get_current_user)):
+    ids = [f for f in (user.get("friend_ids") or []) if f != friend_id]
+    await db.users.update_one({"id": user["id"]}, {"$set": {"friend_ids": ids}})
+    friend = await db.users.find_one({"id": friend_id}, {"_id": 0})
+    if friend:
+        theirs = [f for f in (friend.get("friend_ids") or []) if f != user["id"]]
+        await db.users.update_one({"id": friend_id}, {"$set": {"friend_ids": theirs}})
+    return {"ok": True}
+
+
+# ---------- Themes ----------
+class ThemeSelectIn(BaseModel):
+    theme_id: str
+
+
+@api.get("/themes")
+async def list_themes():
+    return {"themes": THEMES}
+
+
+@api.post("/themes/select")
+async def select_theme(body: ThemeSelectIn, user: dict = Depends(get_current_user)):
+    if body.theme_id not in THEME_BY_ID:
+        raise HTTPException(status_code=400, detail="Unknown theme")
+    xp = int(user.get("xp", 0))
+    unlocked = unlocked_themes_for(xp)
+    if body.theme_id not in unlocked:
+        raise HTTPException(status_code=403, detail="Theme not unlocked yet")
+    await db.users.update_one({"id": user["id"]}, {"$set": {"theme": body.theme_id}})
+    updated = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return {"user": public_user(updated)}
 
 
 @api.get("/")

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { ThemeProvider } from "@/context/ThemeContext";
 import Layout from "@/components/rmc/Layout";
 import InstallPrompt from "@/components/rmc/InstallPrompt";
 import Home from "@/pages/Home";
@@ -26,6 +27,7 @@ import GoFish from "@/pages/games/GoFish";
 import OldMaid from "@/pages/games/OldMaid";
 import Battles from "@/pages/Battles";
 import BattlePlay from "@/pages/BattlePlay";
+import Friends from "@/pages/Friends";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -44,57 +46,67 @@ function App() {
   return (
     <div className="App">
       <AuthProvider>
-        <BrowserRouter>
-          <Layout>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/library" element={<Library />} />
-              <Route path="/leaderboard" element={<Leaderboard />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route
-                path="/profile"
-                element={
-                  <ProtectedRoute>
-                    <Profile />
-                  </ProtectedRoute>
-                }
-              />
-              <Route path="/play/memory" element={<MemoryMatch />} />
-              <Route path="/play/snakes" element={<SnakesLadders />} />
-              <Route path="/play/connect4" element={<ConnectFour />} />
-              <Route path="/play/checkers" element={<Checkers />} />
-              <Route path="/play/rps" element={<RockPaperScissors />} />
-              <Route path="/play/crazy8" element={<CrazyEights />} />
-              <Route path="/play/chess" element={<Chess />} />
-              <Route path="/play/uno" element={<Uno />} />
-              <Route path="/play/ludo" element={<Ludo />} />
-              <Route path="/play/scrabble" element={<Scrabble />} />
-              <Route path="/play/dominoes" element={<Dominoes />} />
-              <Route path="/play/gofish" element={<GoFish />} />
-              <Route path="/play/oldmaid" element={<OldMaid />} />
-              <Route
-                path="/battles"
-                element={
-                  <ProtectedRoute>
-                    <Battles />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/battle/:roomId"
-                element={
-                  <ProtectedRoute>
-                    <BattlePlay />
-                  </ProtectedRoute>
-                }
-              />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Layout>
-          <InstallPrompt />
-          <Toaster theme="dark" richColors position="top-center" />
-        </BrowserRouter>
+        <ThemeProvider>
+          <BrowserRouter>
+            <Layout>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/library" element={<Library />} />
+                <Route path="/leaderboard" element={<Leaderboard />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route
+                  path="/profile"
+                  element={
+                    <ProtectedRoute>
+                      <Profile />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="/play/memory" element={<MemoryMatch />} />
+                <Route path="/play/snakes" element={<SnakesLadders />} />
+                <Route path="/play/connect4" element={<ConnectFour />} />
+                <Route path="/play/checkers" element={<Checkers />} />
+                <Route path="/play/rps" element={<RockPaperScissors />} />
+                <Route path="/play/crazy8" element={<CrazyEights />} />
+                <Route path="/play/chess" element={<Chess />} />
+                <Route path="/play/uno" element={<Uno />} />
+                <Route path="/play/ludo" element={<Ludo />} />
+                <Route path="/play/scrabble" element={<Scrabble />} />
+                <Route path="/play/dominoes" element={<Dominoes />} />
+                <Route path="/play/gofish" element={<GoFish />} />
+                <Route path="/play/oldmaid" element={<OldMaid />} />
+                <Route
+                  path="/battles"
+                  element={
+                    <ProtectedRoute>
+                      <Battles />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/friends"
+                  element={
+                    <ProtectedRoute>
+                      <Friends />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/battle/:roomId"
+                  element={
+                    <ProtectedRoute>
+                      <BattlePlay />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Layout>
+            <InstallPrompt />
+            <Toaster theme="dark" richColors position="top-center" />
+          </BrowserRouter>
+        </ThemeProvider>
       </AuthProvider>
     </div>
   );
