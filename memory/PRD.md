@@ -17,7 +17,11 @@ A mobile-first, installable web app that resurrects childhood classic games in o
 ### Iteration 2 — Chess, Uno, Ludo + XP + Daily Challenge + Share Card + full PWA
 ### Iteration 3 — Scrabble, Dominoes + Streak multipliers + Friend Battles (polling)
 ### Iteration 4 — Go Fish, Old Maid + Streak Freeze + Badges + WebSocket Battles
-### Iteration 5 (this session)
+### Iteration 6 (Feb 2026) — Domain Swap
+- Replaced placeholder `childhood-games-5.emergent.host` with production domain **`rmcclassics.com`** in `frontend/public/index.html` (canonical, og:url, og:image, twitter:image), `robots.txt` (Sitemap), and `sitemap.xml` (all 16 `<loc>` URLs)
+- Verified: served HTML/robots/sitemap all resolve to `rmcclassics.com`. Ready for OG debugger validation (Twitter/Facebook) once DNS is live
+
+### Iteration 5
 - **Rematch Button**: One-tap rematch at end of battle. Backend creates new room, sets `rematch_id` on the old one, and broadcasts state — both players auto-navigate. Winner takes host role in the rematch
 - **Weekly Seasons**: `/api/games/leaderboard-week` aggregates `game_events` from Monday UTC. Frontend Leaderboard has All-time / This-week scope toggle
 - **Friends List**: Add mutual friends by email. Online status tracked via `last_seen` heartbeat on `/auth/me`. Battle CTA on each row
