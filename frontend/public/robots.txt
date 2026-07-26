@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /profile
+Disallow: /friends
+Disallow: /battle/
+
+Sitemap: https://childhood-games-5.emergent.host/sitemap.xml
