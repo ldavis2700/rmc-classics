@@ -3,6 +3,7 @@ import { Home, Gamepad2, Trophy, User, Volume2, VolumeX, Swords, Users } from "l
 import { useEffect, useState } from "react";
 import { isSoundEnabled, setSoundEnabled, sfx } from "@/lib/sound";
 import { useAuth } from "@/context/AuthContext";
+import { trackPageview } from "@/lib/analytics";
 
 const navItems = [
   { to: "/", label: "Home", icon: Home, id: "nav-home" },
@@ -21,6 +22,8 @@ export default function Layout({ children }) {
   useEffect(() => {
     // scroll to top on route change
     window.scrollTo({ top: 0, behavior: "instant" });
+    // GA pageview
+    trackPageview(location.pathname);
   }, [location.pathname]);
 
   const toggleSound = () => {

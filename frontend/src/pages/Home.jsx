@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Sparkles, Gamepad2, Trophy, Zap } from "lucide-react";
 import GameCard from "@/components/rmc/GameCard";
 import DailyChallenge from "@/components/rmc/DailyChallenge";
+import HeroReel from "@/components/rmc/HeroReel";
 import { GAMES } from "@/lib/games";
 import { sfx } from "@/lib/sound";
 import { useAuth } from "@/context/AuthContext";
@@ -95,52 +96,16 @@ export default function Home() {
             </div>
           </motion.div>
 
-          {/* Right visual: stacked mini arcade cabinet */}
+          {/* Right visual: auto-playing hero reel */}
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.1 }}
             className="relative md:col-span-5"
             aria-hidden="true"
+            data-testid="hero-reel"
           >
-            <div className="relative mx-auto aspect-[3/4] max-w-sm rounded-3xl border-2 border-white/15 bg-gradient-to-b from-[#221e42] to-[#0b0a1a] p-4">
-              <div className="h-full w-full rounded-2xl border-2 border-black/40 bg-[#0b0a1a] p-3">
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="font-pixel text-[10px] text-neon-cyan">RMC-01</span>
-                  <span className="flex gap-1">
-                    <span className="h-2 w-2 rounded-full bg-neon-pink" />
-                    <span className="h-2 w-2 rounded-full bg-neon-yellow" />
-                    <span className="h-2 w-2 rounded-full bg-neon-cyan" />
-                  </span>
-                </div>
-                <div className="grid grid-cols-4 gap-2">
-                  {Array.from({ length: 16 }).map((_, i) => {
-                    const colors = ["#FF479A", "#00F0FF", "#FFD100", "#39FF14"];
-                    const c = colors[(i * 3) % colors.length];
-                    return (
-                      <motion.div
-                        key={i}
-                        initial={{ scale: 0.6, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ delay: i * 0.03, type: "spring" }}
-                        className="aspect-square rounded-md"
-                        style={{ backgroundColor: c, boxShadow: `0 0 12px ${c}77` }}
-                      />
-                    );
-                  })}
-                </div>
-                <div className="mt-4 rounded-lg border border-white/10 bg-black/40 p-3 text-center">
-                  <div className="font-pixel text-xs text-neon-yellow">HIGH SCORE</div>
-                  <div className="font-display text-2xl font-black text-white">
-                    {user?.total_wins ?? 0} WINS
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4 flex justify-center gap-3">
-                <span className="h-3 w-16 rounded-full bg-[#ff479a]" />
-                <span className="h-3 w-16 rounded-full bg-[#00f0ff]" />
-              </div>
-            </div>
+            <HeroReel />
           </motion.div>
         </div>
       </section>
