@@ -17,6 +17,11 @@ A mobile-first, installable web app that resurrects childhood classic games in o
 ### Iteration 2 — Chess, Uno, Ludo + XP + Daily Challenge + Share Card + full PWA
 ### Iteration 3 — Scrabble, Dominoes + Streak multipliers + Friend Battles (polling)
 ### Iteration 4 — Go Fish, Old Maid + Streak Freeze + Badges + WebSocket Battles
+### Iteration 11 (Feb 2026) — Jenga Difficulty Hints + Video v2 with Tumble Tower
+- **Jenga safe-block hints**: green outline appears on blocks that are safer to pull (top 3 rows always safe; middle-column blocks in lower rows only if both outer siblings remain). Recomputed on every selection/pull. Legend added to how-to-play panel. Selected block still overrides with yellow. Teaches real Jenga strategy without a tutorial popup
+- **App Preview video v2**: Tumble Tower is now the hero moment. Timeline: Hero → **Tumble Tower gameplay (tower render → safe-hint highlight → pull → collapse → NICE RUN share card)** → Library scroll → Chess → Memory → Leaderboard. 19.97s, 1080×1920 H.264 30fps. Login flow removed (no more "Welcome back" toast leak)
+- **Copy update**: "Thirteen" → "Fourteen" classics in Home hero, Library heading, index.html meta description, og description. Home stat card now shows "14 classic games"
+
 ### Iteration 10 (Feb 2026) — Tumble Tower (Jenga)
 - **New physics game**: Tumble Tower — the 14th playable classic in RMC. Trademark-safe rename of Jenga
 - **Engine**: matter-js 2D physics. 12-row × 3-block wooden tower, realistic gravity/friction, collapse detection based on original-position tracking

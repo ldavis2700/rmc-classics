@@ -9,7 +9,7 @@ export default function Library() {
         <div>
           <p className="font-pixel text-xs text-neon-cyan">// GAME LIBRARY</p>
           <h1 className="mt-1 font-display text-3xl font-black uppercase tracking-tight text-white sm:text-4xl">
-          Thirteen classics. Endless replays.
+          Fourteen classics. Endless replays.
           </h1>
           <p className="mt-2 max-w-xl text-sm text-[#a3a1c6]">
             Every game is instantly playable. Log in to save your stats and climb the global boards.

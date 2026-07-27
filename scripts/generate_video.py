@@ -91,35 +91,49 @@ def record():
         )
         page = context.new_page()
 
-        # Pre-login (not recorded in main timeline - Playwright records this too, we'll trim later)
-        login(page)
+        # No login for the video - all games are playable as guest and it avoids
+        # a "Welcome back!" toast leaking into the reel.
 
-        # === Video timeline (~22s to give ffmpeg room to trim to 20s) ===
+        # === Video timeline — Tumble Tower is the hero moment, early in the reel ===
 
-        # Scene 1: HERO (4s)
+        # Scene 1: HERO (2s)
         page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
-        page.wait_for_timeout(4000)
+        page.wait_for_timeout(2000)
 
-        # Scene 2: LIBRARY scroll (5s)
+        # Scene 2: TUMBLE TOWER — physics collapse hero moment (7s)
+        page.goto(f"{BASE_URL}/play/jenga", wait_until="domcontentloaded")
+        page.wait_for_timeout(2000)  # tower renders + settles
+        try:
+            canvas = page.locator("[data-testid='jenga-canvas']")
+            box = canvas.bounding_box()
+            if box:
+                # Tap a lower block (will cause a dramatic collapse)
+                page.mouse.click(box["x"] + box["width"] * 0.5, box["y"] + box["height"] * 0.78)
+                page.wait_for_timeout(700)
+                page.locator("[data-testid='jenga-pull-btn']").click()
+                page.wait_for_timeout(3500)  # let physics play out + TIMBER overlay
+            else:
+                page.wait_for_timeout(4000)
+        except Exception as e:
+            print(f"  jenga scene interaction skipped: {e}")
+            page.wait_for_timeout(4000)
+
+        # Scene 3: LIBRARY brief scroll (2.5s)
         page.goto(f"{BASE_URL}/library", wait_until="domcontentloaded")
-        page.wait_for_timeout(1500)
-        scroll_slow(page, distance=500, ms=2000)
-        page.wait_for_timeout(1000)
+        page.wait_for_timeout(700)
+        scroll_slow(page, distance=350, ms=1200)
+        page.wait_for_timeout(200)
 
-        # Scene 3: CHESS quick view (4s)
+        # Scene 4: CHESS (2s)
         page.goto(f"{BASE_URL}/play/chess", wait_until="domcontentloaded")
-        page.wait_for_timeout(3800)
+        page.wait_for_timeout(2000)
 
-        # Scene 4: MEMORY MATCH board (3s)
+        # Scene 5: MEMORY MATCH (2s)
         page.goto(f"{BASE_URL}/play/memory", wait_until="domcontentloaded")
-        page.wait_for_timeout(2800)
+        page.wait_for_timeout(2000)
 
-        # Scene 5: LEADERBOARD (3s)
+        # Scene 6: LEADERBOARD (2s)
         page.goto(f"{BASE_URL}/leaderboard", wait_until="domcontentloaded")
-        page.wait_for_timeout(2800)
-
-        # Scene 6: HERO return (2s)
-        page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
         page.wait_for_timeout(2000)
 
         context.close()
@@ -132,10 +146,10 @@ def record():
     raw = webms[0]
     print(f"Raw recording: {raw} ({raw.stat().st_size / 1024 / 1024:.1f} MB)")
 
-    # Trim first 2s (login page) + take next 20s, re-encode to H.264 mp4
+    # Trim first 1s (about:blank flash) + take next 20s, re-encode to H.264 mp4
     cmd = [
         "ffmpeg", "-y",
-        "-ss", "2",             # skip first 2 seconds (login screen)
+        "-ss", "1",
         "-i", str(raw),
         "-t", "20",             # 20-second clip
         "-c:v", "libx264",

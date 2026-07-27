@@ -31,8 +31,12 @@ const WORLD_H = 700;
 const GROUND_Y = WORLD_H - 30;
 const TOWER_LEFT = WORLD_W / 2 - (BLOCK_W * BLOCKS_PER_ROW + BLOCK_GAP * (BLOCKS_PER_ROW - 1)) / 2;
 const COLLAPSE_DROP_PX = 60;  // if any originally-top row block drops this far, tower has fallen
+const SAFE_TOP_ROWS = 3;      // top N rows are always safe to pull
 
 const WOOD_COLORS = ["#C8834E", "#B67240", "#D89463", "#A65D2E", "#CC8B57"];
+const SAFE_STROKE = "#39FF14";        // green outline for "safe" blocks
+const DEFAULT_STROKE = "#7a4a20";
+const SELECTED_STROKE = "#FFD100";
 
 export default function Jenga() {
   const { user, submitScore } = useAuth();
@@ -51,6 +55,37 @@ export default function Jenga() {
   const [submitted, setSubmitted] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
+
+  // Recompute which remaining blocks are "safe to pull" and update their stroke color.
+  // Safe blocks in real Jenga: (1) any block in the top few rows (no weight above them)
+  //   (2) the MIDDLE-column block in any row, as long as its two outer siblings are still
+  //       present to support the tower after removal.
+  // Everything else is risky (default brown outline).
+  const refreshSafetyHints = useCallback(() => {
+    const blocks = blocksRef.current;
+    if (!blocks.length) return;
+    // Map rows -> {col: block}
+    const rowMap = {};
+    for (const b of blocks) {
+      if (b.removed) continue;
+      if (!rowMap[b.row]) rowMap[b.row] = {};
+      rowMap[b.row][b.col] = b;
+    }
+    const remaining = blocks.filter((b) => !b.removed);
+    if (!remaining.length) return;
+    const topmostRemainingRow = Math.max(...remaining.map((b) => b.row));
+    for (const b of blocks) {
+      if (b.removed || b.blockId === selectedIdRef.current) continue;
+      const rowsFromTop = topmostRemainingRow - b.row;
+      const isNearTop = rowsFromTop < SAFE_TOP_ROWS;
+      // Middle-column block is safe if both outer siblings still exist
+      const isMiddleWithSupports =
+        b.col === 1 && rowMap[b.row]?.[0] && rowMap[b.row]?.[2];
+      const safe = isNearTop || isMiddleWithSupports;
+      b.render.strokeStyle = safe ? SAFE_STROKE : DEFAULT_STROKE;
+      b.render.lineWidth = safe ? 2 : 1;
+    }
+  }, []);
 
   const buildTower = useCallback(() => {
     const { World, Bodies } = Matter;
@@ -87,6 +122,7 @@ export default function Jenga() {
         });
         block.blockId = blockId;
         block.row = row;
+        block.col = col;
         blocks.push(block);
         origY.push(y);
         blockId++;
@@ -95,7 +131,8 @@ export default function Jenga() {
     World.add(engine.world, blocks);
     blocksRef.current = blocks;
     originalYRef.current = origY;
-  }, []);
+    refreshSafetyHints();
+  }, [refreshSafetyHints]);
 
   const resetGame = useCallback(() => {
     if (renderRef.current) Matter.Render.stop(renderRef.current);
@@ -197,12 +234,16 @@ export default function Jenga() {
     // Highlight selected
     if (selectedIdRef.current !== null) {
       const prev = blocksRef.current[selectedIdRef.current];
-      if (prev) prev.render.strokeStyle = "#7a4a20", (prev.render.lineWidth = 1);
+      if (prev && !prev.removed) {
+        prev.render.strokeStyle = DEFAULT_STROKE;
+        prev.render.lineWidth = 1;
+      }
     }
-    hit.render.strokeStyle = "#FFD100";
+    hit.render.strokeStyle = SELECTED_STROKE;
     hit.render.lineWidth = 3;
     selectedIdRef.current = hit.blockId;
     setSelectedId(hit.blockId);
+    refreshSafetyHints();      // repaint safe-hints for remaining blocks
     sfx.click();
     haptic("light");
   };
@@ -340,6 +381,19 @@ export default function Jenga() {
                 <li>Every clean pull scores +1</li>
                 <li>Don&apos;t topple the tower</li>
               </ol>
+              <div
+                className="mt-3 flex items-center gap-2 rounded-lg px-2 py-1.5 text-[10px] text-neon-green"
+                style={{
+                  border: "1px solid rgba(57, 255, 20, 0.3)",
+                  background: "rgba(57, 255, 20, 0.06)",
+                }}
+              >
+                <span
+                  className="inline-block h-3 w-3 rounded-sm bg-transparent"
+                  style={{ border: "2px solid #39FF14" }}
+                />
+                Green outline = safer pull
+              </div>
             </div>
             <button
               type="button"
