@@ -142,6 +142,17 @@ export const GAMES = [
       "Draw cards from the CPU's hand and match pairs. Whoever's left with the odd Queen loses.",
     era: "1700s",
   },
+  {
+    id: "jenga",
+    name: "Tumble Tower",
+    tagline: "Pull. Don't drop.",
+    color: "#FF9500",
+    accent: "#FFD100",
+    path: "/play/jenga",
+    description:
+      "Pull blocks from a wobbly tower. Every pull counts. One collapse ends the run.",
+    era: "1980s",
+  },
 ];
 
 export const GAME_MAP = Object.fromEntries(GAMES.map((g) => [g.id, g]));

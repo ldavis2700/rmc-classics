@@ -22,7 +22,7 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_MINUTES = 60 * 24 * 7  # 7 days for MVP simplicity
 
-GAME_IDS = {"memory", "snakes", "connect4", "checkers", "rps", "crazy8", "chess", "uno", "ludo", "scrabble", "dominoes", "gofish", "oldmaid"}
+GAME_IDS = {"memory", "snakes", "connect4", "checkers", "rps", "crazy8", "chess", "uno", "ludo", "scrabble", "dominoes", "gofish", "oldmaid", "jenga"}
 GAME_META = {
     "memory": {"name": "Memory Match", "score_dir": "asc"},   # lower moves better
     "snakes": {"name": "Snakes & Ladders", "score_dir": "desc"},
@@ -37,6 +37,7 @@ GAME_META = {
     "dominoes": {"name": "Dominoes", "score_dir": "desc"},
     "gofish": {"name": "Go Fish", "score_dir": "desc"},
     "oldmaid": {"name": "Old Maid", "score_dir": "desc"},
+    "jenga": {"name": "Tumble Tower", "score_dir": "desc"},
 }
 
 # ---------- Themes ----------
@@ -68,6 +69,7 @@ BADGES = [
     {"id": "streak_100", "name": "Immortal", "desc": "100-day daily-challenge streak", "icon": "💎", "color": "#00F0FF"},
     {"id": "chess_win", "name": "Grandmaster", "desc": "Win a Chess game", "icon": "♛", "color": "#FFFFFF"},
     {"id": "scrabble_win", "name": "Word Smith", "desc": "Beat par in Word Tiles", "icon": "🔤", "color": "#39FF14"},
+    {"id": "jenga_10", "name": "Steady Hand", "desc": "Pull 10 blocks in Tumble Tower", "icon": "🗼", "color": "#FF9500"},
     {"id": "battle_win", "name": "Duelist", "desc": "Win a Friend Battle", "icon": "⚔", "color": "#FF479A"},
     {"id": "all_games", "name": "Collector", "desc": "Play every game at least once", "icon": "🎪", "color": "#FFD100"},
 ]
@@ -106,6 +108,8 @@ def compute_earned_badges(user: dict, ctx: Optional[Dict[str, Any]] = None) -> l
         earned.append("chess_win")
     if int((stats.get("scrabble") or {}).get("wins", 0)) >= 1:
         earned.append("scrabble_win")
+    if int((stats.get("jenga") or {}).get("best", 0)) >= 10:
+        earned.append("jenga_10")
     if ctx.get("battle_win"):
         earned.append("battle_win")
     if all(int((stats.get(g) or {}).get("plays", 0)) >= 1 for g in GAME_IDS):

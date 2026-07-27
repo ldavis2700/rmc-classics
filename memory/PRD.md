@@ -17,6 +17,15 @@ A mobile-first, installable web app that resurrects childhood classic games in o
 ### Iteration 2 — Chess, Uno, Ludo + XP + Daily Challenge + Share Card + full PWA
 ### Iteration 3 — Scrabble, Dominoes + Streak multipliers + Friend Battles (polling)
 ### Iteration 4 — Go Fish, Old Maid + Streak Freeze + Badges + WebSocket Battles
+### Iteration 10 (Feb 2026) — Tumble Tower (Jenga)
+- **New physics game**: Tumble Tower — the 14th playable classic in RMC. Trademark-safe rename of Jenga
+- **Engine**: matter-js 2D physics. 12-row × 3-block wooden tower, realistic gravity/friction, collapse detection based on original-position tracking
+- **Gameplay**: tap a block → PULL button ejects it with lateral impulse → physics decides if tower survives → score = clean pulls. "TIMBER!" game-over overlay
+- **Files**: `frontend/src/pages/games/Jenga.jsx`. Route `/play/jenga`. `Jenga` added to `GAMES` list, App.js router, sitemap
+- **Backend**: `jenga` added to `GAME_IDS`/`GAME_META` (Tumble Tower, desc). New badge `jenga_10` "Steady Hand" — pull 10 blocks
+- **Native**: haptic feedback (light on select, medium on pull, heavy on collapse)
+- **Tested**: rendered, physics engine runs, click-to-select works, pull triggers collapse correctly, score submission via `submitScore` verified
+
 ### Iteration 9 (Feb 2026) — In-App Purchases
 - **Streak Freeze 5-Pack IAP** — Consumable, $0.99, grants 5 streak freezes
 - **Frontend**: `frontend/src/lib/iap.js` (RevenueCat wrapper via `@revenuecat/purchases-capacitor`). `configureIAP()` called on login (native only). `purchaseFreezePack()` + `restorePurchases()` exposed
