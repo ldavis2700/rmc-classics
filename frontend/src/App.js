@@ -28,6 +28,7 @@ import OldMaid from "@/pages/games/OldMaid";
 import Battles from "@/pages/Battles";
 import BattlePlay from "@/pages/BattlePlay";
 import Friends from "@/pages/Friends";
+import { Privacy, Terms, Support } from "@/pages/Legal";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -76,6 +77,9 @@ function App() {
                 <Route path="/play/dominoes" element={<Dominoes />} />
                 <Route path="/play/gofish" element={<GoFish />} />
                 <Route path="/play/oldmaid" element={<OldMaid />} />
+                <Route path="/privacy" element={<Privacy />} />
+                <Route path="/terms" element={<Terms />} />
+                <Route path="/support" element={<Support />} />
                 <Route
                   path="/battles"
                   element={

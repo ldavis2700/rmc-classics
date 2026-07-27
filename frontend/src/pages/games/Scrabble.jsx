@@ -156,7 +156,7 @@ export default function Scrabble() {
 
   return (
     <GameShell
-      title="Scrabble Solo"
+      title="Word Tiles"
       subtitle={`Beat par of ${PAR_SCORE} in ${TOTAL_ROUNDS} rounds.`}
       color="#39FF14"
       onReset={reset}

@@ -127,6 +127,43 @@ export default function Layout({ children }) {
 
       <main className="relative z-10 pb-28 md:pb-16">{children}</main>
 
+      {/* Legal footer - required for App Store review */}
+      <footer className="relative z-10 border-t border-white/10 bg-black/30 px-4 py-6 pb-32 md:px-8 md:pb-8">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 text-[11px] uppercase tracking-widest text-[#7a789e] md:flex-row">
+          <div className="flex items-center gap-4">
+            <span data-testid="footer-copyright">© 2026 RMC CLASSICS</span>
+            <span className="hidden md:inline">·</span>
+            <span className="hidden md:inline">Remembering My Childhood</span>
+          </div>
+          <div className="flex items-center gap-5">
+            <Link
+              to="/privacy"
+              data-testid="footer-privacy"
+              className="hover:text-white"
+              onClick={() => sfx.click()}
+            >
+              Privacy
+            </Link>
+            <Link
+              to="/terms"
+              data-testid="footer-terms"
+              className="hover:text-white"
+              onClick={() => sfx.click()}
+            >
+              Terms
+            </Link>
+            <Link
+              to="/support"
+              data-testid="footer-support"
+              className="hover:text-white"
+              onClick={() => sfx.click()}
+            >
+              Support
+            </Link>
+          </div>
+        </div>
+      </footer>
+
       {/* Bottom nav - mobile only */}
       <nav
         className="glass fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-white/10 px-2 py-2 md:hidden"

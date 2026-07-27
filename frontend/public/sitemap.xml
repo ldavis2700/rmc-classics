@@ -16,4 +16,7 @@
   <url><loc>https://rmcclassics.com/play/dominoes</loc><priority>0.8</priority></url>
   <url><loc>https://rmcclassics.com/play/gofish</loc><priority>0.8</priority></url>
   <url><loc>https://rmcclassics.com/play/oldmaid</loc><priority>0.8</priority></url>
+  <url><loc>https://rmcclassics.com/privacy</loc><priority>0.5</priority></url>
+  <url><loc>https://rmcclassics.com/terms</loc><priority>0.5</priority></url>
+  <url><loc>https://rmcclassics.com/support</loc><priority>0.5</priority></url>
 </urlset>

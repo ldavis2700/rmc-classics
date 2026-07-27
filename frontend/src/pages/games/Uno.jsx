@@ -83,7 +83,7 @@ export default function Uno() {
 
   const finalize = useCallback(async (won) => {
     won ? sfx.win() : sfx.lose();
-    toast[won ? "success" : "error"](won ? "UNO! You won!" : "CPU emptied first.");
+    toast[won ? "success" : "error"](won ? "You won!" : "CPU emptied first.");
     if (user && !submitted) {
       const res = await submitScore({ game_id: "uno", won, score: won ? 1 : 0 });
       if (res.ok) {
@@ -240,7 +240,7 @@ export default function Uno() {
 
   return (
     <GameShell
-      title="Uno"
+      title="Wild Cards"
       subtitle="Match colour or number. Wilds change the colour. First to empty their hand wins."
       color="#FF479A"
       onReset={init}

@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Share2, Copy, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { sfx } from "@/lib/sound";
+import { share, haptic } from "@/lib/native";
 
 export default function ShareCard({ open, onClose, game, won, statLabel, statValue, xpGained, challengeCompleted, newlyUnlockedBadges = [], freezeUsed = false }) {
   const [copied, setCopied] = useState(false);
@@ -17,16 +18,9 @@ export default function ShareCard({ open, onClose, game, won, statLabel, statVal
 
   const doShare = async () => {
     sfx.click();
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: "RMC CLASSICS", text: shareText, url: shareUrl });
-        toast.success("Shared!");
-      } catch (e) {
-        // user cancelled
-      }
-    } else {
-      copyText();
-    }
+    haptic("light");
+    const ok = await share({ title: "RMC CLASSICS", text: shareText, url: shareUrl });
+    if (ok) toast.success("Shared!");
   };
 
   const copyText = async () => {

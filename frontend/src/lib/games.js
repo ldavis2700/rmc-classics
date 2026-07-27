@@ -78,14 +78,14 @@ export const GAMES = [
   },
   {
     id: "uno",
-    name: "Uno",
-    tagline: "Skip. Reverse. WILD!",
+    name: "Wild Cards",
+    tagline: "Skip. Reverse. Wild!",
     color: "#FF479A",
     accent: "#FFD100",
     path: "/play/uno",
     description:
-      "The chaotic card party. Match colours or numbers, throw wilds, don't forget to shout it.",
-    era: "1971",
+      "The chaotic card party. Match colours or numbers, throw wilds, empty your hand first.",
+    era: "1970s",
   },
   {
     id: "ludo",
@@ -100,14 +100,14 @@ export const GAMES = [
   },
   {
     id: "scrabble",
-    name: "Scrabble Solo",
+    name: "Word Tiles",
     tagline: "Seven letters. One word.",
     color: "#39FF14",
     accent: "#FFD100",
     path: "/play/scrabble",
     description:
       "Five rounds. Seven random tiles each round. Build the highest scoring word you can.",
-    era: "1938",
+    era: "1930s",
   },
   {
     id: "dominoes",

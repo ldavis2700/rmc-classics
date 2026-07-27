@@ -17,6 +17,15 @@ A mobile-first, installable web app that resurrects childhood classic games in o
 ### Iteration 2 — Chess, Uno, Ludo + XP + Daily Challenge + Share Card + full PWA
 ### Iteration 3 — Scrabble, Dominoes + Streak multipliers + Friend Battles (polling)
 ### Iteration 4 — Go Fish, Old Maid + Streak Freeze + Badges + WebSocket Battles
+### Iteration 7 (Feb 2026) — App Store Readiness
+- **Trademark rename**: Uno → **Wild Cards**, Scrabble Solo → **Word Tiles** (across frontend `games.js`, `Uno.jsx`, `Scrabble.jsx`, `words.js`, backend `server.py` game map + badges + daily challenges, and `index.html` meta). Routes/IDs (`/play/uno`, `/play/scrabble`) unchanged to preserve leaderboards
+- **Legal pages**: `/privacy`, `/terms`, `/support` at `Legal.jsx` — Apple App Review compliant (Guideline 5.1.1). Sitewide footer with links added to `Layout.jsx`
+- **Capacitor 7**: installed `@capacitor/core, cli, ios, android, haptics, share, status-bar, preferences, splash-screen`. Config at `frontend/capacitor.config.ts` (bundle ID `com.rmcclassics.app`)
+- **Native bridge**: `frontend/src/lib/native.js` — safe `haptic()`, `share()`, `setStatusBarStyle()` wrappers with web fallbacks
+- **ShareCard**: upgraded to use native share sheet + haptic feedback on iOS
+- **Sitemap**: added privacy/terms/support URLs
+- **Docs**: `/app/memory/app_store_submission_guide.md` — complete submission playbook (metadata, screenshots, privacy label, review guidelines)
+
 ### Iteration 6 (Feb 2026) — Domain Swap
 - Replaced placeholder `childhood-games-5.emergent.host` with production domain **`rmcclassics.com`** in `frontend/public/index.html` (canonical, og:url, og:image, twitter:image), `robots.txt` (Sitemap), and `sitemap.xml` (all 16 `<loc>` URLs)
 - Verified: served HTML/robots/sitemap all resolve to `rmcclassics.com`. Ready for OG debugger validation (Twitter/Facebook) once DNS is live
