@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import { signInGameCenter, submitLeaderboardScore } from "@/lib/gameCenter";
+import { configureIAP } from "@/lib/iap";
 
 const AuthContext = createContext(null);
 
@@ -18,6 +19,7 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await api.get("/auth/me");
       setUser(data.user);
+      configureIAP(data.user?.id);   // configure RevenueCat with stable user id (native only)
     } catch (e) {
       localStorage.removeItem("rmc_token");
       setUser(null);

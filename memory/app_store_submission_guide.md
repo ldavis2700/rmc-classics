@@ -219,12 +219,63 @@ Apple often rejects PWAs wrapped in Capacitor as "minimum functionality". We alr
 - ✅ Real user accounts, real leaderboards, real WebSocket multiplayer
 - ✅ Offline PWA capability via service worker
 
-**Extra safety net (highly recommended before submitting):**
-1. **Game Center integration** — hook global leaderboards into Apple Game Center via `@capacitor-community/game-center` plugin. This dramatically improves approval odds.
-2. **Push notifications** — daily challenge reminders via `@capacitor/push-notifications` + Firebase.
-3. **In-app purchases** — even a $0.99 "Remove hint cooldowns" IAP shows deep native integration.
+**Extra safety net (already implemented in code):**
+1. **Game Center integration** ✅ — `frontend/src/lib/gameCenter.js` auto-submits every score. Still requires Xcode: Signing & Capabilities → + Game Center, and App Store Connect: Features → Game Center → create one Leaderboard per game (IDs listed in `gameCenter.js`)
+2. **Local Push reminders** ✅ — daily 7pm challenge reminder via `@capacitor/local-notifications`. Toggle exposed in Profile page. No Firebase needed
+3. **In-App Purchase** ✅ — **Streak Freeze 5-Pack $0.99** consumable via RevenueCat + `@revenuecat/purchases-capacitor`. Frontend at `frontend/src/lib/iap.js`, backend endpoints `POST /api/iap/sync` and `POST /api/iap/webhook`. See "In-App Purchase Setup" below
 
-If you want any of these, ask and I'll wire them in.
+---
+
+## In-App Purchase setup (Streak Freeze 5-Pack)
+
+Product: **`rmc.freeze.pack5`** — Consumable — **$0.99** — grants **5** streak freezes.
+
+### A. App Store Connect
+1. App Store Connect → your app → **Monetization → In-App Purchases → +**
+2. Type: **Consumable**
+3. Product ID: `rmc.freeze.pack5`
+4. Reference name: `Streak Freeze 5-Pack`
+5. Price: $0.99 (Tier 1)
+6. Localization → English: Display Name `Streak Freeze 5-Pack`, Description `Freeze up to 5 missed days without losing your daily streak.`
+7. Save. Wait ~1 hour for sandbox propagation.
+8. **Users and Access → Integrations → In-App Purchase Key → +** → download the `.p8` file, note the Key ID and Issuer ID (needed by RevenueCat).
+
+### B. RevenueCat
+1. Sign up at [revenuecat.com](https://www.revenuecat.com) (free until $10K MTR)
+2. **+ New App** → iOS → Bundle ID: `com.rmcclassics.app`
+3. **App settings → App Store Connect API** → upload the `.p8` file + Key ID + Issuer ID
+4. **Products** tab → **+ New** → Identifier: `rmc.freeze.pack5` → Type: Consumable
+5. Copy the **Public SDK Key** (iOS) → paste it into `frontend/.env`:
+   ```
+   REACT_APP_REVENUECAT_IOS_KEY="appl_xxxxxxxxxxxxxxxxxx"
+   ```
+6. **Project settings → API keys → Secret key** → paste into `backend/.env`:
+   ```
+   REVENUECAT_SECRET_KEY="sk_xxxxxxxxxxxxxxxxxx"
+   ```
+7. **Integrations → Webhooks → + Add Webhook**
+   - URL: `https://rmcclassics.com/api/iap/webhook`
+   - Authorization header value: `Bearer <a-random-secret-you-generate>`
+   - Copy that same secret into `backend/.env`:
+     ```
+     REVENUECAT_WEBHOOK_TOKEN="<same-secret>"
+     ```
+
+### C. Xcode
+- Signing & Capabilities → **+ Capability → In-App Purchase**
+
+### D. Sandbox testing
+1. App Store Connect → **Users and Access → Sandbox Testers → +** → create a fresh Apple ID
+2. On your test iPhone: **Settings → Developer → Sandbox Apple Account** → sign in with that tester
+3. Run the app from Xcode → Profile → **Buy · $0.99** → complete the sandbox flow
+4. Confirm: (a) toast shows `+5 streak freezes added`, (b) balance jumps by 5, (c) RevenueCat dashboard shows the transaction, (d) Mongo `db.users` has the transaction id in `processed_iap`
+5. Force-quit and reopen → tap **Restore Purchases** → should NOT double-credit (idempotency test)
+
+### E. Common pitfalls
+- Product not appearing in `getProducts()`: Apple hasn't propagated yet — wait 1 hour after creation
+- Restore double-crediting: our backend uses `processed_iap` array on the user doc as idempotency guard — safe by default
+- 401 on webhook: `REVENUECAT_WEBHOOK_TOKEN` in backend .env must match the `Bearer <token>` string in RevenueCat's webhook settings exactly
+- Sandbox testers must not have any Apple ID already signed into iCloud on the device
 
 ---
 

@@ -987,6 +987,123 @@ async def root():
     return {"app": "RMC CLASSICS", "status": "ok"}
 
 
+# ---------- In-App Purchases (RevenueCat) ----------
+FREEZE_PACK_5_ID = "rmc.freeze.pack5"
+FREEZE_PACK_5_QTY = 5
+REVENUECAT_API_BASE = "https://api.revenuecat.com/v1"
+
+
+async def _rc_get_subscriber(app_user_id: str) -> Optional[dict]:
+    """Fetch authoritative subscriber state from RevenueCat. Returns None if not configured."""
+    secret = os.environ.get("REVENUECAT_SECRET_KEY", "").strip()
+    if not secret:
+        return None
+    import httpx
+    async with httpx.AsyncClient(timeout=10) as client_http:
+        r = await client_http.get(
+            f"{REVENUECAT_API_BASE}/subscribers/{app_user_id}",
+            headers={"Authorization": f"Bearer {secret}"},
+        )
+        if r.status_code != 200:
+            logger.warning("RevenueCat /subscribers returned %s: %s", r.status_code, r.text[:200])
+            return None
+        return r.json().get("subscriber")
+
+
+async def _credit_freeze_pack(user_id: str, transaction_ids: List[str]) -> int:
+    """Idempotently credit freezes for each new transaction id. Returns count of packs credited."""
+    if not transaction_ids:
+        return 0
+    user_doc = await db.users.find_one({"id": user_id}, {"_id": 0, "processed_iap": 1, "freezes_available": 1})
+    if not user_doc:
+        return 0
+    processed = set(user_doc.get("processed_iap") or [])
+    fresh = [tid for tid in transaction_ids if tid not in processed]
+    if not fresh:
+        return 0
+    inc = len(fresh) * FREEZE_PACK_5_QTY
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$inc": {"freezes_available": inc},
+            "$addToSet": {"processed_iap": {"$each": fresh}},
+        },
+    )
+    logger.info("IAP: credited %d freezes to %s (transactions=%s)", inc, user_id, fresh)
+    return len(fresh)
+
+
+class IAPSyncIn(BaseModel):
+    product_id: str
+
+
+@api.post("/iap/sync")
+async def iap_sync(body: IAPSyncIn, user: dict = Depends(get_current_user)):
+    """Client calls this after a successful RevenueCat purchase.
+    We fetch authoritative subscriber state from RevenueCat with our secret key
+    and idempotently credit any un-processed freeze packs.
+    """
+    if body.product_id != FREEZE_PACK_5_ID:
+        raise HTTPException(status_code=400, detail="Unknown product")
+
+    subscriber = await _rc_get_subscriber(user["id"])
+    credited = 0
+    if subscriber:
+        non_subs = (subscriber.get("non_subscriptions") or {}).get(FREEZE_PACK_5_ID) or []
+        # Each entry has 'id' (RC transaction id) and 'purchase_date'
+        transaction_ids = [str(entry.get("id")) for entry in non_subs if entry.get("id")]
+        credited = await _credit_freeze_pack(user["id"], transaction_ids)
+
+    updated = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return {
+        "credited_packs": credited,
+        "freezes_available": int((updated or {}).get("freezes_available", 0)),
+        "credited": credited * FREEZE_PACK_5_QTY,
+    }
+
+
+@api.post("/iap/webhook")
+async def iap_webhook(request: Request):
+    """RevenueCat calls this on every purchase/renewal event.
+    Auth: Bearer token matches REVENUECAT_WEBHOOK_TOKEN env var.
+    """
+    expected_token = os.environ.get("REVENUECAT_WEBHOOK_TOKEN", "").strip()
+    if not expected_token:
+        raise HTTPException(status_code=503, detail="Webhook not configured")
+    auth = request.headers.get("authorization", "")
+    if auth != f"Bearer {expected_token}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    payload = await request.json()
+    event = payload.get("event") or {}
+    event_id = str(event.get("id") or "")
+    app_user_id = str(event.get("app_user_id") or "")
+    product_id = event.get("product_id")
+    event_type = event.get("type")
+
+    if not event_id or not app_user_id:
+        return {"ok": True, "skipped": "no id"}
+
+    # Idempotency: skip if already processed
+    seen = await db.iap_events.find_one({"event_id": event_id})
+    if seen:
+        return {"ok": True, "duplicate": True}
+    await db.iap_events.insert_one({
+        "event_id": event_id,
+        "app_user_id": app_user_id,
+        "type": event_type,
+        "product_id": product_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+    # Credit only for our known consumable
+    credited = 0
+    if event_type in ("INITIAL_PURCHASE", "NON_RENEWING_PURCHASE") and product_id == FREEZE_PACK_5_ID:
+        transaction_id = str(event.get("transaction_id") or event_id)
+        credited = await _credit_freeze_pack(app_user_id, [transaction_id])
+    return {"ok": True, "credited": credited}
+
+
 # ---------- Startup ----------
 @app.on_event("startup")
 async def startup():

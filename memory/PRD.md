@@ -17,6 +17,15 @@ A mobile-first, installable web app that resurrects childhood classic games in o
 ### Iteration 2 — Chess, Uno, Ludo + XP + Daily Challenge + Share Card + full PWA
 ### Iteration 3 — Scrabble, Dominoes + Streak multipliers + Friend Battles (polling)
 ### Iteration 4 — Go Fish, Old Maid + Streak Freeze + Badges + WebSocket Battles
+### Iteration 9 (Feb 2026) — In-App Purchases
+- **Streak Freeze 5-Pack IAP** — Consumable, $0.99, grants 5 streak freezes
+- **Frontend**: `frontend/src/lib/iap.js` (RevenueCat wrapper via `@revenuecat/purchases-capacitor`). `configureIAP()` called on login (native only). `purchaseFreezePack()` + `restorePurchases()` exposed
+- **UI**: New "STORE" section on Profile page — animated snowflake card, buy button (auto-disabled on web with "iOS App Only" state), restore button, live balance readout
+- **Backend**: `POST /api/iap/sync` fetches authoritative subscriber state from RevenueCat with secret key, idempotently credits `freezes_available` on the user based on `non_subscriptions[rmc.freeze.pack5]` transaction IDs. `POST /api/iap/webhook` accepts RevenueCat push events with bearer-token auth + dedup via `db.iap_events`
+- **DB**: added `processed_iap: []` array on user doc (idempotency guard against restore/webhook double-credits)
+- **Env**: `REACT_APP_REVENUECAT_IOS_KEY`, `REVENUECAT_SECRET_KEY`, `REVENUECAT_WEBHOOK_TOKEN` — placeholders in .env, user fills after RevenueCat setup
+- **Submission guide**: Section E details Apple/RevenueCat/Xcode/sandbox testing steps
+
 ### Iteration 8 (Feb 2026) — App Store Asset Pipeline + Native Features
 - **Icon set generated** — 1024×1024 App Store master (no alpha, no rounded corners), Xcode `AppIcon.appiconset` with 18 sizes + Contents.json, Android launcher icons for all densities. Reproducible via `python3 scripts/generate_icons.py`
 - **App Preview video** — 20-second, 1080×1920, H.264/yuv420p/30fps at `frontend/appstore-assets/app-preview.mp4`. Auto-recorded via Playwright + re-encoded with ffmpeg. Walks through Hero → Library → Chess → Memory → Leaderboard → Hero
