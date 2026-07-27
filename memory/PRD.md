@@ -17,6 +17,14 @@ A mobile-first, installable web app that resurrects childhood classic games in o
 ### Iteration 2 — Chess, Uno, Ludo + XP + Daily Challenge + Share Card + full PWA
 ### Iteration 3 — Scrabble, Dominoes + Streak multipliers + Friend Battles (polling)
 ### Iteration 4 — Go Fish, Old Maid + Streak Freeze + Badges + WebSocket Battles
+### Iteration 8 (Feb 2026) — App Store Asset Pipeline + Native Features
+- **Icon set generated** — 1024×1024 App Store master (no alpha, no rounded corners), Xcode `AppIcon.appiconset` with 18 sizes + Contents.json, Android launcher icons for all densities. Reproducible via `python3 scripts/generate_icons.py`
+- **App Preview video** — 20-second, 1080×1920, H.264/yuv420p/30fps at `frontend/appstore-assets/app-preview.mp4`. Auto-recorded via Playwright + re-encoded with ffmpeg. Walks through Hero → Library → Chess → Memory → Leaderboard → Hero
+- **Screenshots** — 28 PNGs across all required Apple device sizes (iPhone 6.7"/6.5"/5.5" + iPad Pro 12.9") in `frontend/appstore-assets/screenshots/`. 7 screens per device: hero, library, leaderboard, chess, memory, connect4, profile. Reproducible via `python3 scripts/generate_screenshots.py`
+- **Apple Game Center integration** — `frontend/src/lib/gameCenter.js` (via `@openforge/capacitor-game-services`). Silent sign-in on app launch, auto-submits every score to per-game leaderboards. Safe no-op on web
+- **Local push reminders** — `frontend/src/lib/notifications.js` (via `@capacitor/local-notifications`). Schedules a repeating 7pm daily challenge reminder. Toggle exposed in Profile page
+- **Additional Capacitor plugins**: `@capacitor/local-notifications`, `@openforge/capacitor-game-services`
+
 ### Iteration 7 (Feb 2026) — App Store Readiness
 - **Trademark rename**: Uno → **Wild Cards**, Scrabble Solo → **Word Tiles** (across frontend `games.js`, `Uno.jsx`, `Scrabble.jsx`, `words.js`, backend `server.py` game map + badges + daily challenges, and `index.html` meta). Routes/IDs (`/play/uno`, `/play/scrabble`) unchanged to preserve leaderboards
 - **Legal pages**: `/privacy`, `/terms`, `/support` at `Legal.jsx` — Apple App Review compliant (Guideline 5.1.1). Sitewide footer with links added to `Layout.jsx`

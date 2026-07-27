@@ -1,10 +1,17 @@
 import { useAuth } from "@/context/AuthContext";
 import { GAMES } from "@/lib/games";
 import { Link } from "react-router-dom";
-import { LogOut, Sparkles, Snowflake } from "lucide-react";
+import { LogOut, Sparkles, Snowflake, Bell, BellOff } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { sfx } from "@/lib/sound";
 import { BadgeShelf } from "@/components/rmc/Badge";
 import ThemePicker from "@/components/rmc/ThemePicker";
+import {
+  enableDailyReminder,
+  disableDailyReminder,
+  isReminderEnabled,
+} from "@/lib/notifications";
 
 export default function Profile() {
   const { user, logout } = useAuth();
@@ -70,6 +77,9 @@ export default function Profile() {
       {/* Theme picker */}
       <ThemePicker />
 
+      {/* Daily reminder */}
+      <ReminderToggle />
+
       <div className="mt-10">
         <p className="font-pixel text-xs text-neon-cyan">// GAME BREAKDOWN</p>
         <h2 className="mt-1 font-display text-xl font-black uppercase tracking-tight text-white sm:text-2xl">
@@ -125,6 +135,70 @@ function MiniStat({ label, value, color = "#ffffff" }) {
         {value}
       </div>
       <div className="mt-1 text-[9px] uppercase tracking-widest text-[#6a6890]">{label}</div>
+    </div>
+  );
+}
+
+function ReminderToggle() {
+  const [enabled, setEnabled] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    isReminderEnabled().then(setEnabled);
+  }, []);
+
+  const toggle = async () => {
+    if (busy) return;
+    setBusy(true);
+    sfx.click();
+    try {
+      if (enabled) {
+        await disableDailyReminder();
+        setEnabled(false);
+        toast.success("Daily reminder off");
+      } else {
+        const result = await enableDailyReminder();
+        if (result === "granted") {
+          setEnabled(true);
+          toast.success("Daily reminder set for 7pm");
+        } else if (result === "denied") {
+          toast.error("Notifications blocked — enable them in Settings");
+        } else {
+          toast.error("Not supported on this device");
+        }
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-10">
+      <p className="font-pixel text-xs text-neon-yellow">// DAILY REMINDER</p>
+      <div className="mt-3 flex flex-col items-start gap-4 rounded-3xl border border-white/10 bg-[#16152b] p-6 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="font-display text-lg font-bold uppercase tracking-tight text-white">
+            Keep the streak alive
+          </h3>
+          <p className="mt-1 text-sm text-[#a3a1c6]">
+            One tap-friendly ping at 7&nbsp;pm your time. Silent by default. Off any time.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={toggle}
+          disabled={busy}
+          data-testid="reminder-toggle"
+          className={`inline-flex items-center gap-2 rounded-full border px-5 py-2.5 text-xs font-black uppercase tracking-widest transition-colors ${
+            enabled
+              ? "border-neon-yellow/50 bg-neon-yellow/10 text-neon-yellow hover:bg-neon-yellow/20"
+              : "border-white/10 bg-white/5 text-white hover:border-white/20"
+          }`}
+        >
+          {enabled ? <BellOff className="h-3.5 w-3.5" /> : <Bell className="h-3.5 w-3.5" />}
+          {enabled ? "Reminder On" : "Turn On"}
+        </button>
+      </div>
     </div>
   );
 }

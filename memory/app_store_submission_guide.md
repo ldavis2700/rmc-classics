@@ -66,6 +66,19 @@ npx cap open ios         # opens Xcode
 - Android launcher icons: `/app/frontend/appstore-assets/android/` (mdpi → xxxhdpi + Play Store 512×512)
 - PWA/home-screen icons: `/app/frontend/public/icons/` (72–512px, wired into manifest.json)
 
+**✅ Screenshots already generated** (Feb 2026):
+Auto-captured via Playwright at all required Apple device sizes. Pick 3–6 best from each folder to upload:
+- `/app/frontend/appstore-assets/screenshots/iphone-6.7/` — 1290×2796 (iPhone 15 Pro Max)
+- `/app/frontend/appstore-assets/screenshots/iphone-6.5/` — 1284×2778 (iPhone 14 Plus)
+- `/app/frontend/appstore-assets/screenshots/iphone-5.5/` — 1242×2208 (iPhone 8 Plus)
+- `/app/frontend/appstore-assets/screenshots/ipad-pro-12.9/` — 2048×2732 (iPad Pro)
+- Regenerate anytime: `python3 /app/scripts/generate_screenshots.py`
+
+**✅ App Preview video already generated** (Feb 2026):
+- 20 seconds · 1080×1920 · H.264 · 30fps · Silent · Apple-uploadable
+- Location: `/app/frontend/appstore-assets/app-preview.mp4`
+- Regenerate anytime: `python3 /app/scripts/generate_video.py`
+
 **You still need to create:**
 
 | Asset | Size | Notes |

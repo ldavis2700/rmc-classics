@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import api, { formatApiErrorDetail } from "@/lib/api";
+import { signInGameCenter, submitLeaderboardScore } from "@/lib/gameCenter";
 
 const AuthContext = createContext(null);
 
@@ -27,6 +28,8 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     refresh();
+    // Silent Game Center sign-in on iOS (no-op on web)
+    signInGameCenter();
   }, [refresh]);
 
   const login = async (email, password) => {
@@ -60,6 +63,10 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await api.post("/games/submit", payload);
       setUser(data.user);
+      // Mirror the score to Apple Game Center / Google Play Games (native-only, fire-and-forget)
+      if (payload?.game_id && typeof payload?.score === "number") {
+        submitLeaderboardScore(payload.game_id, payload.score);
+      }
       return {
         ok: true,
         user: data.user,
