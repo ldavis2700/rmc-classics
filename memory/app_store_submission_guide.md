@@ -60,11 +60,16 @@ npx cap open ios         # opens Xcode
 
 ### 5. Assets required (I've prepared specs — you create the artwork)
 
-Save all to `/app/frontend/appstore-assets/` (create the folder):
+**✅ Icons already generated** (Feb 2026):
+- App Store marketing icon: `/app/frontend/appstore-assets/icon-appstore-1024.png` (1024×1024, RGB, no alpha, no rounded corners)
+- Xcode drop-in AppIcon.appiconset: `/app/frontend/appstore-assets/AppIcon.appiconset/` (18 icons + Contents.json — drag straight into Xcode's Assets.xcassets)
+- Android launcher icons: `/app/frontend/appstore-assets/android/` (mdpi → xxxhdpi + Play Store 512×512)
+- PWA/home-screen icons: `/app/frontend/public/icons/` (72–512px, wired into manifest.json)
+
+**You still need to create:**
 
 | Asset | Size | Notes |
 |---|---|---|
-| App icon | 1024×1024 PNG | No transparency, no rounded corners, no text. Use RMC logo on `#0B0A1A` background |
 | iPhone 6.7" screenshots | 1290×2796 | 3–10 shots. Portrait |
 | iPhone 6.5" screenshots | 1242×2688 or 1284×2778 | 3–10 shots |
 | iPhone 5.5" screenshots | 1242×2208 | 3–10 shots (for older devices) |
