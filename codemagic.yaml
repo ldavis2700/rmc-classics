@@ -1,0 +1,143 @@
+# Codemagic CI/CD — Cloud IPA builds for RMC Classics
+# --------------------------------------------------
+# HOW THIS WORKS (no Mac needed on your side):
+#   1. Push this repo to GitHub / GitLab / Bitbucket
+#   2. Sign up at https://codemagic.io (free tier: 500 build-minutes / month)
+#   3. Connect your repo -> Codemagic detects this file automatically
+#   4. In Codemagic dashboard: Team settings -> Integrations -> App Store Connect
+#      Upload the .p8 API key (Users and Access -> Integrations -> App Store Connect API)
+#   5. Click "Start new build" -> IPA lands in your email + downloadable link
+#
+# Two workflows below:
+#   * ios-testflight  -> signed IPA uploaded to TestFlight automatically (recommended)
+#   * ios-unsigned    -> unsigned IPA for local inspection only
+#
+# Docs: https://docs.codemagic.io/yaml-quick-start/building-a-capacitor-app/
+
+workflows:
+  ios-testflight:
+    name: RMC Classics -> TestFlight
+    max_build_duration: 60
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.rmcclassics.app
+      vars:
+        XCODE_WORKSPACE: "frontend/ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
+        APP_STORE_APPLE_ID: 0000000000       # <-- REPLACE with your App Store Connect apple_id after first upload
+      node: 20
+      xcode: latest
+      cocoapods: default
+    integrations:
+      app_store_connect: RMC ASC Key         # <-- name matches what you set in Codemagic UI
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+
+    scripts:
+      - name: Install frontend deps
+        script: |
+          cd frontend
+          yarn install --frozen-lockfile
+
+      - name: Build the web bundle
+        script: |
+          cd frontend
+          CI=false yarn build
+
+      - name: Sync Capacitor iOS
+        script: |
+          cd frontend
+          npx cap sync ios
+
+      - name: Install CocoaPods
+        script: |
+          cd frontend/ios/App
+          pod install --repo-update
+
+      - name: Set build number
+        script: |
+          cd frontend/ios/App
+          agvtool new-version -all "$(($BUILD_NUMBER + 1))"
+
+      - name: Fetch iOS signing files from App Store Connect
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "com.rmcclassics.app" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Build .ipa
+        script: |
+          cd frontend/ios/App
+          xcode-project build-ipa \
+            --workspace App.xcworkspace \
+            --scheme App
+
+    artifacts:
+      - frontend/ios/App/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - frontend/ios/App/App.xcarchive
+
+    publishing:
+      email:
+        recipients:
+          - hello@rmcclassics.com          # <-- change if you want another inbox to receive the IPA
+        notify:
+          success: true
+          failure: true
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups: []                    # add TestFlight tester group names here, e.g. ["Internal"]
+
+  ios-unsigned:
+    name: RMC Classics -> Unsigned IPA (inspection only)
+    max_build_duration: 60
+    environment:
+      vars:
+        XCODE_WORKSPACE: "frontend/ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
+      node: 20
+      xcode: latest
+      cocoapods: default
+
+    scripts:
+      - name: Install frontend deps
+        script: |
+          cd frontend
+          yarn install --frozen-lockfile
+
+      - name: Build web bundle
+        script: |
+          cd frontend
+          CI=false yarn build
+
+      - name: Sync Capacitor iOS
+        script: |
+          cd frontend
+          npx cap sync ios
+
+      - name: Install CocoaPods
+        script: |
+          cd frontend/ios/App
+          pod install --repo-update
+
+      - name: Build unsigned archive
+        script: |
+          cd frontend/ios/App
+          xcodebuild -workspace App.xcworkspace -scheme App \
+            -configuration Release \
+            -archivePath $CM_BUILD_DIR/App.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+
+    artifacts:
+      - $CM_BUILD_DIR/App.xcarchive

@@ -17,6 +17,15 @@ A mobile-first, installable web app that resurrects childhood classic games in o
 ### Iteration 2 — Chess, Uno, Ludo + XP + Daily Challenge + Share Card + full PWA
 ### Iteration 3 — Scrabble, Dominoes + Streak multipliers + Friend Battles (polling)
 ### Iteration 4 — Go Fish, Old Maid + Streak Freeze + Badges + WebSocket Battles
+### Iteration 12 (Feb 2026) — iOS Xcode Project + Cloud IPA Pipeline
+- **iOS scaffolded**: `frontend/ios/` full Xcode workspace + `App.xcodeproj` + Podfile generated via `npx cap add ios`. All 8 native plugins linked (haptics, share, status-bar, splash, preferences, local-notifications, game-center, revenuecat)
+- **Icons installed**: replaced the default 512×512 with our custom 18-icon AppIcon.appiconset (drop-in complete, no manual Xcode work needed)
+- **Info.plist updates**: `ITSAppUsesNonExemptEncryption=false` (skips export compliance filing), `LSApplicationCategoryType=public.app-category.games`
+- **Codemagic yaml** at repo root: two workflows — `ios-testflight` (signed IPA auto-uploaded to TestFlight) and `ios-unsigned` (compile-only sanity check). No Mac required
+- **GitHub Actions** at `.github/workflows/ios-build.yml`: alternate cloud-CI path using macos-14 runner + fastlane. Free tier gives 2000 min/mo on public repos
+- **iOS `.gitignore`** created to exclude Pods/ and DerivedData while keeping the Xcode project version-controlled
+- **Build guide** at `memory/build_ipa_guide.md`: three IPA generation paths documented (local Mac, Codemagic, GitHub Actions) with exact commands, secrets to set, and expected turnaround times
+
 ### Iteration 11 (Feb 2026) — Jenga Difficulty Hints + Video v2 with Tumble Tower
 - **Jenga safe-block hints**: green outline appears on blocks that are safer to pull (top 3 rows always safe; middle-column blocks in lower rows only if both outer siblings remain). Recomputed on every selection/pull. Legend added to how-to-play panel. Selected block still overrides with yellow. Teaches real Jenga strategy without a tutorial popup
 - **App Preview video v2**: Tumble Tower is now the hero moment. Timeline: Hero → **Tumble Tower gameplay (tower render → safe-hint highlight → pull → collapse → NICE RUN share card)** → Library scroll → Chess → Memory → Leaderboard. 19.97s, 1080×1920 H.264 30fps. Login flow removed (no more "Welcome back" toast leak)

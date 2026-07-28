@@ -1,0 +1,90 @@
+name: iOS Build & Upload to TestFlight
+
+# Alternative to Codemagic — build IPAs on GitHub's macOS runners.
+# Setup:
+#   1. Store an App Store Connect API key as GitHub Secrets:
+#      - ASC_API_KEY_ID      (Key ID from App Store Connect)
+#      - ASC_API_ISSUER_ID   (Issuer ID)
+#      - ASC_API_KEY_P8      (contents of the .p8 file, base64-encoded)
+#   2. Push to main to trigger automatically, or run manually from Actions tab
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-ios:
+    name: Build iOS IPA
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'yarn'
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: yarn install --frozen-lockfile
+
+      - name: Build web bundle
+        working-directory: frontend
+        env:
+          CI: 'false'
+        run: yarn build
+
+      - name: Sync Capacitor iOS
+        working-directory: frontend
+        run: npx cap sync ios
+
+      - name: Install CocoaPods
+        working-directory: frontend/ios/App
+        run: pod install --repo-update
+
+      - name: Setup App Store Connect API key
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$ASC_KEY_P8" | base64 --decode > "~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+
+      - name: Install fastlane
+        run: |
+          gem install fastlane -N -v 2.222
+
+      - name: Build & upload via fastlane
+        working-directory: frontend/ios/App
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+        run: |
+          fastlane run app_store_connect_api_key \
+            key_id:$ASC_KEY_ID \
+            issuer_id:$ASC_ISSUER_ID \
+            key_filepath:"~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8" \
+            in_house:false
+          fastlane run build_app \
+            workspace:App.xcworkspace \
+            scheme:App \
+            export_method:app-store \
+            output_directory:build/ios/ipa
+          fastlane run upload_to_testflight \
+            ipa:build/ios/ipa/App.ipa \
+            skip_waiting_for_build_processing:true
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RMC-Classics-IPA
+          path: frontend/ios/App/build/ios/ipa/*.ipa
+          if-no-files-found: error
+          retention-days: 30
