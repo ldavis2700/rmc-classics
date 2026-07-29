@@ -26,6 +26,7 @@ workflows:
         XCODE_WORKSPACE: "frontend/ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
         APP_STORE_APPLE_ID: 0000000000       # <-- REPLACE with your App Store Connect apple_id after first upload
+        REACT_APP_BACKEND_URL: "https://rmcclassics.com"
       node: 20
       xcode: latest
       cocoapods: default
