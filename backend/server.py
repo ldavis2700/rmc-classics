@@ -620,8 +620,8 @@ def _public_room(room: dict) -> dict:
         "status": room["status"],
         "created_at": room["created_at"],
         "last_move_at": room.get("last_move_at"),
+        "rematch_id": room.get("rematch_id")
     }
-
 
 class MoveIn(BaseModel):
     col: int
