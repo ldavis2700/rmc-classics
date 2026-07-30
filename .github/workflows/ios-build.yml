@@ -48,14 +48,7 @@ jobs:
         working-directory: frontend/ios/App
         run: pod install --repo-update
 
-      - name: Setup App Store Connect API key
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
-          ASC_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
-        run: |
-          mkdir -p ~/.appstoreconnect/private_keys
-          echo "$ASC_KEY_P8" | base64 --decode > "$HOME/ .appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+     
 
       - name: Install fastlane
         run: |
@@ -66,11 +59,13 @@ jobs:
         env:
           ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
         run: |
           fastlane run app_store_connect_api_key \
             key_id:$ASC_KEY_ID \
             issuer_id:$ASC_ISSUER_ID \
-            key_filepath:"~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8" \
+            key_content:"$ASC_KEY_P8" \ 
+            is_key_content_base64:true \
             in_house:false
           fastlane run build_app \
             workspace:App.xcworkspace \
