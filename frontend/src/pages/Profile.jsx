@@ -15,7 +15,12 @@ import {
 import { purchaseFreezePack, restorePurchases, IAP_PRODUCTS } from "@/lib/iap";
 
 export default function Profile() {
-  const { user, logout } = useAuth();
+  const { user, logout, refresh } = useAuth();
+
+  useEffect( () => {
+    refresh();
+  }, [refresh]);
+    
   if (!user) return null;
   const initial = (user.name || user.email || "?").charAt(0).toUpperCase();
   const winRate = user.total_plays > 0 ? Math.round((user.total_wins / user.total_plays) * 100) : 0;
