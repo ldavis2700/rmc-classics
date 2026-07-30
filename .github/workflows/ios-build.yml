@@ -55,7 +55,7 @@ jobs:
           ASC_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
         run: |
           mkdir -p ~/.appstoreconnect/private_keys
-          echo "$ASC_KEY_P8" | base64 --decode > "~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          echo "$ASC_KEY_P8" | base64 --decode > "$HOME/ .appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8"
 
       - name: Install fastlane
         run: |
