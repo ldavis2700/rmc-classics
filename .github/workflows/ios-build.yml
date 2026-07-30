@@ -67,6 +67,7 @@ jobs:
             scheme:App \
             export_method:app-store \
             output_directory:build/ios/ipa
+            xcargs:"-allowProvisioningUpdates"
           fastlane run upload_to_testflight \
             ipa:build/ios/ipa/App.ipa \
             skip_waiting_for_build_processing:true
