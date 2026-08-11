@@ -5,6 +5,8 @@ name: iOS Build & Upload to TestFlight
 #   - ASC_API_KEY_ID
 #   - ASC_API_ISSUER_ID
 #   - ASC_API_KEY_P8 (contents of the .p8 file, base64-encoded)
+#   - IOS_DISTRIBUTION_CERTIFICATE_BASE64 (exported Apple Distribution .p12, base64-encoded)
+#   - IOS_DISTRIBUTION_CERTIFICATE_PASSWORD
 #   - IOS_PROVISIONING_PROFILE_BASE64
 # Trigger manually from Actions or with an intentional vX.Y.Z release tag.
 
@@ -54,12 +56,35 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
+          IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
           IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
         run: |
           test -n "$ASC_KEY_ID" || (echo "Missing ASC_API_KEY_ID" && exit 1)
           test -n "$ASC_ISSUER_ID" || (echo "Missing ASC_API_ISSUER_ID" && exit 1)
           test -n "$ASC_KEY_P8" || (echo "Missing ASC_API_KEY_P8" && exit 1)
+          test -n "$IOS_DISTRIBUTION_CERTIFICATE_BASE64" || (echo "Missing IOS_DISTRIBUTION_CERTIFICATE_BASE64" && exit 1)
+          test -n "$IOS_DISTRIBUTION_CERTIFICATE_PASSWORD" || (echo "Missing IOS_DISTRIBUTION_CERTIFICATE_PASSWORD" && exit 1)
           test -n "$IOS_PROVISIONING_PROFILE_BASE64" || (echo "Missing IOS_PROVISIONING_PROFILE_BASE64" && exit 1)
+
+      - name: Install Apple Distribution certificate
+        env:
+          IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
+          IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH="$RUNNER_TEMP/distribution.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/rmc-build.keychain-db"
+          KEYCHAIN_PASSWORD="rmc-ci-keychain"
+
+          echo "$IOS_DISTRIBUTION_CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$IOS_DISTRIBUTION_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
       - name: Install provisioning profile
         env:
