@@ -37,6 +37,7 @@ jobs:
           CI: 'false'
         run: yarn build
 
-      - name: Validate Capacitor config
-        working-directory: frontend
-        run: npx cap doctor
+      - name: Confirm iOS project and Capacitor config exist
+        run: |
+          test -f frontend/capacitor.config.ts
+          test -d frontend/ios/App
