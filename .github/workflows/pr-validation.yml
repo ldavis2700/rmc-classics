@@ -1,0 +1,42 @@
+name: RMC Classics PR Validation
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/**'
+  push:
+    branches:
+      - 'agent/**'
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/**'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: yarn install --frozen-lockfile
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          CI: 'false'
+        run: yarn build
+
+      - name: Validate Capacitor config
+        working-directory: frontend
+        run: npx cap doctor
