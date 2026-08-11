@@ -1,13 +1,12 @@
 name: iOS Build & Upload to TestFlight
 
-# Alternative to Codemagic — build IPAs on GitHub's macOS runners.
-# Setup:
-#   1. Store an App Store Connect API key as GitHub Secrets:
-#      - ASC_API_KEY_ID      (Key ID from App Store Connect)
-#      - ASC_API_ISSUER_ID   (Issuer ID)
-#      - ASC_API_KEY_P8      (contents of the .p8 file, base64-encoded)
-#      - IOS_PROVISIONING_PROFILE_BASE64 (App Store provisioning profile, base64-encoded)
-#   2. Push a vX.Y.Z tag to trigger automatically, or run manually from Actions tab
+# Build IPAs on GitHub's macOS runners.
+# Required GitHub Secrets:
+#   - ASC_API_KEY_ID
+#   - ASC_API_ISSUER_ID
+#   - ASC_API_KEY_P8 (contents of the .p8 file, base64-encoded)
+#   - IOS_PROVISIONING_PROFILE_BASE64
+# Trigger manually from Actions or with an intentional vX.Y.Z release tag.
 
 on:
   workflow_dispatch:
@@ -75,24 +74,7 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
-        run: |
-          fastlane run app_store_connect_api_key \
-            key_id:"$ASC_KEY_ID" \
-            issuer_id:"$ASC_ISSUER_ID" \
-            key_content:"$ASC_KEY_P8" \
-            is_key_content_base64:true \
-            in_house:false
-
-          fastlane run build_app \
-            workspace:App.xcworkspace \
-            scheme:App \
-            export_method:app-store \
-            output_directory:build/ios/ipa \
-            xcargs:"-allowProvisioningUpdates"
-
-          fastlane run upload_to_testflight \
-            ipa:build/ios/ipa/App.ipa \
-            skip_waiting_for_build_processing:true
+        run: fastlane testflight
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
