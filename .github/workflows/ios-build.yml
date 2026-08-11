@@ -6,7 +6,8 @@ name: iOS Build & Upload to TestFlight
 #      - ASC_API_KEY_ID      (Key ID from App Store Connect)
 #      - ASC_API_ISSUER_ID   (Issuer ID)
 #      - ASC_API_KEY_P8      (contents of the .p8 file, base64-encoded)
-#   2. Push to main to trigger automatically, or run manually from Actions tab
+#      - IOS_PROVISIONING_PROFILE_BASE64 (App Store provisioning profile, base64-encoded)
+#   2. Push a vX.Y.Z tag to trigger automatically, or run manually from Actions tab
 
 on:
   workflow_dispatch:
@@ -27,8 +28,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-        
-      
 
       - name: Install frontend deps
         working-directory: frontend
@@ -48,19 +47,28 @@ jobs:
         working-directory: frontend/ios/App
         run: pod install --repo-update
 
-     
-
       - name: Install fastlane
+        run: gem install fastlane -N -v 2.222
+
+      - name: Validate signing secrets
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
         run: |
-          gem install fastlane -N -v 2.222
-      
+          test -n "$ASC_KEY_ID" || (echo "Missing ASC_API_KEY_ID" && exit 1)
+          test -n "$ASC_ISSUER_ID" || (echo "Missing ASC_API_ISSUER_ID" && exit 1)
+          test -n "$ASC_KEY_P8" || (echo "Missing ASC_API_KEY_P8" && exit 1)
+          test -n "$IOS_PROVISIONING_PROFILE_BASE64" || (echo "Missing IOS_PROVISIONING_PROFILE_BASE64" && exit 1)
+
       - name: Install provisioning profile
         env:
           IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
         run: |
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/RMC_Classics_App_Store_2026.mobileprovision"
-      
+
       - name: Build & upload via fastlane
         working-directory: frontend/ios/App
         env:
@@ -68,13 +76,20 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
         run: |
-          fastlane run app_store_connect_api_key key_id:"$ASC_KEY_ID" issuer_id:"$ASC_ISSUER_ID" key_content:"$ASC_KEY_P8" is_key_content_base64:"false" in_house:false 
+          fastlane run app_store_connect_api_key \
+            key_id:"$ASC_KEY_ID" \
+            issuer_id:"$ASC_ISSUER_ID" \
+            key_content:"$ASC_KEY_P8" \
+            is_key_content_base64:true \
+            in_house:false
+
           fastlane run build_app \
             workspace:App.xcworkspace \
             scheme:App \
             export_method:app-store \
-            output_directory:build/ios/ipa
+            output_directory:build/ios/ipa \
             xcargs:"-allowProvisioningUpdates"
+
           fastlane run upload_to_testflight \
             ipa:build/ios/ipa/App.ipa \
             skip_waiting_for_build_processing:true
