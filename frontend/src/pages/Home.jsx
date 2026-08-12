@@ -1,11 +1,13 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Sparkles, Gamepad2, Trophy, Zap } from "lucide-react";
+import { Sparkles, Gamepad2, Trophy, Zap, Crown, X } from "lucide-react";
 import GameCard from "@/components/rmc/GameCard";
 import DailyChallenge from "@/components/rmc/DailyChallenge";
 import HeroReel from "@/components/rmc/HeroReel";
 import { GAMES } from "@/lib/games";
 import { sfx } from "@/lib/sound";
+import { trackEvent } from "@/lib/analytics";
 import { useAuth } from "@/context/AuthContext";
 
 const stats = [
@@ -16,6 +18,48 @@ const stats = [
 
 export default function Home() {
   const { user } = useAuth();
+  const [showFoundingMemberOffer, setShowFoundingMemberOffer] = useState(false);
+
+  useEffect(() => {
+    const cohortKey = "rmc_founding_member_cohort_v1";
+    const dismissedKey = "rmc_founding_member_dismissed_v1";
+    let cohort = window.localStorage.getItem(cohortKey);
+
+    if (!cohort) {
+      cohort = Math.random() < 0.25 ? "treatment" : "control";
+      window.localStorage.setItem(cohortKey, cohort);
+    }
+
+    if (cohort !== "treatment" || window.localStorage.getItem(dismissedKey) === "true") {
+      return;
+    }
+
+    setShowFoundingMemberOffer(true);
+    trackEvent("membership_offer_viewed", {
+      experiment: "founding_member_interest_v1",
+      placement: "home",
+      cohort,
+    });
+  }, []);
+
+  const recordFoundingMemberInterest = () => {
+    sfx.click();
+    trackEvent("founding_member_interest_clicked", {
+      experiment: "founding_member_interest_v1",
+      placement: "home",
+      signed_in: Boolean(user),
+    });
+  };
+
+  const dismissFoundingMemberOffer = () => {
+    window.localStorage.setItem("rmc_founding_member_dismissed_v1", "true");
+    setShowFoundingMemberOffer(false);
+    trackEvent("membership_offer_dismissed", {
+      experiment: "founding_member_interest_v1",
+      placement: "home",
+    });
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-4 pt-8 md:px-8 md:pt-14">
       {/* HERO */}
@@ -141,6 +185,50 @@ export default function Home() {
           </div>
         </Link>
       </section>
+
+      {/* REVERSIBLE DEMAND TEST: no checkout, charge, entitlement, or paywall */}
+      {showFoundingMemberOffer && <section
+        className="relative mt-8 overflow-hidden rounded-3xl border border-neon-yellow/40 bg-[#16152b] p-6 sm:p-8"
+        data-testid="founding-member-interest"
+      >
+        <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-neon-yellow/20 blur-3xl" />
+        <button
+          type="button"
+          onClick={dismissFoundingMemberOffer}
+          aria-label="Dismiss Founding Member preview"
+          className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-black/20 text-[#a3a1c6] hover:bg-white/10 hover:text-white"
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <div className="relative grid items-center gap-6 md:grid-cols-[1fr_auto]">
+          <div>
+            <p className="font-pixel text-xs text-neon-yellow">// FOUNDING MEMBER PREVIEW</p>
+            <div className="mt-3 flex items-center gap-3">
+              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-neon-yellow/30 bg-neon-yellow/10">
+                <Crown className="h-5 w-5 text-neon-yellow" aria-hidden="true" />
+              </div>
+              <h2 className="font-display text-2xl font-black uppercase tracking-tight text-white sm:text-3xl">
+                Help shape RMC Membership
+              </h2>
+            </div>
+            <p className="mt-4 max-w-3xl text-sm leading-relaxed text-[#c9c8e2]">
+              We are exploring optional member perks like profile customization, cosmetic themes,
+              enhanced personal stats, and early previews. Core games stay playable without a membership.
+            </p>
+            <p className="mt-3 text-xs font-semibold uppercase tracking-widest text-[#a3a1c6]">
+              Interest only — no purchase, subscription, or payment today.
+            </p>
+          </div>
+          <a
+            href="mailto:hello@rmcclassics.com?subject=RMC%20Founding%20Member%20Interest&body=I%27m%20interested%20in%20helping%20shape%20the%20RMC%20Classics%20Founding%20Member%20program."
+            onClick={recordFoundingMemberInterest}
+            data-testid="founding-member-interest-btn"
+            className="btn-arcade inline-flex justify-center rounded-full px-7 py-3 text-center text-sm font-black"
+          >
+            I’m interested
+          </a>
+        </div>
+      </section>}
 
       {/* GAME GRID */}
       <section className="mt-14">
