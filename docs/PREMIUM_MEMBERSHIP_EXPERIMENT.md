@@ -1,6 +1,6 @@
-# RMC Classics Premium / Membership Experiment — Prepared, Not Live
+# RMC Classics Premium / Membership Experiment — Founding Member Interest Approved
 
-This document prepares a reversible membership experiment for future approval. It does not create a paywall, subscription product, App Store in-app purchase, entitlement, charge, or production UI change.
+The owner approved the reversible Founding Member interest phase on 2026-08-12. This phase adds an informational home-page surface and an email interest action. It does not create a paywall, subscription product, App Store in-app purchase, entitlement, or charge.
 
 ## Product principle
 
@@ -67,4 +67,4 @@ A live membership experiment requires separate approval of:
 
 Test the value proposition before creating a hard paywall: show a clearly labeled, dismissible membership information surface to a small eligible cohort and measure interest/checkout intent while leaving core gameplay unchanged.
 
-Status remains **prepared only** until separately approved through APEX.
+The Founding Member interest surface is approved for review and deployment. Pricing, checkout, entitlements, purchases, and paid membership remain **unapproved** and require a separate APEX approval.
