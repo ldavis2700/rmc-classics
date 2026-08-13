@@ -1,7 +1,7 @@
 {
   "short_name": "RMC",
   "name": "RMC CLASSICS — Remembering My Childhood",
-  "description": "The arcade that raised us — reborn. Play 13 classic childhood games, compete on global leaderboards, complete daily challenges.",
+  "description": "The arcade that raised us — reborn. Play 14 classic childhood games, compete on global leaderboards, complete daily challenges.",
   "icons": [
     { "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
