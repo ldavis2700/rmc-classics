@@ -36,4 +36,7 @@ Direct sponsorship takes precedence when both are enabled. All external links us
 - The Founding Membership experiment links to the approved pilot at `https://rmc-classics-founding-pilot-ashy.vercel.app/`.
 - Override the pilot destination with `REACT_APP_FOUNDING_PILOT_URL` when promoting a new validated pilot version.
 - These clicks emit first-party GA events when analytics is configured: `freeze_pack_store_clicked`, `founding_pilot_opened`, and the existing founding-offer events.
+- The iOS Streak Freeze funnel also records privacy-minimal outcomes: `freeze_pack_checkout_started`, `freeze_pack_checkout_cancelled`, `freeze_pack_checkout_failed`, `freeze_pack_activation_pending`, `freeze_pack_purchase_completed`, and restore start/completion/failure.
+- Funnel events contain only product ID, placement, platform, outcome stage, and a boolean indicating whether account credit changed. They exclude Apple transaction IDs, RevenueCat customer data, payment details, email addresses, and raw error messages.
+- Measure unique players where possible: store-to-checkout rate, checkout completion rate, cancellation rate, failure rate, activation-pending rate, and restore success rate. Treat `freeze_pack_purchase_completed` as product telemetry—not settlement or payout evidence; App Store Connect financial reports remain authoritative.
 - The Founding pilot remains interest-only and must not be described as a paid membership until pricing, benefits, billing, entitlement, refunds, and store requirements are approved and implemented.
