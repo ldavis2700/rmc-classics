@@ -25,7 +25,9 @@ workflows:
       vars:
         XCODE_WORKSPACE: "frontend/ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
-        APP_STORE_APPLE_ID: 0000000000       # <-- REPLACE with your App Store Connect apple_id after first upload
+        # Configure APP_STORE_APPLE_ID and REACT_APP_REVENUECAT_IOS_KEY as
+        # protected Codemagic environment variables. Never commit store IDs as
+        # placeholders or any RevenueCat private/server key.
         REACT_APP_BACKEND_URL: "https://rmcclassics.com"
       node: 20
       xcode: latest
@@ -45,6 +47,17 @@ workflows:
         script: |
           cd frontend
           yarn install --frozen-lockfile
+
+      - name: Validate monetization release configuration
+        script: |
+          if ! echo "$APP_STORE_APPLE_ID" | grep -Eq '^[1-9][0-9]+$'; then
+            echo "APP_STORE_APPLE_ID must be the real numeric App Store Connect Apple ID"
+            exit 1
+          fi
+          if [ -z "$REACT_APP_REVENUECAT_IOS_KEY" ]; then
+            echo "REACT_APP_REVENUECAT_IOS_KEY must be configured as a protected Codemagic variable"
+            exit 1
+          fi
 
       - name: Build the web bundle
         script: |
