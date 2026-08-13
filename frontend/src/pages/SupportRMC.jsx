@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Crown, Mail, ShieldCheck } from "lucide-react";
-import { REVENUE_CHANNELS, getAdPreference, setAdPreference } from "@/lib/monetization";
+import { Crown, ExternalLink, Mail, ShieldCheck, ShoppingBag } from "lucide-react";
+import { MONETIZATION, REVENUE_CHANNELS, getAdPreference, setAdPreference } from "@/lib/monetization";
 import { trackEvent } from "@/lib/analytics";
 
 const EMAIL = "hello@rmcclassics.com";
@@ -39,7 +39,25 @@ export default function SupportRMC() {
             </div>
             <h2 className="mt-4 font-display text-lg font-black uppercase text-white">{channel.name}</h2>
             <p className="mt-1 min-h-10 text-sm text-[#a3a1c6]">{channel.detail}</p>
-            {channel.status !== "live" && (
+            {channel.action === "freeze_pack" ? (
+              <a
+                href="/profile"
+                onClick={() => trackEvent("freeze_pack_store_clicked", { placement: "support_rmc" })}
+                className="mt-4 inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-neon-cyan"
+              >
+                <ShoppingBag className="h-3.5 w-3.5" /> Open the iOS store
+              </a>
+            ) : channel.action === "founding_pilot" ? (
+              <a
+                href={MONETIZATION.foundingPilotUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => trackEvent("founding_pilot_opened", { placement: "support_rmc" })}
+                className="mt-4 inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-neon-cyan"
+              >
+                <ExternalLink className="h-3.5 w-3.5" /> View founding pilot
+              </a>
+            ) : (
               <a
                 href={interestLink(`RMC CLASSICS: ${channel.name}`, channel.name)}
                 onClick={() => trackEvent("revenue_channel_interest", { channel: channel.name })}
