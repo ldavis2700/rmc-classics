@@ -1052,12 +1052,16 @@ async def iap_sync(body: IAPSyncIn, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Unknown product")
 
     subscriber = await _rc_get_subscriber(user["id"])
+    if subscriber is None:
+        # A paid purchase must never be reported as fulfilled when server-side
+        # verification is unavailable. The client treats 503 as sync-pending.
+        raise HTTPException(status_code=503, detail="Purchase verification is temporarily unavailable")
+
     credited = 0
-    if subscriber:
-        non_subs = (subscriber.get("non_subscriptions") or {}).get(FREEZE_PACK_5_ID) or []
-        # Each entry has 'id' (RC transaction id) and 'purchase_date'
-        transaction_ids = [str(entry.get("id")) for entry in non_subs if entry.get("id")]
-        credited = await _credit_freeze_pack(user["id"], transaction_ids)
+    non_subs = (subscriber.get("non_subscriptions") or {}).get(FREEZE_PACK_5_ID) or []
+    # Each entry has 'id' (RC transaction id) and 'purchase_date'
+    transaction_ids = [str(entry.get("id")) for entry in non_subs if entry.get("id")]
+    credited = await _credit_freeze_pack(user["id"], transaction_ids)
 
     updated = await db.users.find_one({"id": user["id"]}, {"_id": 0})
     return {
