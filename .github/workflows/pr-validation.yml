@@ -5,12 +5,14 @@ on:
     paths:
       - 'frontend/**'
       - '.github/workflows/**'
+      - 'codemagic.yaml'
   push:
     branches:
       - 'agent/**'
     paths:
       - 'frontend/**'
       - '.github/workflows/**'
+      - 'codemagic.yaml'
 
 jobs:
   validate:
@@ -44,3 +46,10 @@ jobs:
 
       - name: Validate Fastlane lane syntax
         run: ruby -c frontend/ios/App/fastlane/Fastfile
+
+      - name: Validate Codemagic monetization release gate
+        run: |
+          ruby -e "require 'yaml'; YAML.safe_load_file('codemagic.yaml', aliases: true)"
+          ! grep -Eq 'APP_STORE_APPLE_ID:[[:space:]]*0+' codemagic.yaml
+          grep -q 'APP_STORE_APPLE_ID must be the real numeric App Store Connect Apple ID' codemagic.yaml
+          grep -q 'REACT_APP_REVENUECAT_IOS_KEY must be configured as a protected Codemagic variable' codemagic.yaml
