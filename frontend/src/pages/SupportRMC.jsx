@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Crown, ExternalLink, Mail, ShieldCheck, ShoppingBag } from "lucide-react";
 import { MONETIZATION, REVENUE_CHANNELS, getAdPreference, setAdPreference } from "@/lib/monetization";
 import { trackEvent } from "@/lib/analytics";
@@ -40,13 +41,13 @@ export default function SupportRMC() {
             <h2 className="mt-4 font-display text-lg font-black uppercase text-white">{channel.name}</h2>
             <p className="mt-1 min-h-10 text-sm text-[#a3a1c6]">{channel.detail}</p>
             {channel.action === "freeze_pack" ? (
-              <a
-                href="/profile"
+              <Link
+                to="/profile"
                 onClick={() => trackEvent("freeze_pack_store_clicked", { placement: "support_rmc" })}
                 className="mt-4 inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-neon-cyan"
               >
                 <ShoppingBag className="h-3.5 w-3.5" /> Open the iOS store
-              </a>
+              </Link>
             ) : channel.action === "founding_pilot" ? (
               <a
                 href={MONETIZATION.foundingPilotUrl}
