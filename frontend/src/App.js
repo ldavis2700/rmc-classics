@@ -30,6 +30,7 @@ import Battles from "@/pages/Battles";
 import BattlePlay from "@/pages/BattlePlay";
 import Friends from "@/pages/Friends";
 import { Privacy, Terms, Support } from "@/pages/Legal";
+import SupportRMC from "@/pages/SupportRMC";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -82,6 +83,7 @@ function App() {
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/terms" element={<Terms />} />
                 <Route path="/support" element={<Support />} />
+                <Route path="/support-rmc" element={<SupportRMC />} />
                 <Route
                   path="/battles"
                   element={

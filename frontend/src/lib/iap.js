@@ -67,6 +67,9 @@ export async function purchaseFreezePack() {
   if (!isNative()) {
     return { ok: false, error: "In-app purchases are only available in the iOS app." };
   }
+  if (!REVENUECAT_KEY) {
+    return { ok: false, error: "Purchases are temporarily unavailable." };
+  }
   const Purchases = await getPurchases();
   if (!Purchases) return { ok: false, error: "Store unavailable" };
   try {
@@ -77,20 +80,32 @@ export async function purchaseFreezePack() {
     const product = products?.[0];
     if (!product) return { ok: false, error: "Product not found. Try again shortly." };
 
-    // Purchase
+    // Purchase. Once this resolves, payment is confirmed by the store.
     await Purchases.purchaseStoreProduct({ product });
+  } catch (err) {
+    // User-cancel is not an error to us.
+    const msg = err?.message || String(err);
+    if (msg.toLowerCase().includes("cancel")) return { ok: false, cancelled: true };
+    console.warn("purchaseFreezePack failed:", err);
+    return { ok: false, error: msg };
+  }
 
-    // Backend syncs with RevenueCat and credits freezes
+  try {
+    // Backend syncs with RevenueCat and credits freezes.
     const { data } = await api.post("/iap/sync", {
       product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
     });
     return { ok: true, freezes_available: data.freezes_available, credited: data.credited };
   } catch (err) {
-    // User-cancel is not an error to us
-    const msg = err?.message || String(err);
-    if (msg.toLowerCase().includes("cancel")) return { ok: false, cancelled: true };
-    console.warn("purchaseFreezePack failed:", err);
-    return { ok: false, error: msg };
+    // Do not report a paid transaction as a failed purchase. RevenueCat's webhook
+    // can still deliver it, and Restore Purchases safely retries the account sync.
+    console.warn("Freeze pack purchased; credit sync pending:", err);
+    return {
+      ok: true,
+      pending: true,
+      credited: 0,
+      error: "Payment received. Your freezes are still syncing—tap Restore Purchases shortly.",
+    };
   }
 }
 
