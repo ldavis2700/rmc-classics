@@ -233,8 +233,11 @@ function FreezePackShop() {
         return;
       }
       await refresh();
-      const credited = res.credited || IAP_PRODUCTS.FREEZE_PACK_5.freezes;
-      toast.success(`+${credited} streak freezes added!`);
+      if (res.credited > 0) {
+        toast.success(`+${res.credited} streak freezes added!`);
+      } else {
+        toast.success("Purchase verified. Your freeze balance is up to date.");
+      }
     } finally {
       setBusy(false);
     }
