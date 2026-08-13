@@ -1,4 +1,5 @@
 export const MONETIZATION = {
+  foundingPilotUrl: process.env.REACT_APP_FOUNDING_PILOT_URL || "https://rmc-classics-founding-pilot-ashy.vercel.app/",
   sponsorEnabled: process.env.REACT_APP_SPONSOR_ENABLED === "true",
   sponsorName: process.env.REACT_APP_SPONSOR_NAME || "",
   sponsorCopy: process.env.REACT_APP_SPONSOR_COPY || "",
@@ -22,8 +23,8 @@ export function setAdPreference(preference) {
 }
 
 export const REVENUE_CHANNELS = [
-  { name: "Streak Freeze Packs", status: "live", detail: "Consumable in-app purchase" },
-  { name: "Founding Membership", status: "testing", detail: "Premium membership interest test" },
+  { name: "Streak Freeze Packs", status: "live", detail: "Five one-time streak protections for $0.99 in the iOS app", action: "freeze_pack" },
+  { name: "Founding Membership", status: "testing", detail: "Help shape optional member benefits in the approved interest pilot", action: "founding_pilot" },
   { name: "Sponsor Placements", status: "ready", detail: "Direct-sold, clearly labeled inventory" },
   { name: "Affiliate Offers", status: "ready", detail: "Commission-earning partner links" },
   { name: "Cosmetic Theme Packs", status: "planned", detail: "Non-competitive visual upgrades" },
