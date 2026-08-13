@@ -1,7 +1,7 @@
 /* eslint-disable react/no-unescaped-entities */
 import { Link } from "react-router-dom";
 
-const LAST_UPDATED = "February 26, 2026";
+const LAST_UPDATED = "August 13, 2026";
 const CONTACT_EMAIL = "hello@rmcclassics.com";
 
 function Shell({ eyebrow, title, children }) {
@@ -53,14 +53,18 @@ export function Privacy() {
           <b>Analytics:</b> aggregated, non-identifying usage counts (page views, game starts) via
           privacy-friendly analytics.
         </li>
+        <li>
+          <b>Advertising preference:</b> whether you selected contextual or personalized advertising.
+          Contextual advertising is the default.
+        </li>
       </ul>
 
       <h2>What we do NOT collect</h2>
       <ul>
         <li>We do not collect location, contacts, camera, microphone, or health data.</li>
-        <li>We do not sell your data to third parties. Ever.</li>
+        <li>We do not sell personal information to third parties.</li>
         <li>We do not track you across other apps or websites.</li>
-        <li>We do not target ads to you inside the app.</li>
+        <li>We do not use sensitive traits, precise location, contacts, health data, or children's data for advertising.</li>
       </ul>
 
       <h2>How we use your data</h2>
@@ -68,6 +72,8 @@ export function Privacy() {
         <li>To power leaderboards, friend battles, and daily challenges.</li>
         <li>To save your progress so you can log in on any device.</li>
         <li>To improve the app and fix bugs (aggregated only).</li>
+        <li>To show contextual sponsor or affiliate offers.</li>
+        <li>Only with your opt-in, to personalize offers using activity inside RMC CLASSICS.</li>
       </ul>
 
       <h2>Data storage & security</h2>
@@ -101,7 +107,19 @@ export function Privacy() {
         <li>MongoDB Atlas (data storage)</li>
         <li>Cloudflare (CDN + DDoS protection)</li>
         <li>Apple App Store / Google Play (distribution)</li>
+        <li>RevenueCat (in-app purchase processing)</li>
+        <li>Approved sponsors and affiliate partners, when a clearly labeled offer is active</li>
       </ul>
+
+      <h2>Advertising and affiliate disclosure</h2>
+      <p>
+        Clearly labeled sponsor and partner offers may appear outside active gameplay. We may earn
+        money from impressions, clicks, or qualifying purchases. Personalized advertising is off by
+        default and requires an affirmative choice on the Support RMC page. You can return there to
+        change your preference. Enabling personalization does not permit cross-app tracking; any
+        tracking that would require platform permission will remain disabled unless that permission
+        is separately requested and granted.
+      </p>
 
       <h2>Changes to this policy</h2>
       <p>

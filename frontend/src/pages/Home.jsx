@@ -9,6 +9,7 @@ import { GAMES } from "@/lib/games";
 import { sfx } from "@/lib/sound";
 import { trackEvent } from "@/lib/analytics";
 import { useAuth } from "@/context/AuthContext";
+import SponsorUnit from "@/components/rmc/SponsorUnit";
 
 const stats = [
   { label: "Classic games", value: "14", icon: Gamepad2, color: "#00F0FF" },
@@ -270,6 +271,7 @@ export default function Home() {
           More childhood classics dropping soon. Sign up to get notified.
         </p>
       </section>
+      <SponsorUnit placement="home" />
     </div>
   );
 }

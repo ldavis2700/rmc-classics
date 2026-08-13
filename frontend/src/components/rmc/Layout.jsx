@@ -160,6 +160,9 @@ export default function Layout({ children }) {
             >
               Support
             </Link>
+            <Link to="/support-rmc" data-testid="footer-support-rmc" className="hover:text-white" onClick={() => sfx.click()}>
+              Support RMC
+            </Link>
           </div>
         </div>
       </footer>
