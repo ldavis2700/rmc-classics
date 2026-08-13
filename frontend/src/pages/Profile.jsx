@@ -228,6 +228,10 @@ function FreezePackShop() {
         toast.error(res.error || "Purchase failed");
         return;
       }
+      if (res.pending) {
+        toast.success(res.error || "Payment received. Your streak freezes are syncing.");
+        return;
+      }
       await refresh();
       const credited = res.credited || IAP_PRODUCTS.FREEZE_PACK_5.freezes;
       toast.success(`+${credited} streak freezes added!`);
