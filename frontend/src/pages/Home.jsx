@@ -10,6 +10,7 @@ import { sfx } from "@/lib/sound";
 import { trackEvent } from "@/lib/analytics";
 import { useAuth } from "@/context/AuthContext";
 import SponsorUnit from "@/components/rmc/SponsorUnit";
+import { MONETIZATION } from "@/lib/monetization";
 
 const stats = [
   { label: "Classic games", value: "14", icon: Gamepad2, color: "#00F0FF" },
@@ -221,12 +222,14 @@ export default function Home() {
             </p>
           </div>
           <a
-            href="mailto:hello@rmcclassics.com?subject=RMC%20Founding%20Member%20Interest&body=I%27m%20interested%20in%20helping%20shape%20the%20RMC%20Classics%20Founding%20Member%20program."
+            href={MONETIZATION.foundingPilotUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             onClick={recordFoundingMemberInterest}
             data-testid="founding-member-interest-btn"
             className="btn-arcade inline-flex justify-center rounded-full px-7 py-3 text-center text-sm font-black"
           >
-            I’m interested
+            View the founding pilot
           </a>
         </div>
       </section>}
