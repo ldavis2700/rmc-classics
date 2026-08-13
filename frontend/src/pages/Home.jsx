@@ -264,7 +264,7 @@ export default function Home() {
       <section className="mt-16 rounded-3xl border border-white/10 bg-[#16152b] p-8 text-center">
         <p className="font-pixel text-xs text-neon-yellow">// COMING SOON</p>
         <h3 className="mt-2 font-display text-xl font-black uppercase tracking-tight text-white sm:text-2xl">
-          Jenga · Hopscotch · Marbles · Obstacle Course
+          Hopscotch · Marbles · Obstacle Course
         </h3>
         <p className="mt-3 text-sm text-[#a3a1c6]">
           More childhood classics dropping soon. Sign up to get notified.
