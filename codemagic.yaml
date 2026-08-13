@@ -25,7 +25,9 @@ workflows:
       vars:
         XCODE_WORKSPACE: "frontend/ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
-        APP_STORE_APPLE_ID: 0000000000       # <-- REPLACE with your App Store Connect apple_id after first upload
+        # Configure APP_STORE_APPLE_ID and REACT_APP_REVENUECAT_IOS_KEY as
+        # protected Codemagic environment variables. Never commit store IDs as
+        # placeholders or any RevenueCat private/server key.
         REACT_APP_BACKEND_URL: "https://rmcclassics.com"
       node: 20
       xcode: latest
@@ -45,6 +47,109 @@ workflows:
         script: |
           cd frontend
           yarn install --frozen-lockfile
+
+      - name: Validate monetization release configuration
+        script: |
+          if ! echo "$APP_STORE_APPLE_ID" | grep -Eq '^[1-9][0-9]+
+      - name: Sync Capacitor iOS
+        script: |
+          cd frontend
+          npx cap sync ios
+
+      - name: Install CocoaPods
+        script: |
+          cd frontend/ios/App
+          pod install --repo-update
+
+      - name: Set build number
+        script: |
+          cd frontend/ios/App
+          agvtool new-version -all "$(($BUILD_NUMBER + 1))"
+
+      - name: Fetch iOS signing files from App Store Connect
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "com.rmcclassics.app" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Build .ipa
+        script: |
+          cd frontend/ios/App
+          xcode-project build-ipa \
+            --workspace App.xcworkspace \
+            --scheme App
+
+    artifacts:
+      - frontend/ios/App/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - frontend/ios/App/App.xcarchive
+
+    publishing:
+      email:
+        recipients:
+          - hello@rmcclassics.com          # <-- change if you want another inbox to receive the IPA
+        notify:
+          success: true
+          failure: true
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups: []                    # add TestFlight tester group names here, e.g. ["Internal"]
+
+  ios-unsigned:
+    name: RMC Classics -> Unsigned IPA (inspection only)
+    max_build_duration: 60
+    environment:
+      vars:
+        XCODE_WORKSPACE: "frontend/ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
+      node: 20
+      xcode: latest
+      cocoapods: default
+
+    scripts:
+      - name: Install frontend deps
+        script: |
+          cd frontend
+          yarn install --frozen-lockfile
+
+      - name: Build web bundle
+        script: |
+          cd frontend
+          CI=false yarn build
+
+      - name: Sync Capacitor iOS
+        script: |
+          cd frontend
+          npx cap sync ios
+
+      - name: Install CocoaPods
+        script: |
+          cd frontend/ios/App
+          pod install --repo-update
+
+      - name: Build unsigned archive
+        script: |
+          cd frontend/ios/App
+          xcodebuild -workspace App.xcworkspace -scheme App \
+            -configuration Release \
+            -archivePath $CM_BUILD_DIR/App.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+
+    artifacts:
+      - $CM_BUILD_DIR/App.xcarchive
+; then
+            echo "APP_STORE_APPLE_ID must be the real numeric App Store Connect Apple ID"
+            exit 1
+          fi
+          if [ -z "$REACT_APP_REVENUECAT_IOS_KEY" ]; then
+            echo "REACT_APP_REVENUECAT_IOS_KEY must be configured as a protected Codemagic variable"
+            exit 1
+          fi
 
       - name: Build the web bundle
         script: |
