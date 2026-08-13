@@ -1015,26 +1015,27 @@ async def _rc_get_subscriber(app_user_id: str) -> Optional[dict]:
 
 
 async def _credit_freeze_pack(user_id: str, transaction_ids: List[str]) -> int:
-    """Idempotently credit freezes for each new transaction id. Returns count of packs credited."""
-    if not transaction_ids:
-        return 0
-    user_doc = await db.users.find_one({"id": user_id}, {"_id": 0, "processed_iap": 1, "freezes_available": 1})
-    if not user_doc:
-        return 0
-    processed = set(user_doc.get("processed_iap") or [])
-    fresh = [tid for tid in transaction_ids if tid not in processed]
-    if not fresh:
-        return 0
-    inc = len(fresh) * FREEZE_PACK_5_QTY
-    await db.users.update_one(
-        {"id": user_id},
-        {
-            "$inc": {"freezes_available": inc},
-            "$addToSet": {"processed_iap": {"$each": fresh}},
-        },
-    )
-    logger.info("IAP: credited %d freezes to %s (transactions=%s)", inc, user_id, fresh)
-    return len(fresh)
+    """Atomically claim and credit each transaction once. Returns packs credited."""
+    credited = 0
+    for transaction_id in dict.fromkeys(tid for tid in transaction_ids if tid):
+        # The transaction claim and balance increment happen in one document update.
+        # Concurrent sync/webhook requests therefore cannot credit the same purchase twice.
+        result = await db.users.update_one(
+            {"id": user_id, "processed_iap": {"$ne": transaction_id}},
+            {
+                "$inc": {"freezes_available": FREEZE_PACK_5_QTY},
+                "$addToSet": {"processed_iap": transaction_id},
+            },
+        )
+        credited += int(result.modified_count)
+    if credited:
+        logger.info(
+            "IAP: credited %d freezes to %s across %d transaction(s)",
+            credited * FREEZE_PACK_5_QTY,
+            user_id,
+            credited,
+        )
+    return credited
 
 
 class IAPSyncIn(BaseModel):
@@ -1088,23 +1089,26 @@ async def iap_webhook(request: Request):
     if not event_id or not app_user_id:
         return {"ok": True, "skipped": "no id"}
 
-    # Idempotency: skip if already processed
-    seen = await db.iap_events.find_one({"event_id": event_id})
-    if seen:
-        return {"ok": True, "duplicate": True}
-    await db.iap_events.insert_one({
-        "event_id": event_id,
-        "app_user_id": app_user_id,
-        "type": event_type,
-        "product_id": product_id,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-
-    # Credit only for our known consumable
+    # Credit first. The atomic transaction claim makes webhook retries safe and
+    # prevents an event-log write from stranding a paid purchase after a failure.
     credited = 0
     if event_type in ("INITIAL_PURCHASE", "NON_RENEWING_PURCHASE") and product_id == FREEZE_PACK_5_ID:
         transaction_id = str(event.get("transaction_id") or event_id)
         credited = await _credit_freeze_pack(app_user_id, [transaction_id])
+
+    await db.iap_events.update_one(
+        {"event_id": event_id},
+        {
+            "$setOnInsert": {
+                "event_id": event_id,
+                "app_user_id": app_user_id,
+                "type": event_type,
+                "product_id": product_id,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+        upsert=True,
+    )
     return {"ok": True, "credited": credited}
 
 
@@ -1114,6 +1118,7 @@ async def startup():
     await db.users.create_index("email", unique=True)
     await db.users.create_index("total_wins")
     await db.game_events.create_index("user_id")
+    await db.iap_events.create_index("event_id", unique=True)
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@rmc.com").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
     existing = await db.users.find_one({"email": admin_email})
