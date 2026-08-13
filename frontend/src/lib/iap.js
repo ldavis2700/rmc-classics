@@ -67,6 +67,9 @@ export async function purchaseFreezePack() {
   if (!isNative()) {
     return { ok: false, error: "In-app purchases are only available in the iOS app." };
   }
+  if (!REVENUECAT_KEY) {
+    return { ok: false, error: "Purchases are temporarily unavailable." };
+  }
   const Purchases = await getPurchases();
   if (!Purchases) return { ok: false, error: "Store unavailable" };
   try {
