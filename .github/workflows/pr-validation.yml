@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'frontend/**'
+      - 'backend/**'
       - '.github/workflows/**'
       - 'codemagic.yaml'
   push:
@@ -11,6 +12,7 @@ on:
       - 'agent/**'
     paths:
       - 'frontend/**'
+      - 'backend/**'
       - '.github/workflows/**'
       - 'codemagic.yaml'
 
@@ -38,6 +40,17 @@ jobs:
         env:
           CI: 'false'
         run: yarn build
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate backend syntax and IAP idempotency
+        run: |
+          python -m py_compile backend/server.py
+          python -m pip install --disable-pip-version-check pytest
+          python -m pytest -q backend/tests/test_iap_idempotency_unit.py
 
       - name: Confirm iOS project and Capacitor config exist
         run: |
