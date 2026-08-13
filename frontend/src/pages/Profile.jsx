@@ -13,6 +13,7 @@ import {
   isReminderEnabled,
 } from "@/lib/notifications";
 import { purchaseFreezePack, restorePurchases, IAP_PRODUCTS } from "@/lib/iap";
+import { trackEvent } from "@/lib/analytics";
 
 export default function Profile() {
   const { user, logout, refresh } = useAuth();
@@ -221,17 +222,46 @@ function FreezePackShop() {
     if (busy) return;
     setBusy(true);
     sfx.click();
+    trackEvent("freeze_pack_checkout_started", {
+      product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
+      placement: "profile",
+      platform: "ios",
+    });
     try {
       const res = await purchaseFreezePack();
-      if (res.cancelled) return;
+      if (res.cancelled) {
+        trackEvent("freeze_pack_checkout_cancelled", {
+          product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
+          placement: "profile",
+          platform: "ios",
+        });
+        return;
+      }
       if (!res.ok) {
+        trackEvent("freeze_pack_checkout_failed", {
+          product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
+          placement: "profile",
+          platform: "ios",
+          stage: "store",
+        });
         toast.error(res.error || "Purchase failed");
         return;
       }
       if (res.pending) {
+        trackEvent("freeze_pack_activation_pending", {
+          product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
+          placement: "profile",
+          platform: "ios",
+        });
         toast.success(res.error || "Payment received. Your streak freezes are syncing.");
         return;
       }
+      trackEvent("freeze_pack_purchase_completed", {
+        product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
+        placement: "profile",
+        platform: "ios",
+        credited: res.credited > 0,
+      });
       await refresh();
       if (res.credited > 0) {
         toast.success(`+${res.credited} streak freezes added!`);
@@ -247,12 +277,28 @@ function FreezePackShop() {
     if (busy) return;
     setBusy(true);
     sfx.click();
+    trackEvent("freeze_pack_restore_started", {
+      product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
+      placement: "profile",
+      platform: "ios",
+    });
     try {
       const res = await restorePurchases();
       if (!res.ok) {
+        trackEvent("freeze_pack_restore_failed", {
+          product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
+          placement: "profile",
+          platform: "ios",
+        });
         toast.error(res.error || "Nothing to restore");
         return;
       }
+      trackEvent("freeze_pack_restore_completed", {
+        product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
+        placement: "profile",
+        platform: "ios",
+        credited: res.credited > 0,
+      });
       await refresh();
       if (res.credited > 0) toast.success(`Restored ${res.credited} streak freezes`);
       else toast.success("Purchases restored");
