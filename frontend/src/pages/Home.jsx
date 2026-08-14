@@ -265,6 +265,35 @@ export default function Home() {
         </div>
       </section>
 
+      <section
+        className="mt-16 rounded-3xl border border-neon-cyan/30 bg-[#16152b] p-6 sm:p-8"
+        data-testid="support-rmc-home-cta"
+      >
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-pixel text-xs text-neon-cyan">// KEEP THE CLASSICS ALIVE</p>
+            <h3 className="mt-2 font-display text-xl font-black uppercase tracking-tight text-white sm:text-2xl">
+              Support RMC Classics
+            </h3>
+            <p className="mt-2 max-w-2xl text-sm text-[#a3a1c6]">
+              Explore optional ways to support the arcade, including the live iOS Streak Freeze Pack,
+              the Founding Member pilot, sponsorships, and partnerships. Core games stay playable without paying.
+            </p>
+          </div>
+          <Link
+            to="/support-rmc"
+            onClick={() => {
+              sfx.click();
+              trackEvent("support_rmc_opened", { placement: "home" });
+            }}
+            className="btn-arcade inline-flex shrink-0 justify-center rounded-full px-6 py-3 text-sm font-black"
+            data-testid="support-rmc-home-btn"
+          >
+            See support options
+          </Link>
+        </div>
+      </section>
+
       <section className="mt-16 rounded-3xl border border-white/10 bg-[#16152b] p-8 text-center">
         <p className="font-pixel text-xs text-neon-yellow">// COMING SOON</p>
         <h3 className="mt-2 font-display text-xl font-black uppercase tracking-tight text-white sm:text-2xl">
