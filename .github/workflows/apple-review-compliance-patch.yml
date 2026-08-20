@@ -1,0 +1,183 @@
+name: Apply Apple Review Compliance Patch
+
+on:
+  push:
+    branches:
+      - fix/apple-review-2026-08-20
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/apple-review-2026-08-20
+          fetch-depth: 0
+
+      - name: Patch backend compliance endpoints
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path('backend/server.py')
+          s = p.read_text()
+          marker = '# ---------- Apple Review Compliance 2026-08-20 ----------'
+          if marker in s:
+              print('Compliance patch already applied')
+              raise SystemExit(0)
+
+          s = s.replace(
+              'class RegisterIn(BaseModel):\n    email: EmailStr\n    password: str = Field(min_length=6, max_length=128)\n    name: str = Field(min_length=1, max_length=60)\n',
+              'class RegisterIn(BaseModel):\n    email: EmailStr\n    password: str = Field(min_length=6, max_length=128)\n    name: str = Field(min_length=1, max_length=60)\n    accepted_terms: bool = False\n'
+          )
+
+          s = s.replace(
+              'async def register(body: RegisterIn):\n    email = body.email.lower().strip()\n',
+              'async def register(body: RegisterIn):\n    if not body.accepted_terms:\n        raise HTTPException(status_code=400, detail="You must accept the Terms of Use and Privacy Policy")\n    email = body.email.lower().strip()\n'
+          )
+
+          s = s.replace(
+              '        "daily": {"date": None, "progress": 0, "claimed": False},\n        "created_at": datetime.now(timezone.utc).isoformat(),\n',
+              '        "daily": {"date": None, "progress": 0, "claimed": False},\n        "terms_accepted_at": datetime.now(timezone.utc).isoformat(),\n        "created_at": datetime.now(timezone.utc).isoformat(),\n',
+              1
+          )
+
+          anchor = '@api.post("/auth/logout")\nasync def logout():\n    return {"ok": True}\n\n\n# ---------- Game / Score Endpoints ----------'
+          replacement = '''@api.post("/auth/logout")
+async def logout():
+    return {"ok": True}
+
+
+# ---------- Apple Review Compliance 2026-08-20 ----------
+@api.delete("/auth/account")
+async def delete_account(user: dict = Depends(get_current_user)):
+    """Permanently delete the authenticated account and associated personal gameplay data."""
+    uid = user["id"]
+    await db.users.update_many({}, {"$pull": {"friend_ids": uid, "blocked_user_ids": uid}})
+    await db.game_events.delete_many({"user_id": uid})
+    await db.safety_reports.delete_many({"reporter_user_id": uid})
+    await db.safety_reports.update_many(
+        {"reported_user_id": uid},
+        {"$set": {"reported_user_id": "deleted-user", "reported_user_deleted": True}},
+    )
+    await db.users.delete_one({"id": uid})
+    for room_id, room in list(_battle_rooms.items()):
+        if uid in (room.get("host_id"), room.get("guest_id")):
+            _battle_rooms.pop(room_id, None)
+    return {"ok": True, "deleted": True}
+
+
+# ---------- Game / Score Endpoints ----------'''
+          if anchor not in s:
+              raise SystemExit('auth logout anchor not found')
+          s = s.replace(anchor, replacement)
+
+          s = s.replace(
+              'async def list_friends(user: dict = Depends(get_current_user)):\n    ids = user.get("friend_ids") or []\n',
+              'async def list_friends(user: dict = Depends(get_current_user)):\n    blocked_ids = set(user.get("blocked_user_ids") or [])\n    ids = [fid for fid in (user.get("friend_ids") or []) if fid not in blocked_ids]\n'
+          )
+
+          safety_anchor = '# ---------- Themes ----------\nclass ThemeSelectIn(BaseModel):'
+          safety_code = '''# ---------- User Safety / UGC Moderation ----------
+class SafetyReportIn(BaseModel):
+    reported_user_id: str
+    reason: str = Field(min_length=1, max_length=1000)
+    context: str = Field(default="app", max_length=100)
+
+
+@api.post("/safety/report")
+async def report_user(body: SafetyReportIn, user: dict = Depends(get_current_user)):
+    if body.reported_user_id == user["id"]:
+        raise HTTPException(status_code=400, detail="You cannot report yourself")
+    target = await db.users.find_one({"id": body.reported_user_id}, {"_id": 0, "id": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    report = {
+        "id": str(uuid.uuid4()),
+        "reporter_user_id": user["id"],
+        "reported_user_id": body.reported_user_id,
+        "reason": body.reason.strip(),
+        "context": body.context,
+        "status": "open",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.safety_reports.insert_one(report)
+    logger.warning("SAFETY REPORT %s: reporter=%s target=%s context=%s", report["id"], user["id"], body.reported_user_id, body.context)
+    return {"ok": True, "report_id": report["id"]}
+
+
+@api.post("/safety/block/{target_user_id}")
+async def block_user(target_user_id: str, user: dict = Depends(get_current_user)):
+    if target_user_id == user["id"]:
+        raise HTTPException(status_code=400, detail="You cannot block yourself")
+    target = await db.users.find_one({"id": target_user_id}, {"_id": 0, "id": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Block immediately and remove the relationship from both sides so the blocked
+    # user's profile/content disappears from the blocker's social surface at once.
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$addToSet": {"blocked_user_ids": target_user_id}, "$pull": {"friend_ids": target_user_id}},
+    )
+    await db.users.update_one({"id": target_user_id}, {"$pull": {"friend_ids": user["id"]}})
+
+    # Apple 1.2 requires blocking abusive users to notify the developer. Every block
+    # creates a moderation event for review even when the user did not file a separate report.
+    report = {
+        "id": str(uuid.uuid4()),
+        "reporter_user_id": user["id"],
+        "reported_user_id": target_user_id,
+        "reason": "User blocked from in-app safety controls",
+        "context": "block",
+        "status": "open",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.safety_reports.insert_one(report)
+    logger.warning("SAFETY BLOCK %s: blocker=%s target=%s", report["id"], user["id"], target_user_id)
+    return {"ok": True, "blocked_user_id": target_user_id, "report_id": report["id"]}
+
+
+@api.delete("/safety/block/{target_user_id}")
+async def unblock_user(target_user_id: str, user: dict = Depends(get_current_user)):
+    await db.users.update_one({"id": user["id"]}, {"$pull": {"blocked_user_ids": target_user_id}})
+    return {"ok": True}
+
+
+# ---------- Themes ----------
+class ThemeSelectIn(BaseModel):'''
+          if safety_anchor not in s:
+              raise SystemExit('themes anchor not found')
+          s = s.replace(safety_anchor, safety_code)
+
+          s = s.replace(
+              '    await db.iap_events.create_index("event_id", unique=True)\n',
+              '    await db.iap_events.create_index("event_id", unique=True)\n    await db.safety_reports.create_index("reported_user_id")\n    await db.safety_reports.create_index("created_at")\n'
+          )
+
+          p.write_text(s)
+          print('Applied Apple review compliance backend patch')
+
+      - name: Validate patched backend
+        run: |
+          python -m py_compile backend/server.py
+          grep -q 'Apple Review Compliance 2026-08-20' backend/server.py
+          grep -q '@api.delete("/auth/account")' backend/server.py
+          grep -q '@api.post("/safety/report")' backend/server.py
+          grep -q '@api.post("/safety/block/{target_user_id}")' backend/server.py
+
+      - name: Commit backend patch
+        run: |
+          if git diff --quiet; then
+            echo "Nothing to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/server.py
+          git commit -m "Add backend Apple review compliance endpoints"
+          git push origin HEAD:fix/apple-review-2026-08-20
