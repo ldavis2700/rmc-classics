@@ -269,6 +269,7 @@ class RegisterIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, max_length=128)
     name: str = Field(min_length=1, max_length=60)
+    accepted_terms: bool = False
 
 
 class LoginIn(BaseModel):
@@ -286,6 +287,8 @@ class SubmitScoreIn(BaseModel):
 # ---------- Auth Endpoints ----------
 @api.post("/auth/register")
 async def register(body: RegisterIn):
+    if not body.accepted_terms:
+        raise HTTPException(status_code=400, detail="You must accept the Terms of Use and Privacy Policy")
     email = body.email.lower().strip()
     existing = await db.users.find_one({"email": email})
     if existing:
@@ -302,6 +305,7 @@ async def register(body: RegisterIn):
         "total_plays": 0,
         "xp": 0,
         "daily": {"date": None, "progress": 0, "claimed": False},
+        "terms_accepted_at": datetime.now(timezone.utc).isoformat(),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.users.insert_one(doc)
@@ -333,6 +337,25 @@ async def me(user: dict = Depends(get_current_user)):
 @api.post("/auth/logout")
 async def logout():
     return {"ok": True}
+
+
+# ---------- Apple Review Compliance 2026-08-20 ----------
+@api.delete("/auth/account")
+async def delete_account(user: dict = Depends(get_current_user)):
+    """Permanently delete the authenticated account and associated personal gameplay data."""
+    uid = user["id"]
+    await db.users.update_many({}, {"$pull": {"friend_ids": uid, "blocked_user_ids": uid}})
+    await db.game_events.delete_many({"user_id": uid})
+    await db.safety_reports.delete_many({"reporter_user_id": uid})
+    await db.safety_reports.update_many(
+        {"reported_user_id": uid},
+        {"$set": {"reported_user_id": "deleted-user", "reported_user_deleted": True}},
+    )
+    await db.users.delete_one({"id": uid})
+    for room_id, room in list(_battle_rooms.items()):
+        if uid in (room.get("host_id"), room.get("guest_id")):
+            _battle_rooms.pop(room_id, None)
+    return {"ok": True, "deleted": True}
 
 
 # ---------- Game / Score Endpoints ----------
@@ -925,7 +948,8 @@ async def add_friend(body: FriendAddIn, user: dict = Depends(get_current_user)):
 
 @api.get("/friends")
 async def list_friends(user: dict = Depends(get_current_user)):
-    ids = user.get("friend_ids") or []
+    blocked_ids = set(user.get("blocked_user_ids") or [])
+    ids = [fid for fid in (user.get("friend_ids") or []) if fid not in blocked_ids]
     if not ids:
         return {"friends": []}
     friends = await db.users.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1, "email": 1, "avatar": 1, "last_seen": 1, "total_wins": 1, "xp": 1}).to_list(1000)
@@ -960,6 +984,66 @@ async def remove_friend(friend_id: str, user: dict = Depends(get_current_user)):
     if friend:
         theirs = [f for f in (friend.get("friend_ids") or []) if f != user["id"]]
         await db.users.update_one({"id": friend_id}, {"$set": {"friend_ids": theirs}})
+    return {"ok": True}
+
+
+# ---------- User Safety / UGC Moderation ----------
+class SafetyReportIn(BaseModel):
+    reported_user_id: str
+    reason: str = Field(min_length=1, max_length=1000)
+    context: str = Field(default="app", max_length=100)
+
+
+@api.post("/safety/report")
+async def report_user(body: SafetyReportIn, user: dict = Depends(get_current_user)):
+    if body.reported_user_id == user["id"]:
+        raise HTTPException(status_code=400, detail="You cannot report yourself")
+    target = await db.users.find_one({"id": body.reported_user_id}, {"_id": 0, "id": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    report = {
+        "id": str(uuid.uuid4()),
+        "reporter_user_id": user["id"],
+        "reported_user_id": body.reported_user_id,
+        "reason": body.reason.strip(),
+        "context": body.context,
+        "status": "open",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.safety_reports.insert_one(report)
+    logger.warning("SAFETY REPORT %s: reporter=%s target=%s context=%s", report["id"], user["id"], body.reported_user_id, body.context)
+    return {"ok": True, "report_id": report["id"]}
+
+
+@api.post("/safety/block/{target_user_id}")
+async def block_user(target_user_id: str, user: dict = Depends(get_current_user)):
+    if target_user_id == user["id"]:
+        raise HTTPException(status_code=400, detail="You cannot block yourself")
+    target = await db.users.find_one({"id": target_user_id}, {"_id": 0, "id": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$addToSet": {"blocked_user_ids": target_user_id}, "$pull": {"friend_ids": target_user_id}},
+    )
+    await db.users.update_one({"id": target_user_id}, {"$pull": {"friend_ids": user["id"]}})
+    report = {
+        "id": str(uuid.uuid4()),
+        "reporter_user_id": user["id"],
+        "reported_user_id": target_user_id,
+        "reason": "User blocked from in-app safety controls",
+        "context": "block",
+        "status": "open",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.safety_reports.insert_one(report)
+    logger.warning("SAFETY BLOCK %s: blocker=%s target=%s", report["id"], user["id"], target_user_id)
+    return {"ok": True, "blocked_user_id": target_user_id, "report_id": report["id"]}
+
+
+@api.delete("/safety/block/{target_user_id}")
+async def unblock_user(target_user_id: str, user: dict = Depends(get_current_user)):
+    await db.users.update_one({"id": user["id"]}, {"$pull": {"blocked_user_ids": target_user_id}})
     return {"ok": True}
 
 
@@ -1123,6 +1207,8 @@ async def startup():
     await db.users.create_index("total_wins")
     await db.game_events.create_index("user_id")
     await db.iap_events.create_index("event_id", unique=True)
+    await db.safety_reports.create_index("reported_user_id")
+    await db.safety_reports.create_index("created_at")
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@rmc.com").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
     existing = await db.users.find_one({"email": admin_email})
