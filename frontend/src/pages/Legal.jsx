@@ -1,7 +1,7 @@
 /* eslint-disable react/no-unescaped-entities */
 import { Link } from "react-router-dom";
 
-const LAST_UPDATED = "August 13, 2026";
+const LAST_UPDATED = "August 20, 2026";
 const CONTACT_EMAIL = "hello@rmcclassics.com";
 
 function Shell({ eyebrow, title, children }) {
@@ -88,7 +88,7 @@ export function Privacy() {
           <b>Access:</b> View your data on the Profile screen at any time.
         </li>
         <li>
-          <b>Delete:</b> Email us to permanently delete your account and all associated data.
+          <b>Delete:</b> Permanently delete your account and associated account data from inside the app at Profile → Account Settings → Delete Account. If you cannot access your account, contact support for assistance.
         </li>
         <li>
           <b>Export:</b> Request a copy of your data by email.
@@ -148,7 +148,8 @@ export function Terms() {
       <ul>
         <li>No cheating, botting, or exploiting bugs to inflate scores.</li>
         <li>No harassment, hate speech, or spam in chat or usernames.</li>
-        <li>We reserve the right to reset scores or ban accounts that violate fair play.</li>
+        <li>Use the in-app Report and Block controls when another player violates these rules.</li>
+        <li>We reserve the right to reset scores or suspend or ban accounts that violate fair play or safety rules.</li>
       </ul>
 
       <h2>Your content</h2>
@@ -179,7 +180,7 @@ export function Terms() {
 
       <h2>Termination</h2>
       <p>
-        You can delete your account any time. We may suspend accounts that violate these terms.
+        You can permanently delete your account at any time from Profile → Account Settings → Delete Account. We may suspend accounts that violate these terms.
       </p>
 
       <h2>Governing law</h2>
@@ -224,8 +225,12 @@ export function Support() {
 
       <h2>How do I delete my account?</h2>
       <p>
-        Email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> with the subject "Delete my
-        account". We'll wipe your data within 7 days and confirm by email.
+        While signed in, open Profile → Account Settings → Delete Account. The app will ask you to confirm before permanently deleting the account. If you cannot sign in, email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> for assistance.
+      </p>
+
+      <h2>How do I report or block another player?</h2>
+      <p>
+        Open Friends, select the player, then use Report or Block. Blocking removes that player from your social and friends surfaces, and reports are recorded for moderation review.
       </p>
 
       <h2>Why did I lose my streak?</h2>
