@@ -19,7 +19,7 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await api.get("/auth/me");
       setUser(data.user);
-      configureIAP(data.user?.id);   // configure RevenueCat with stable user id (native only)
+      configureIAP(data.user?.id);
     } catch (e) {
       localStorage.removeItem("rmc_token");
       setUser(null);
@@ -30,7 +30,6 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     refresh();
-    // Silent Game Center sign-in on iOS (no-op on web)
     signInGameCenter();
   }, [refresh]);
 
@@ -45,9 +44,14 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const register = async (email, password, name) => {
+  const register = async (email, password, name, acceptedTerms = false) => {
     try {
-      const { data } = await api.post("/auth/register", { email, password, name });
+      const { data } = await api.post("/auth/register", {
+        email,
+        password,
+        name,
+        accepted_terms: acceptedTerms,
+      });
       localStorage.setItem("rmc_token", data.token);
       setUser(data.user);
       return { ok: true };
@@ -61,11 +65,21 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const deleteAccount = async () => {
+    try {
+      await api.delete("/auth/account");
+      localStorage.removeItem("rmc_token");
+      setUser(null);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: formatApiErrorDetail(e.response?.data?.detail) || e.message };
+    }
+  };
+
   const submitScore = async (payload) => {
     try {
       const { data } = await api.post("/games/submit", payload);
       setUser(data.user);
-      // Mirror the score to Apple Game Center / Google Play Games (native-only, fire-and-forget)
       if (payload?.game_id && typeof payload?.score === "number") {
         submitLeaderboardScore(payload.game_id, payload.score);
       }
@@ -83,7 +97,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refresh, submitScore }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, deleteAccount, refresh, submitScore }}>
       {children}
     </AuthContext.Provider>
   );
