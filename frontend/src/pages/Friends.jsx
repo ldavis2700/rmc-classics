@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { UserPlus, Swords, Trash2, Users } from "lucide-react";
+import { UserPlus, Swords, Trash2, Users, Flag, Ban } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import { sfx } from "@/lib/sound";
@@ -22,7 +22,7 @@ export default function Friends() {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 20000); // refresh online status
+    const t = setInterval(load, 20000);
     return () => clearInterval(t);
   }, []);
 
@@ -53,6 +53,39 @@ export default function Friends() {
     }
   };
 
+  const reportUser = async (friend) => {
+    const reason = window.prompt(
+      `Report ${friend.name || friend.email}. Briefly describe the objectionable or abusive behavior:`
+    );
+    if (!reason?.trim()) return;
+    sfx.click();
+    try {
+      await api.post("/safety/report", {
+        reported_user_id: friend.id,
+        reason: reason.trim(),
+        context: "friends",
+      });
+      toast.success("Report received. Thank you for helping keep RMC Classics safe.");
+    } catch (err) {
+      toast.error(formatApiErrorDetail(err.response?.data?.detail) || "Couldn't submit report");
+    }
+  };
+
+  const blockUser = async (friend) => {
+    const confirmed = window.confirm(
+      `Block ${friend.name || friend.email}? They will be removed from your friends list and their user-generated content will no longer be shown to you.`
+    );
+    if (!confirmed) return;
+    sfx.click();
+    try {
+      await api.post(`/safety/block/${friend.id}`);
+      setFriends((current) => current.filter((x) => x.id !== friend.id));
+      toast.success("User blocked and removed from your view.");
+    } catch (err) {
+      toast.error(formatApiErrorDetail(err.response?.data?.detail) || "Couldn't block user");
+    }
+  };
+
   return (
     <div className="mx-auto max-w-3xl px-4 pt-8 md:px-8 md:pt-14">
       <p className="font-pixel text-xs text-neon-cyan">// FRIENDS</p>
@@ -60,10 +93,9 @@ export default function Friends() {
         Your circle
       </h1>
       <p className="mt-2 max-w-xl text-sm text-[#a3a1c6]">
-        Save friends by email. See who&apos;s online. Battle them in one tap.
+        Save friends by email. See who&apos;s online. Battle them in one tap. Use Report or Block whenever a player behaves abusively or shares objectionable content.
       </p>
 
-      {/* Add friend */}
       <form onSubmit={addFriend} className="mt-6 flex flex-wrap gap-2">
         <input
           type="email"
@@ -84,7 +116,6 @@ export default function Friends() {
         </button>
       </form>
 
-      {/* List */}
       <div className="mt-8 space-y-2" data-testid="friends-list">
         {loading && <div className="font-pixel text-neon-cyan">LOADING…</div>}
         {!loading && friends.length === 0 && (
@@ -117,10 +148,7 @@ export default function Friends() {
                       color: f.online ? "#39FF14" : "#6a6890",
                     }}
                   >
-                    <span
-                      className="h-1.5 w-1.5 rounded-full"
-                      style={{ backgroundColor: f.online ? "#39FF14" : "#6a6890" }}
-                    />
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: f.online ? "#39FF14" : "#6a6890" }} />
                     {f.online ? "online" : "offline"}
                   </span>
                 </div>
@@ -129,7 +157,7 @@ export default function Friends() {
                 </div>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Link
                 to="/battles"
                 data-testid={`friend-battle-${f.id}`}
@@ -137,6 +165,24 @@ export default function Friends() {
               >
                 <Swords className="h-3.5 w-3.5" /> Battle
               </Link>
+              <button
+                type="button"
+                onClick={() => reportUser(f)}
+                data-testid={`friend-report-${f.id}`}
+                className="inline-flex items-center gap-1 rounded-full border border-yellow-400/30 bg-yellow-400/5 px-3 py-2 text-xs font-semibold text-yellow-200 hover:bg-yellow-400/10"
+                aria-label="Report user"
+              >
+                <Flag className="h-3.5 w-3.5" /> Report
+              </button>
+              <button
+                type="button"
+                onClick={() => blockUser(f)}
+                data-testid={`friend-block-${f.id}`}
+                className="inline-flex items-center gap-1 rounded-full border border-red-400/30 bg-red-400/5 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-400/10"
+                aria-label="Block user"
+              >
+                <Ban className="h-3.5 w-3.5" /> Block
+              </button>
               <button
                 type="button"
                 onClick={() => removeFriend(f.id)}

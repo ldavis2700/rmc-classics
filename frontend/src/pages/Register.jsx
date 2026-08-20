@@ -8,6 +8,7 @@ export default function Register() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [busy, setBusy] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -15,9 +16,13 @@ export default function Register() {
   const onSubmit = async (e) => {
     e.preventDefault();
     if (busy) return;
+    if (!acceptedTerms) {
+      toast.error("Please agree to the Terms of Use and Privacy Policy before creating an account.");
+      return;
+    }
     setBusy(true);
     sfx.click();
-    const res = await register(email, password, name);
+    const res = await register(email, password, name, acceptedTerms);
     setBusy(false);
     if (res.ok) {
       sfx.win();
@@ -50,10 +55,32 @@ export default function Register() {
             testId="register-password"
             required
           />
+
+          <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-[#c5c3df]">
+            <input
+              type="checkbox"
+              checked={acceptedTerms}
+              onChange={(e) => setAcceptedTerms(e.target.checked)}
+              data-testid="register-terms-checkbox"
+              className="mt-1 h-4 w-4 shrink-0 accent-[#00F0FF]"
+            />
+            <span>
+              I agree to the{" "}
+              <Link to="/terms" target="_blank" className="font-semibold text-neon-cyan hover:underline">
+                Terms of Use
+              </Link>{" "}
+              and{" "}
+              <Link to="/privacy" target="_blank" className="font-semibold text-neon-cyan hover:underline">
+                Privacy Policy
+              </Link>
+              . I understand that abusive or objectionable behavior is prohibited and may be reported or blocked.
+            </span>
+          </label>
+
           <button
             type="submit"
             data-testid="register-submit"
-            disabled={busy}
+            disabled={busy || !acceptedTerms}
             className="btn-arcade w-full rounded-2xl py-3 text-sm font-black disabled:opacity-60"
           >
             {busy ? "..." : "▶ Start playing"}
