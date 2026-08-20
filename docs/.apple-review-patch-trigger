@@ -1,1 +1,2 @@
 Trigger Apple review compliance backend patch workflow.
+Manual retrigger after PR #16 merge to ensure backend routes are committed.
