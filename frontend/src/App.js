@@ -10,6 +10,7 @@ import Home from "@/pages/Home";
 import Library from "@/pages/Library";
 import Leaderboard from "@/pages/Leaderboard";
 import Profile from "@/pages/Profile";
+import AccountSettings from "@/pages/AccountSettings";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import MemoryMatch from "@/pages/games/MemoryMatch";
@@ -63,6 +64,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <Profile />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/account"
+                  element={
+                    <ProtectedRoute>
+                      <AccountSettings />
                     </ProtectedRoute>
                   }
                 />
