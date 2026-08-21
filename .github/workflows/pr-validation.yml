@@ -52,6 +52,28 @@ jobs:
           python -m pip install --disable-pip-version-check pytest
           python -m pytest -q backend/tests/test_iap_idempotency_unit.py
 
+      - name: Protect Apple Review remediation
+        run: |
+          # Guideline 1.2: consent plus developer-visible Report and Block controls.
+          grep -q 'accepted_terms: bool = False' backend/server.py
+          grep -q '@api.post("/safety/report")' backend/server.py
+          grep -q '@api.post("/safety/block/{target_user_id}")' backend/server.py
+          grep -q 'accepted_terms: acceptedTerms' frontend/src/context/AuthContext.jsx
+          grep -q 'aria-label="Report user"' frontend/src/pages/Friends.jsx
+          grep -q 'aria-label="Block user"' frontend/src/pages/Friends.jsx
+
+          # Guideline 5.1.1(v): authenticated, in-app permanent account deletion.
+          grep -q '@api.delete("/auth/account")' backend/server.py
+          grep -q 'Permanently delete account' frontend/src/pages/AccountSettings.jsx
+
+          # Public disclosures must match the actual in-app safety and deletion paths.
+          grep -q 'Profile → Account Settings → Delete Account' frontend/src/pages/Legal.jsx
+          grep -q 'Open Friends, select the player, then use Report or Block' frontend/src/pages/Legal.jsx
+
+          # Guideline 2.1(b): the submitted consumable remains consistent end-to-end.
+          grep -q 'FREEZE_PACK_5_ID = "rmc.freeze.pack5"' backend/server.py
+          grep -q 'id: "rmc.freeze.pack5"' frontend/src/lib/iap.js
+
       - name: Confirm iOS project and Capacitor config exist
         run: |
           test -f frontend/capacitor.config.ts
