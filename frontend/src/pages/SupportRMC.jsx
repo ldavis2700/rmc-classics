@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Crown, ExternalLink, Mail, ShieldCheck, ShoppingBag } from "lucide-react";
 import { MONETIZATION, REVENUE_CHANNELS, getAdPreference, setAdPreference } from "@/lib/monetization";
 import { trackEvent } from "@/lib/analytics";
 
 const EMAIL = "hello@rmcclassics.com";
+const PAGE_TITLE = "Sponsor or Partner with RMC CLASSICS";
+const PAGE_DESCRIPTION = "Sponsor RMC CLASSICS, license the classic-games collection, or explore branded tournaments and partnership opportunities.";
 
 function interestLink(subject, channel) {
   const body = `I'm interested in ${channel} for RMC CLASSICS.`;
@@ -13,6 +15,26 @@ function interestLink(subject, channel) {
 
 export default function SupportRMC() {
   const [preference, setPreference] = useState(getAdPreference());
+
+  useEffect(() => {
+    const description = document.querySelector('meta[name="description"]');
+    const canonical = document.querySelector('link[rel="canonical"]');
+    const previous = {
+      title: document.title,
+      description: description?.getAttribute("content"),
+      canonical: canonical?.getAttribute("href"),
+    };
+
+    document.title = PAGE_TITLE;
+    description?.setAttribute("content", PAGE_DESCRIPTION);
+    canonical?.setAttribute("href", "https://rmcclassics.com/support-rmc");
+
+    return () => {
+      document.title = previous.title;
+      if (previous.description) description?.setAttribute("content", previous.description);
+      if (previous.canonical) canonical?.setAttribute("href", previous.canonical);
+    };
+  }, []);
   const updatePreference = (value) => {
     setAdPreference(value);
     setPreference(value);
