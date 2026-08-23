@@ -20,8 +20,19 @@ export function initAnalytics() {
 }
 
 export function trackEvent(name, params = {}) {
-  if (typeof window === "undefined" || !window.gtag) return;
-  window.gtag("event", name, params);
+  if (typeof window === "undefined") return;
+
+  if (window.gtag) {
+    window.gtag("event", name, params);
+  }
+
+  const posthog = window.posthog;
+  if (
+    typeof posthog?.capture === "function" &&
+    posthog.has_opted_out_capturing?.() !== true
+  ) {
+    posthog.capture(name, params);
+  }
 }
 
 export function trackPageview(path) {
