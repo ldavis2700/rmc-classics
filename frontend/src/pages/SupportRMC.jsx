@@ -13,6 +13,20 @@ function interestLink(subject, channel) {
   return `mailto:${EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
+function partnershipLink() {
+  const body = [
+    "I'm interested in partnering with RMC CLASSICS.",
+    "",
+    "Organization:",
+    "Website:",
+    "Opportunity: sponsorship / branded tournament / bulk access / licensing",
+    "Audience or campaign goal:",
+    "Desired timing:",
+  ].join("\n");
+
+  return `mailto:${EMAIL}?subject=${encodeURIComponent("RMC CLASSICS partnership inquiry")}&body=${encodeURIComponent(body)}`;
+}
+
 export default function SupportRMC() {
   const [preference, setPreference] = useState(getAdPreference());
 
@@ -43,15 +57,24 @@ export default function SupportRMC() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 pb-24 pt-8 md:px-8 md:pt-14">
-      <p className="font-pixel text-xs text-neon-yellow">// SUPPORT RMC CLASSICS</p>
+      <p className="font-pixel text-xs text-neon-yellow">// PARTNERSHIPS</p>
       <h1 className="mt-2 font-display text-3xl font-black uppercase tracking-tight text-white sm:text-4xl">
-        Help keep the classics alive
+        Sponsor or partner with RMC CLASSICS
       </h1>
       <p className="mt-3 max-w-2xl text-[#a3a1c6]">
-        Choose how you want to support the arcade. Core games stay playable without paying, and competitive results are never sold.
+        Reach classic-game players through clearly labeled sponsor placements, branded tournaments, bulk access, or licensing. Tell us what you want to accomplish and we will confirm fit, scope, and availability.
       </p>
+      <a
+        href={partnershipLink()}
+        onClick={() => trackEvent("partner_inquiry_started", { placement: "support_rmc_hero" })}
+        className="btn-arcade mt-5 inline-flex rounded-full px-6 py-3 text-sm"
+      >
+        Request partnership details
+      </a>
+      <p className="mt-3 text-xs text-[#77749d]">No obligation. Your email opens with a short qualification checklist.</p>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <h2 className="mt-10 font-display text-xl font-black uppercase text-white">Ways to work with RMC</h2>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {REVENUE_CHANNELS.map((channel) => (
           <article key={channel.name} className="rounded-2xl border border-white/10 bg-[#16152b] p-5">
             <div className="flex items-start justify-between gap-3">
@@ -121,17 +144,6 @@ export default function SupportRMC() {
         </div>
       </section>
 
-      <section className="mt-10 rounded-3xl border border-neon-pink/30 bg-[#16152b] p-6 text-center">
-        <h2 className="font-display text-xl font-black uppercase text-white">Advertise, license, or partner with us</h2>
-        <p className="mt-2 text-sm text-[#a3a1c6]">Request sponsor inventory, branded tournaments, bulk access, or licensing.</p>
-        <a
-          href={interestLink("RMC CLASSICS partnership inquiry", "a sponsorship or licensing partnership")}
-          onClick={() => trackEvent("partner_inquiry_started", { placement: "support_rmc" })}
-          className="btn-arcade mt-5 inline-flex rounded-full px-6 py-3 text-sm"
-        >
-          Start a partnership inquiry
-        </a>
-      </section>
     </div>
   );
 }
