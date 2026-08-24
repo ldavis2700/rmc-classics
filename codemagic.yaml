@@ -6,7 +6,9 @@
 #   3. Connect your repo -> Codemagic detects this file automatically
 #   4. In Codemagic dashboard: Team settings -> Integrations -> App Store Connect
 #      Upload the .p8 API key (Users and Access -> Integrations -> App Store Connect API)
-#   5. For a deliberate release, create a Git tag matching rmc-testflight-*.
+#   5. For a deliberate release, either:
+#      - push a guarded branch matching rmc-testflight/*, or
+#      - create a Git tag matching rmc-testflight-*.
 #      Codemagic will start the signed ios-testflight workflow automatically.
 #      Manual starts remain available as a fallback.
 #
@@ -16,8 +18,8 @@
 #
 # Cost/release guardrail:
 #   Signed iOS release builds do NOT run on ordinary pushes to main.
-#   They run only from an intentional rmc-testflight-* tag or a deliberate manual start,
-#   preventing accidental macOS-minute usage or unintended TestFlight uploads.
+#   They run only from an intentional rmc-testflight/* branch push,
+#   an intentional rmc-testflight-* tag, or a deliberate manual start.
 #
 # Docs: https://docs.codemagic.io/yaml-running-builds/starting-builds-automatically/
 
@@ -27,7 +29,12 @@ workflows:
     max_build_duration: 60
     triggering:
       events:
+        - push
         - tag
+      branch_patterns:
+        - pattern: 'rmc-testflight/*'
+          include: true
+          source: true
       tag_patterns:
         - pattern: 'rmc-testflight-*'
           include: true
