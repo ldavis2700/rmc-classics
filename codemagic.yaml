@@ -23,15 +23,17 @@ workflows:
     name: RMC Classics -> TestFlight
     max_build_duration: 60
     environment:
+      groups:
+        - rmc_release
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.rmcclassics.app
       vars:
         XCODE_WORKSPACE: "frontend/ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
-        # Configure APP_STORE_APPLE_ID and REACT_APP_REVENUECAT_IOS_KEY as
-        # protected Codemagic environment variables. Never commit store IDs as
-        # placeholders or any RevenueCat private/server key.
+        # APP_STORE_APPLE_ID and REACT_APP_REVENUECAT_IOS_KEY are loaded from
+        # the protected rmc_release Codemagic environment variable group.
+        # Never commit store IDs as placeholders or any RevenueCat private/server key.
         REACT_APP_BACKEND_URL: "https://rmcclassics.com"
       node: 20
       xcode: latest
