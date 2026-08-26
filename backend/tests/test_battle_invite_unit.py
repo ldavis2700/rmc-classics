@@ -17,8 +17,10 @@ def test_invites_use_a_public_https_origin_and_encode_room_ids():
     assert "REACT_APP_PUBLIC_APP_URL" in source
     assert ".trim()" in source
     assert '.replace(/\\/+$/, "")' in source
+    assert 'parsed.protocol !== "https:"' in source
+    assert "return DEFAULT_PUBLIC_APP_URL" in source
     assert "encodeURIComponent(roomId" in source
-    assert 'return `${publicBase}/battle/${encodeURIComponent(roomId || "")}`;' in source
+    assert 'return `${publicAppBaseUrl()}/battle/${encodeURIComponent(roomId || "")}`;' in source
 
 
 def test_battle_share_uses_native_bridge_not_capacitor_local_origin():
