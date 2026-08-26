@@ -8,11 +8,13 @@ export default function AccountSettings() {
   const { user, deleteAccount } = useAuth();
   const navigate = useNavigate();
   const [confirmText, setConfirmText] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
   if (!user) return null;
 
-  const confirmed = confirmText.trim().toUpperCase() === "DELETE";
+  const confirmed =
+    confirmText.trim().toUpperCase() === "DELETE" && currentPassword.length > 0;
 
   const onDelete = async () => {
     if (!confirmed || busy) return;
@@ -21,7 +23,7 @@ export default function AccountSettings() {
     );
     if (!finalConfirm) return;
     setBusy(true);
-    const result = await deleteAccount();
+    const result = await deleteAccount(currentPassword);
     setBusy(false);
     if (result.ok) {
       toast.success("Your account has been permanently deleted.");
@@ -54,13 +56,28 @@ export default function AccountSettings() {
             </h2>
             <p className="mt-2 text-sm leading-6 text-[#c5c3df]">
               This permanently deletes your RMC Classics account and associated account data, including your profile,
-              friend connections, gameplay history tied to your account, and stored progression. This is not temporary
-              deactivation and cannot be undone.
+              friend connections, gameplay history tied to your account, and stored progression. Limited transaction
+              and safety evidence may be retained without your active profile or email for purchase integrity, disputes,
+              fraud prevention, and moderation. This is not temporary deactivation and cannot be undone.
             </p>
           </div>
         </div>
 
         <label className="mt-5 block">
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-widest text-[#a3a1c6]">
+            Current password
+          </span>
+          <input
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            data-testid="delete-account-password-input"
+            autoComplete="current-password"
+            className="w-full rounded-xl border border-red-500/30 bg-black/30 px-4 py-3 text-white outline-none focus:border-red-400"
+          />
+        </label>
+
+        <label className="mt-4 block">
           <span className="mb-2 block text-xs font-semibold uppercase tracking-widest text-[#a3a1c6]">
             Type DELETE to confirm
           </span>
