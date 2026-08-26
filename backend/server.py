@@ -285,8 +285,11 @@ def _validated_player_name(value: str) -> str:
         raise HTTPException(status_code=400, detail="Nickname contains unsupported characters")
 
     lowered = name.casefold()
+    tokens = re.findall(r"[a-z0-9]+", lowered)
     compact = re.sub(r"[^a-z0-9]+", "", lowered)
-    if any(term in compact for term in _BLOCKED_PLAYER_NAME_TERMS):
+    if compact in _BLOCKED_PLAYER_NAME_TERMS or any(
+        token in _BLOCKED_PLAYER_NAME_TERMS for token in tokens
+    ):
         raise HTTPException(status_code=400, detail="Please choose an appropriate nickname")
     if (
         re.search(r"(?:https?://|www\.|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})", lowered)
