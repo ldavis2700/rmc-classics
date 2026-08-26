@@ -50,7 +50,7 @@ jobs:
         run: |
           python -m py_compile backend/server.py
           python -m pip install --disable-pip-version-check pytest
-          python -m pytest -q backend/tests/test_iap_idempotency_unit.py
+          python -m pytest -q backend/tests/test_iap_idempotency_unit.py backend/tests/test_username_safety_unit.py
 
       - name: Protect Apple Review remediation
         run: |
@@ -61,6 +61,7 @@ jobs:
           grep -q 'accepted_terms: acceptedTerms' frontend/src/context/AuthContext.jsx
           grep -q 'aria-label="Report user"' frontend/src/pages/Friends.jsx
           grep -q 'aria-label="Block user"' frontend/src/pages/Friends.jsx
+          grep -q '_validated_player_name(body.name)' backend/server.py
 
           # Guideline 5.1.1(v): authenticated, in-app permanent account deletion.
           grep -q '@api.delete("/auth/account")' backend/server.py
