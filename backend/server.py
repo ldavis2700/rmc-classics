@@ -6,6 +6,8 @@ load_dotenv(ROOT_DIR / '.env')
 
 import os
 import logging
+import re
+import unicodedata
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
@@ -264,6 +266,39 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
+# ---------- Public profile safety ----------
+# Usernames are the app's only public free-text UGC. Normalize and filter them
+# before persistence so objectionable material and off-platform contact details
+# do not reach friends, battles, or leaderboards.
+_BLOCKED_PLAYER_NAME_TERMS = {
+    "bitch", "cunt", "faggot", "fuck", "nazi", "nigga", "nigger",
+    "porn", "rape", "shit", "whore",
+}
+
+
+def _validated_player_name(value: str) -> str:
+    name = unicodedata.normalize("NFKC", value or "")
+    name = " ".join(name.split())
+    if not 1 <= len(name) <= 60:
+        raise HTTPException(status_code=400, detail="Nickname must be between 1 and 60 characters")
+    if any(unicodedata.category(char).startswith("C") for char in name):
+        raise HTTPException(status_code=400, detail="Nickname contains unsupported characters")
+
+    lowered = name.casefold()
+    tokens = re.findall(r"[a-z0-9]+", lowered)
+    compact = re.sub(r"[^a-z0-9]+", "", lowered)
+    if compact in _BLOCKED_PLAYER_NAME_TERMS or any(
+        token in _BLOCKED_PLAYER_NAME_TERMS for token in tokens
+    ):
+        raise HTTPException(status_code=400, detail="Please choose an appropriate nickname")
+    if (
+        re.search(r"(?:https?://|www\.|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})", lowered)
+        or re.search(r"(?:\+?\d[\s().-]*){7,}", name)
+    ):
+        raise HTTPException(status_code=400, detail="Nicknames cannot contain links or contact information")
+    return name
+
+
 # ---------- Models ----------
 class RegisterIn(BaseModel):
     email: EmailStr
@@ -297,7 +332,7 @@ async def register(body: RegisterIn):
     doc = {
         "id": user_id,
         "email": email,
-        "name": body.name.strip(),
+        "name": _validated_player_name(body.name),
         "password_hash": hash_password(body.password),
         "avatar": None,
         "stats": empty_stats(),
