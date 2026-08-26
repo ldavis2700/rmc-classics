@@ -58,9 +58,15 @@ def test_return_paths_reject_external_or_protocol_relative_redirects():
     assert "return fallback" in source
 
 
-def test_native_share_uses_capacitor_and_treats_cancellation_as_non_failure():
+def test_native_share_distinguishes_cancellation_from_real_failure():
     source = NATIVE.read_text()
     assert 'import("@capacitor/share")' in source
     assert "await Share.share" in source
     assert 'includes("cancel")' in source
+    assert 'error?.name === "AbortError"' in source
+    assert "return null" in source
+    assert "await navigator.clipboard.writeText" in source
     assert "return false" in source
+
+    battle = BATTLE.read_text()
+    assert "if (shared === false)" in battle
