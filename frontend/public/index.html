@@ -39,16 +39,13 @@
         <meta name="twitter:description" content="Play 14 childhood classics — Chess, Wild Cards, Ludo, Connect Four & more. Real-time friend battles. Zero downloads." />
         <meta name="twitter:image" content="https://rmcclassics.com/logo.svg" />
 
-        <!-- SEO / verification (fill via your dashboard) -->
-        <meta name="google-site-verification" content="REPLACE_WITH_YOUR_SEARCH_CONSOLE_TOKEN" />
-        <!-- Add Google Analytics by setting REACT_APP_GA_MEASUREMENT_ID in frontend/.env -->
+        <!-- Search Console verification is managed outside source control. -->
 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap" rel="stylesheet" />
         <title>RMC CLASSICS — Remembering My Childhood</title>
         <script>window.addEventListener("error",function(e){if(e.error instanceof DOMException&&e.error.name==="DataCloneError"&&e.message&&e.message.includes("PerformanceServerTiming")){e.stopImmediatePropagation();e.preventDefault()}},true);</script>
-        <script src="https://assets.emergent.sh/scripts/emergent-main.js"></script>
     </head>
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
@@ -115,13 +112,11 @@
                     (e.__SV = 1));
             })(document, window.posthog || []);
             posthog.init("phc_DbsPb39SRc8z3EiQ6Dhj6ikv4H4rTKcht9d4sZSesceP", {
-                api_host: "https://ap.emergent.sh",
+                api_host: "https://us.i.posthog.com",
                 person_profiles: "identified_only",
-                session_recording: {
-                    recordCrossOriginIframes: true,
-                    capturePerformance: false,
-                },
             });
+            // Keep aggregate product analytics without recording player sessions.
+            posthog.stopSessionRecording();
         </script>
     </body>
 </html>
