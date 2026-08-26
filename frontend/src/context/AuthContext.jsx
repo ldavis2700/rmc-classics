@@ -33,9 +33,13 @@ export function AuthProvider({ children }) {
     signInGameCenter();
   }, [refresh]);
 
-  const login = async (email, password) => {
+  const login = async (email, password, acceptedTerms = false) => {
     try {
-      const { data } = await api.post("/auth/login", { email, password });
+      const { data } = await api.post("/auth/login", {
+        email,
+        password,
+        accepted_terms: acceptedTerms,
+      });
       localStorage.setItem("rmc_token", data.token);
       setUser(data.user);
       return { ok: true };
