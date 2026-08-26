@@ -6,6 +6,8 @@ load_dotenv(ROOT_DIR / '.env')
 
 import os
 import logging
+import hashlib
+import hmac
 import re
 import unicodedata
 import uuid
@@ -338,6 +340,10 @@ class LoginIn(BaseModel):
     password: str
 
 
+class AccountDeletionIn(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+
+
 class SubmitScoreIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
     game_id: str
@@ -401,21 +407,52 @@ async def logout():
 
 
 # ---------- Apple Review Compliance 2026-08-20 ----------
+def _deleted_account_ref(user_id: str) -> str:
+    """Create a stable, non-reversible reference for retained integrity evidence."""
+    digest = hmac.new(
+        get_jwt_secret().encode("utf-8"),
+        f"deleted-account:{user_id}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"deleted:{digest}"
+
+
 @api.delete("/auth/account")
-async def delete_account(user: dict = Depends(get_current_user)):
-    """Permanently delete the authenticated account and associated personal gameplay data."""
+async def delete_account(body: AccountDeletionIn, user: dict = Depends(get_current_user)):
+    """Delete personal account data while preserving pseudonymous integrity evidence."""
+    if not verify_password(body.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+
     uid = user["id"]
+    deleted_ref = _deleted_account_ref(uid)
     await db.users.update_many({}, {"$pull": {"friend_ids": uid, "blocked_user_ids": uid}})
     await db.game_events.delete_many({"user_id": uid})
-    await db.safety_reports.delete_many({"reporter_user_id": uid})
+    await db.safety_reports.update_many(
+        {"reporter_user_id": uid},
+        {"$set": {
+            "reporter_user_id": deleted_ref,
+            "reporter_user_deleted": True,
+        }},
+    )
     await db.safety_reports.update_many(
         {"reported_user_id": uid},
-        {"$set": {"reported_user_id": "deleted-user", "reported_user_deleted": True}},
+        {"$set": {
+            "reported_user_id": deleted_ref,
+            "reported_user_deleted": True,
+        }},
+    )
+    await db.iap_events.update_many(
+        {"app_user_id": uid},
+        {"$set": {
+            "app_user_id": deleted_ref,
+            "account_deleted": True,
+        }},
     )
     await db.users.delete_one({"id": uid})
     for room_id, room in list(_battle_rooms.items()):
         if uid in (room.get("host_id"), room.get("guest_id")):
             _battle_rooms.pop(room_id, None)
+    logger.info("Account deletion completed with pseudonymous integrity retention")
     return {"ok": True, "deleted": True}
 
 
