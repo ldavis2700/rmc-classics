@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { sfx } from "@/lib/sound";
+import { safeReturnPath } from "@/lib/routes";
 
 export default function Register() {
   const [name, setName] = useState("");
@@ -12,6 +13,8 @@ export default function Register() {
   const [busy, setBusy] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = safeReturnPath(location.state?.from, "/library");
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -27,7 +30,7 @@ export default function Register() {
     if (res.ok) {
       sfx.win();
       toast.success("Account created! Let's play.");
-      navigate("/library");
+      navigate(returnTo, { replace: true });
     } else {
       sfx.lose();
       toast.error(res.error || "Registration failed");
@@ -88,7 +91,7 @@ export default function Register() {
         </form>
         <p className="mt-6 text-center text-sm text-[#a3a1c6]">
           Already have an account?{" "}
-          <Link to="/login" data-testid="link-login" className="font-semibold text-neon-cyan hover:underline">
+          <Link to="/login" state={{ from: returnTo }} data-testid="link-login" className="font-semibold text-neon-cyan hover:underline">
             Log in
           </Link>
         </p>
