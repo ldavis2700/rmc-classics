@@ -65,9 +65,9 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
-  const deleteAccount = async () => {
+  const deleteAccount = async (password) => {
     try {
-      await api.delete("/auth/account");
+      await api.delete("/auth/account", { data: { password } });
       localStorage.removeItem("rmc_token");
       setUser(null);
       return { ok: true };

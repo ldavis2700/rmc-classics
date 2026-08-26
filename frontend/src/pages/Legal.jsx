@@ -88,7 +88,7 @@ export function Privacy() {
           <b>Access:</b> View your data on the Profile screen at any time.
         </li>
         <li>
-          <b>Delete:</b> Permanently delete your account and associated account data from inside the app at Profile → Account Settings → Delete Account. If you cannot access your account, contact support for assistance.
+          <b>Delete:</b> Permanently delete your account and associated personal account data from inside the app at Profile → Account Settings → Delete Account. Limited transaction and safety evidence may be retained under a non-identifying reference when necessary for purchase integrity, disputes, fraud prevention, accounting, or moderation. It is no longer linked to an active profile or email. If you cannot access your account, contact support for assistance.
         </li>
         <li>
           <b>Export:</b> Request a copy of your data by email.
@@ -225,7 +225,7 @@ export function Support() {
 
       <h2>How do I delete my account?</h2>
       <p>
-        While signed in, open Profile → Account Settings → Delete Account. The app will ask you to confirm before permanently deleting the account. If you cannot sign in, email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> for assistance.
+        While signed in, open Profile → Account Settings → Delete Account. Enter your current password, type DELETE, and confirm permanent deletion. If you cannot sign in, email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> for assistance.
       </p>
 
       <h2>How do I report or block another player?</h2>

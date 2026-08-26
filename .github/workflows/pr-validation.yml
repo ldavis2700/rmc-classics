@@ -50,7 +50,7 @@ jobs:
         run: |
           python -m py_compile backend/server.py
           python -m pip install --disable-pip-version-check pytest
-          python -m pytest -q backend/tests/test_iap_idempotency_unit.py backend/tests/test_username_safety_unit.py backend/tests/test_block_visibility_unit.py backend/tests/test_safety_moderation_unit.py
+          python -m pytest -q backend/tests/test_iap_idempotency_unit.py backend/tests/test_username_safety_unit.py backend/tests/test_block_visibility_unit.py backend/tests/test_safety_moderation_unit.py backend/tests/test_account_deletion_unit.py
 
       - name: Protect Apple Review remediation
         run: |
@@ -72,6 +72,11 @@ jobs:
           # Guideline 5.1.1(v): authenticated, in-app permanent account deletion.
           grep -q '@api.delete("/auth/account")' backend/server.py
           grep -q 'Permanently delete account' frontend/src/pages/AccountSettings.jsx
+          grep -q 'verify_password(body.password' backend/server.py
+          grep -q '_deleted_account_ref' backend/server.py
+          grep -q 'db.iap_events.update_many' backend/server.py
+          grep -q 'delete-account-password-input' frontend/src/pages/AccountSettings.jsx
+          grep -q 'data: { password }' frontend/src/context/AuthContext.jsx
 
           # Public disclosures must match the actual in-app safety and deletion paths.
           grep -q 'Profile → Account Settings → Delete Account' frontend/src/pages/Legal.jsx
