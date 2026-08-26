@@ -15,6 +15,8 @@ def test_invites_use_a_public_https_origin_and_encode_room_ids():
     source = ROUTES.read_text()
     assert 'DEFAULT_PUBLIC_APP_URL = "https://rmcclassics.com"' in source
     assert "REACT_APP_PUBLIC_APP_URL" in source
+    assert ".trim()" in source
+    assert '.replace(/\\/+$/, "")' in source
     assert "encodeURIComponent(roomId" in source
     assert 'return `${publicBase}/battle/${encodeURIComponent(roomId || "")}`;' in source
 
