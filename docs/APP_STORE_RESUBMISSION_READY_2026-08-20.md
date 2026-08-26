@@ -14,6 +14,7 @@ The current `main` codebase addresses the Apple review blockers identified in th
   - Report and block events are recorded for developer moderation.
 - **Battle invitation and reviewer flow**
   - Native iPhone sharing uses the installed iOS share sheet and a public `https://rmcclassics.com/battle/...` link.
+  - Canceling the share sheet exits quietly; genuine share failures fall back to copying the invite instead of showing a false cancellation error.
   - Invite recipients return to the exact battle after login or account creation instead of being diverted to a profile/library page.
 - **Guideline 5.1.1(v) — Account deletion**
   - Signed-in users have an in-app **Permanently delete account** flow under Account Settings.
