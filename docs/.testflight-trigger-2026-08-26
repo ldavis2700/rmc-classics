@@ -1,0 +1,3 @@
+Intentional App Store resubmission TestFlight release trigger for RMC Classics on 2026-08-26.
+Source: main at 6f7de7b04ac0958dfb02a348128920c730dac196.
+Purpose: build a fresh signed candidate containing the Apple Review remediation for account deletion, user reporting/blocking, legal disclosures, and IAP consistency.
