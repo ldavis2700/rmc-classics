@@ -1464,7 +1464,7 @@ async def startup():
             await db.users.update_one({"email": admin_email}, {"$set": operator_fields})
         logger.info("Configured moderation operator account")
     else:
-        # Disable the legacy seed if a previous release created it with admin/admin123.
+        # Disable the legacy seed if a previous release created it with public fallback credentials.
         await db.users.update_many(
             {"email": "admin@rmc.com", "terms_accepted_at": {"$exists": False}},
             {"$set": {"disabled": True}, "$unset": {"role": ""}},
