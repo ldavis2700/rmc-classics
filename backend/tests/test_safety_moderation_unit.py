@@ -74,7 +74,7 @@ def test_moderation_queue_and_resolution_are_role_gated_and_audited():
     for endpoint in ("list_safety_reports", "resolve_safety_report"):
         assert "Depends(get_moderation_operator)" in source[endpoint]
     resolution = source["resolve_safety_report"]
-    assert '"status": "open"' in resolution
+    assert "'status': 'open'" in resolution
     assert "resolved_by_user_id" in resolution
     assert "status_code=409" in resolution
 
@@ -92,8 +92,8 @@ def test_default_admin_credentials_are_removed_and_legacy_seed_is_disabled():
 
 def test_disabled_accounts_cannot_login_or_reuse_existing_tokens():
     source = functions()
-    assert 'user.get("disabled")' in source["login"]
-    assert 'user.get("disabled")' in source["get_current_user"]
+    assert "user.get('disabled')" in source["login"]
+    assert "user.get('disabled')" in source["get_current_user"]
 
 
 def test_repeated_block_does_not_flood_moderation_queue():
