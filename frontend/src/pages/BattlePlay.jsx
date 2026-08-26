@@ -155,7 +155,7 @@ export default function BattlePlay() {
       text: `Join my Connect Four battle on RMC CLASSICS: ${roomId}`,
       url: inviteUrl,
     });
-    if (!shared && typeof navigator !== "undefined" && !navigator.share) {
+    if (shared === false) {
       toast.error("Couldn't open sharing or copy the invite link");
     }
   };
