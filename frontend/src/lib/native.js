@@ -52,8 +52,9 @@ export async function share(payload) {
       const { Share } = await import("@capacitor/share");
       await Share.share({ title, text, url, dialogTitle: "Share your win" });
       return true;
-    } catch {
-      /* fall through to web */
+    } catch (error) {
+      if ((error?.message || "").toLowerCase().includes("cancel")) return false;
+      /* plugin unavailable: fall through to web sharing */
     }
   }
   if (typeof navigator !== "undefined" && navigator.share) {
