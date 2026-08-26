@@ -50,12 +50,15 @@ jobs:
         run: |
           python -m py_compile backend/server.py
           python -m pip install --disable-pip-version-check pytest
-          python -m pytest -q backend/tests/test_iap_idempotency_unit.py backend/tests/test_username_safety_unit.py backend/tests/test_block_visibility_unit.py backend/tests/test_safety_moderation_unit.py backend/tests/test_account_deletion_unit.py
+          python -m pytest -q backend/tests/test_iap_idempotency_unit.py backend/tests/test_username_safety_unit.py backend/tests/test_block_visibility_unit.py backend/tests/test_safety_moderation_unit.py backend/tests/test_account_deletion_unit.py backend/tests/test_terms_consent_unit.py
 
       - name: Protect Apple Review remediation
         run: |
           # Guideline 1.2: consent plus developer-visible Report and Block controls.
           grep -q 'accepted_terms: bool = False' backend/server.py
+          grep -q 'TERMS_VERSION = "2026-08-20"' backend/server.py
+          grep -q 'Terms acceptance required' backend/server.py
+          grep -q 'login(email, password, acceptedTerms)' frontend/src/pages/Login.jsx
           grep -q '@api.post("/safety/report")' backend/server.py
           grep -q '@api.post("/safety/block/{target_user_id}")' backend/server.py
           grep -q '@api.get("/safety/moderation/reports")' backend/server.py

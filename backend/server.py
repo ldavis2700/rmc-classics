@@ -25,6 +25,7 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 # ---------- Config ----------
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_MINUTES = 60 * 24 * 7  # 7 days for MVP simplicity
+TERMS_VERSION = "2026-08-20"
 
 GAME_IDS = {"memory", "snakes", "connect4", "checkers", "rps", "crazy8", "chess", "uno", "ludo", "scrabble", "dominoes", "gofish", "oldmaid", "jenga"}
 GAME_META = {
@@ -237,6 +238,11 @@ def public_user(doc: dict) -> dict:
         "badges": doc.get("badges", []),
         "theme": doc.get("theme", "neon"),
         "unlocked_themes": unlocked_themes,
+        "terms_accepted": (
+            bool(doc.get("terms_accepted_at"))
+            and doc.get("terms_version") == TERMS_VERSION
+        ),
+        "terms_version": doc.get("terms_version"),
         "created_at": doc.get("created_at"),
     }
 
@@ -261,6 +267,14 @@ async def get_current_user(
         user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0})
         if not user or user.get("disabled"):
             raise HTTPException(status_code=401, detail="User not found")
+        if (
+            user.get("role") != "moderation_operator"
+            and (
+                not user.get("terms_accepted_at")
+                or user.get("terms_version") != TERMS_VERSION
+            )
+        ):
+            raise HTTPException(status_code=403, detail="Terms acceptance required")
         return user
     except pyjwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
@@ -338,6 +352,7 @@ class RegisterIn(BaseModel):
 class LoginIn(BaseModel):
     email: EmailStr
     password: str
+    accepted_terms: bool = False
 
 
 class AccountDeletionIn(BaseModel):
@@ -373,6 +388,7 @@ async def register(body: RegisterIn):
         "xp": 0,
         "daily": {"date": None, "progress": 0, "claimed": False},
         "terms_accepted_at": datetime.now(timezone.utc).isoformat(),
+        "terms_version": TERMS_VERSION,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.users.insert_one(doc)
@@ -386,6 +402,24 @@ async def login(body: LoginIn):
     user = await db.users.find_one({"email": email}, {"_id": 0})
     if not user or user.get("disabled") or not verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    if not body.accepted_terms:
+        raise HTTPException(status_code=400, detail="You must accept the Terms of Use and Privacy Policy")
+
+    if (
+        not user.get("terms_accepted_at")
+        or user.get("terms_version") != TERMS_VERSION
+    ):
+        accepted_at = datetime.now(timezone.utc).isoformat()
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {
+                "terms_accepted_at": accepted_at,
+                "terms_version": TERMS_VERSION,
+            }},
+        )
+        user["terms_accepted_at"] = accepted_at
+        user["terms_version"] = TERMS_VERSION
+
     token = create_access_token(user["id"], user["email"])
     return {"user": public_user(user), "token": token}
 

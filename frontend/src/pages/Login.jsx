@@ -21,7 +21,7 @@ export default function Login() {
     }
     setBusy(true);
     sfx.click();
-    const res = await login(email, password);
+    const res = await login(email, password, acceptedTerms);
     setBusy(false);
     if (res.ok) {
       sfx.win();

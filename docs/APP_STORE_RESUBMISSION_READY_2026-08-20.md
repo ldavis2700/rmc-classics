@@ -7,7 +7,8 @@ Date: 2026-08-20
 The current `main` codebase addresses the Apple review blockers identified in the latest review:
 
 - **Guideline 1.2 — User Generated Content / social safety**
-  - New account registration requires explicit acceptance of the Terms of Use and Privacy Policy.
+  - Registration and login require explicit acceptance of the current Terms of Use and Privacy Policy.
+  - Acceptance is versioned and stored server-side; legacy sessions without current consent must re-authenticate and accept before using authenticated features.
   - Player/friend surfaces provide **Report** and **Block** actions.
   - Blocking immediately removes the blocked player from the user's friends/social surface.
   - Report and block events are recorded for developer moderation.
@@ -30,12 +31,12 @@ These are App Store Connect / physical-device evidence steps and cannot be satis
 4. Upload a **new binary newer than build 14**. The Fastlane release lane now retrieves the latest TestFlight build number and increments it automatically.
 5. Select that new processed build for version 1.0.
 6. On a physical iPhone, capture a short reviewer recording showing, in this order:
-   - Create Account → Terms of Use / Privacy Policy acceptance checkbox.
+   - Log In (or Create Account) → Terms of Use / Privacy Policy acceptance checkbox.
    - Friends/social surface → **Report** another test user.
    - Friends/social surface → **Block** that user and show their immediate removal.
    - Account Settings → Permanently delete account → type `DELETE` → confirm deletion.
 7. Attach the recording in **App Review Information** (or provide a reviewer-accessible link if App Store Connect requests a link).
-8. Verify the demo/reviewer account still works on the production backend before resubmission.
+8. Log in to the demo/reviewer account, accept the current Terms, and verify it works on the production backend before resubmission.
 9. Save, add version 1.0 for review, and submit.
 
 ## Recommended App Review Notes
@@ -46,7 +47,7 @@ Paste/adapt this concise note into App Review Information:
 >
 > Thank you for the prior feedback. This new RMC Classics build specifically addresses the cited issues:
 >
-> **Guideline 1.2:** Account creation now requires acceptance of our Terms of Use and Privacy Policy. Social player surfaces include Report and Block actions. Blocking immediately removes the blocked account from the user's social/friends surface, and report/block events are recorded for developer moderation.
+> **Guideline 1.2:** Registration and login now require acceptance of the current Terms of Use and Privacy Policy. Acceptance is versioned and recorded server-side, and legacy sessions without current consent must re-authenticate. Social player surfaces include Report and Block actions. Blocking immediately removes the blocked account from the user's social/friends surface, and report/block events are recorded for developer moderation.
 >
 > **Guideline 5.1.1(v):** Signed-in users can permanently delete their account in Account Settings → Permanently delete account. The app requires typing DELETE plus a final confirmation; deletion permanently removes the account and associated account-linked data from the server.
 >
@@ -60,7 +61,7 @@ Paste/adapt this concise note into App Review Information:
 
 - New binary is processed and selectable.
 - Reviewer login succeeds against production.
-- Terms acceptance is visible on registration.
+- Current Terms acceptance is visible on registration and login, and the reviewer account has accepted the current version.
 - Report succeeds.
 - Block succeeds and immediately hides/removes the blocked user from the relevant social surface.
 - Permanent account deletion succeeds end-to-end.
