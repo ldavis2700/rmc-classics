@@ -43,6 +43,8 @@ export async function haptic(style = "light") {
 
 /**
  * Native share sheet. Falls back to navigator.share on web, then clipboard.
+ * Returns true when shared/copied, null when the user cancels, and false only
+ * when every available sharing method fails.
  * @param {{ title?: string, text?: string, url?: string }} payload
  */
 export async function share(payload) {
@@ -53,7 +55,7 @@ export async function share(payload) {
       await Share.share({ title, text, url, dialogTitle: "Share your win" });
       return true;
     } catch (error) {
-      if ((error?.message || "").toLowerCase().includes("cancel")) return false;
+      if ((error?.message || "").toLowerCase().includes("cancel")) return null;
       /* plugin unavailable: fall through to web sharing */
     }
   }
@@ -61,15 +63,20 @@ export async function share(payload) {
     try {
       await navigator.share({ title, text, url });
       return true;
-    } catch {
-      /* user cancelled - not an error */
-      return false;
+    } catch (error) {
+      const message = (error?.message || "").toLowerCase();
+      if (error?.name === "AbortError" || message.includes("cancel")) return null;
+      /* Web Share failed: fall through to clipboard. */
     }
   }
   // Last resort: clipboard
   if (typeof navigator !== "undefined" && navigator.clipboard) {
-    await navigator.clipboard.writeText(`${text} ${url}`.trim());
-    return true;
+    try {
+      await navigator.clipboard.writeText(`${text} ${url}`.trim());
+      return true;
+    } catch {
+      return false;
+    }
   }
   return false;
 }
