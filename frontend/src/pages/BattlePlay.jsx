@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import { sfx } from "@/lib/sound";
 import { useAuth } from "@/context/AuthContext";
+import { share } from "@/lib/native";
+import { publicBattleInviteUrl } from "@/lib/routes";
 
 const POLL_MS = 3000; // fallback if WS is down
 
@@ -132,7 +134,7 @@ export default function BattlePlay() {
     }
   };
 
-  const inviteUrl = typeof window !== "undefined" ? `${window.location.origin}/battle/${roomId}` : "";
+  const inviteUrl = publicBattleInviteUrl(roomId);
 
   const copyLink = async () => {
     sfx.click();
@@ -148,16 +150,13 @@ export default function BattlePlay() {
 
   const shareLink = async () => {
     sfx.click();
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: "RMC CLASSICS Battle",
-          text: `Join my Connect Four battle on RMC CLASSICS: ${roomId}`,
-          url: inviteUrl,
-        });
-      } catch (e) { /* cancelled */ }
-    } else {
-      copyLink();
+    const shared = await share({
+      title: "RMC CLASSICS Battle",
+      text: `Join my Connect Four battle on RMC CLASSICS: ${roomId}`,
+      url: inviteUrl,
+    });
+    if (shared === false) {
+      toast.error("Couldn't open sharing or copy the invite link");
     }
   };
 

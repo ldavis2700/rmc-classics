@@ -46,11 +46,11 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Validate backend syntax and IAP idempotency
+      - name: Validate backend syntax and focused release regressions
         run: |
           python -m py_compile backend/server.py
           python -m pip install --disable-pip-version-check pytest
-          python -m pytest -q backend/tests/test_iap_idempotency_unit.py backend/tests/test_username_safety_unit.py backend/tests/test_block_visibility_unit.py backend/tests/test_safety_moderation_unit.py backend/tests/test_account_deletion_unit.py backend/tests/test_terms_consent_unit.py
+          python -m pytest -q backend/tests/test_iap_idempotency_unit.py backend/tests/test_username_safety_unit.py backend/tests/test_block_visibility_unit.py backend/tests/test_safety_moderation_unit.py backend/tests/test_account_deletion_unit.py backend/tests/test_terms_consent_unit.py backend/tests/test_battle_invite_unit.py
 
       - name: Protect Apple Review remediation
         run: |
@@ -88,6 +88,14 @@ jobs:
           # Guideline 2.1(b): the submitted consumable remains consistent end-to-end.
           grep -q 'FREEZE_PACK_5_ID = "rmc.freeze.pack5"' backend/server.py
           grep -q 'id: "rmc.freeze.pack5"' frontend/src/lib/iap.js
+
+          # Acquisition loop: native invites must be public and survive authentication.
+          grep -q 'https://rmcclassics.com' frontend/src/lib/routes.js
+          grep -q 'publicBattleInviteUrl(roomId)' frontend/src/pages/BattlePlay.jsx
+          grep -q 'await share({' frontend/src/pages/BattlePlay.jsx
+          grep -q 'state={{ from }}' frontend/src/App.js
+          grep -q 'navigate(returnTo, { replace: true })' frontend/src/pages/Login.jsx
+          grep -q 'navigate(returnTo, { replace: true })' frontend/src/pages/Register.jsx
 
       - name: Confirm iOS project and Capacitor config exist
         run: |

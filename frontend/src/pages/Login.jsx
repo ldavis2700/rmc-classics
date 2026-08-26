@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { sfx } from "@/lib/sound";
+import { safeReturnPath } from "@/lib/routes";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -11,6 +12,8 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = safeReturnPath(location.state?.from, "/profile");
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -26,7 +29,7 @@ export default function Login() {
     if (res.ok) {
       sfx.win();
       toast.success("Welcome back!");
-      navigate("/profile");
+      navigate(returnTo, { replace: true });
     } else {
       sfx.lose();
       toast.error(res.error || "Login failed");
@@ -73,7 +76,7 @@ export default function Login() {
         </form>
         <p className="mt-6 text-center text-sm text-[#a3a1c6]">
           New player?{" "}
-          <Link to="/register" data-testid="link-register" className="font-semibold text-neon-cyan hover:underline">
+          <Link to="/register" state={{ from: returnTo }} data-testid="link-register" className="font-semibold text-neon-cyan hover:underline">
             Create account
           </Link>
         </p>

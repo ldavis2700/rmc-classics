@@ -12,6 +12,10 @@ The current `main` codebase addresses the Apple review blockers identified in th
   - Player/friend surfaces provide **Report** and **Block** actions.
   - Blocking immediately removes the blocked player from the user's friends/social surface.
   - Report and block events are recorded for developer moderation.
+- **Battle invitation and reviewer flow**
+  - Native iPhone sharing uses the installed iOS share sheet and a public `https://rmcclassics.com/battle/...` link.
+  - Canceling the share sheet exits quietly; genuine share failures fall back to copying the invite instead of showing a false cancellation error.
+  - Invite recipients return to the exact battle after login or account creation instead of being diverted to a profile/library page.
 - **Guideline 5.1.1(v) — Account deletion**
   - Signed-in users have an in-app **Permanently delete account** flow under Account Settings.
   - The flow requires typing `DELETE` plus a final confirmation.
@@ -32,6 +36,8 @@ These are App Store Connect / physical-device evidence steps and cannot be satis
 5. Select that new processed build for version 1.0.
 6. On a physical iPhone, capture a short reviewer recording showing, in this order:
    - Log In (or Create Account) → Terms of Use / Privacy Policy acceptance checkbox.
+   - Create a Friend Battle → **Share** → verify the iOS share sheet contains a public `rmcclassics.com/battle/...` link.
+   - Open the invite while signed out → log in → verify the exact battle opens and joins.
    - Friends/social surface → **Report** another test user.
    - Friends/social surface → **Block** that user and show their immediate removal.
    - Account Settings → Permanently delete account → type `DELETE` → confirm deletion.
@@ -62,6 +68,7 @@ Paste/adapt this concise note into App Review Information:
 - New binary is processed and selectable.
 - Reviewer login succeeds against production.
 - Current Terms acceptance is visible on registration and login, and the reviewer account has accepted the current version.
+- Native battle sharing produces a public HTTPS invite and the recipient returns to that battle after authentication.
 - Report succeeds.
 - Block succeeds and immediately hides/removes the blocked user from the relevant social surface.
 - Permanent account deletion succeeds end-to-end.
