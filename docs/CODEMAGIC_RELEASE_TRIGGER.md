@@ -2,22 +2,36 @@
 
 The signed `ios-testflight` Codemagic workflow is intentionally release-gated.
 
-## Automatic TestFlight release
+## Accepted starts
 
-Create a Git tag matching:
+Start the workflow with one of these deliberate choices:
 
-`rmc-testflight-*`
+- push a branch matching `rmc-testflight/*`
+- create a tag matching `rmc-testflight-*`
+- manually start the workflow in Codemagic
 
-Example:
+Ordinary pushes to `main` never start a signed build.
 
-`rmc-testflight-2026.08.24-1`
+## Current-main source gate
 
-When Codemagic's GitHub webhook is active, that tag event starts the `ios-testflight` workflow automatically. The workflow imports the protected `rmc_release` variable group, fetches App Store signing files through the configured `RMC ASC Key` integration, builds the IPA, and submits it to TestFlight.
+Every signed run fetches `origin/main` before installing dependencies or fetching signing files. The workflow stops immediately unless its checked-out commit exactly matches current `main`.
 
-## Safety guardrail
+This prevents an old release branch, tag, or manual selection from uploading a candidate that predates the latest safety or App Review corrections. Failed source verification happens before expensive release work and produces no TestFlight upload.
 
-Ordinary pushes to `main` do not trigger signed iOS builds. Manual starts remain available as a fallback.
+A successful run stores `release-source.txt` with the repository and verified commit alongside the build artifacts.
+
+## Recommended final-candidate sequence
+
+1. Confirm the intended release changes are merged into `main` and all GitHub/Vercel checks passed.
+2. Create a fresh trigger from that exact commit, for example:
+   - branch: `rmc-testflight/app-review-resubmission-YYYY-MM-DD`
+   - tag: `rmc-testflight-YYYY.MM.DD-1`
+3. Confirm Codemagic's first step, **Verify release source is current main**, succeeds.
+4. Confirm the IPA uploads to TestFlight and retain `release-source.txt`.
+5. Smoke-test that exact TestFlight build before selecting it in App Store Connect.
+
+Never reuse an older trigger after `main` advances. Create a new trigger from the new `main` commit instead.
 
 ## One-time Codemagic UI check
 
-If a matching tag does not trigger a build, open the RMC Classics app in Codemagic and update/repair the GitHub webhook under the app's webhook/integration settings. The repository is connected through the GitHub App, but Codemagic must receive the tag webhook for automatic triggering to work.
+If an accepted branch or tag does not trigger a build, open the RMC Classics app in Codemagic and repair the GitHub webhook under the app's webhook/integration settings. Manual starts remain available, but they must select current `main`.
