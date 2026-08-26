@@ -58,6 +58,25 @@ workflows:
       app_store_connect: RMC ASC Key
 
     scripts:
+      - name: Verify release source is current main
+        script: |
+          # Refuse stale tags/branches before dependency installation, signing,
+          # or other expensive release work.
+          git fetch origin main --depth=1
+          CURRENT_COMMIT="$(git rev-parse HEAD)"
+          MAIN_COMMIT="$(git rev-parse origin/main)"
+          if [ "$CURRENT_COMMIT" != "$MAIN_COMMIT" ]; then
+            echo "Refusing stale TestFlight source: $CURRENT_COMMIT"
+            echo "Current main is: $MAIN_COMMIT"
+            echo "Create a new rmc-testflight/* branch or rmc-testflight-* tag from current main."
+            exit 1
+          fi
+          {
+            echo "repository=ldavis2700/rmc-classics"
+            echo "commit=$CURRENT_COMMIT"
+            echo "verified_against=origin/main"
+          } > "$CM_BUILD_DIR/release-source.txt"
+
       - name: Install frontend deps
         script: |
           cd frontend
@@ -111,6 +130,7 @@ workflows:
             --scheme App
 
     artifacts:
+      - $CM_BUILD_DIR/release-source.txt
       - frontend/ios/App/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - frontend/ios/App/App.xcarchive
