@@ -55,7 +55,7 @@ export default function Friends() {
 
   const reportUser = async (friend) => {
     const reason = window.prompt(
-      `Report ${friend.name || friend.email}. Briefly describe the objectionable or abusive behavior:`
+      `Report ${friend.name || "Player"}. Briefly describe the objectionable or abusive behavior:`
     );
     if (!reason?.trim()) return;
     sfx.click();
@@ -73,7 +73,7 @@ export default function Friends() {
 
   const blockUser = async (friend) => {
     const confirmed = window.confirm(
-      `Block ${friend.name || friend.email}? They will be removed from your friends list and their user-generated content will no longer be shown to you.`
+      `Block ${friend.name || "Player"}? They will be removed from your friends list and their user-generated content will no longer be shown to you.`
     );
     if (!confirmed) return;
     sfx.click();
@@ -136,11 +136,11 @@ export default function Friends() {
                 className="grid h-10 w-10 place-items-center rounded-xl font-display text-lg font-black text-white"
                 style={{ backgroundColor: f.online ? "#39FF14" : "#3d2b56" }}
               >
-                {(f.name || f.email).charAt(0).toUpperCase()}
+                {(f.name || "Player").charAt(0).toUpperCase()}
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-white">{f.name || f.email}</span>
+                  <span className="font-semibold text-white">{f.name || "Player"}</span>
                   <span
                     className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-pixel text-[9px] uppercase tracking-widest"
                     style={{

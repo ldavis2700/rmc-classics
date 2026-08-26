@@ -31,7 +31,7 @@ def load_validator():
         )
         or (
             isinstance(node, ast.FunctionDef)
-            and node.name == "_validated_player_name"
+            and node.name in {"_validated_player_name", "_public_player_name"}
         )
     ]
     module = ast.Module(body=nodes, type_ignores=[])
@@ -42,11 +42,11 @@ def load_validator():
         "unicodedata": unicodedata,
     }
     exec(compile(module, str(SERVER), "exec"), namespace)
-    return namespace["_validated_player_name"]
+    return namespace["_validated_player_name"], namespace["_public_player_name"]
 
 
 def test_normalizes_safe_player_name():
-    validate = load_validator()
+    validate, _ = load_validator()
     assert validate("  Classic   Player  ") == "Classic Player"
     assert validate("ScunthorpeFan") == "ScunthorpeFan"
 
@@ -60,7 +60,7 @@ def test_normalizes_safe_player_name():
     "\u0000hidden",
 ])
 def test_rejects_unsafe_public_player_name(name):
-    validate = load_validator()
+    validate, _ = load_validator()
     with pytest.raises(FakeHTTPException) as exc:
         validate(name)
     assert exc.value.status_code == 400
@@ -78,3 +78,39 @@ def test_registration_persists_only_validated_name():
         and node.func.id == "_validated_player_name"
         for node in ast.walk(register)
     )
+
+def test_masks_legacy_unsafe_name_on_public_surfaces():
+    _, public_name = load_validator()
+    assert public_name({"name": "f.u.c.k"}) == "Player"
+    assert public_name({"name": "  Classic   Player  "}) == "Classic Player"
+
+
+def test_friend_responses_do_not_expose_login_email():
+    tree = ast.parse(SERVER.read_text())
+    functions = {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    for endpoint in ("add_friend", "list_friends"):
+        source = ast.unparse(functions[endpoint])
+        assert '"email"' not in source
+        assert "_public_player_name" in source
+
+
+def test_every_public_ranking_uses_safe_player_names():
+    tree = ast.parse(SERVER.read_text())
+    functions = {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    for endpoint in (
+        "overall_leaderboard",
+        "game_leaderboard",
+        "weekly_leaderboard",
+        "create_battle",
+        "join_battle",
+    ):
+        assert "_public_player_name" in ast.unparse(functions[endpoint])
+

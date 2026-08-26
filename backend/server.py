@@ -299,6 +299,14 @@ def _validated_player_name(value: str) -> str:
     return name
 
 
+def _public_player_name(doc: dict, fallback: str = "Player") -> str:
+    """Return a safe display name for any other-user/public response."""
+    try:
+        return _validated_player_name(doc.get("name", ""))
+    except HTTPException:
+        return fallback
+
+
 # ---------- Models ----------
 class RegisterIn(BaseModel):
     email: EmailStr
@@ -550,7 +558,7 @@ async def overall_leaderboard(limit: int = 20):
     cursor = db.users.find({}, {"_id": 0, "id": 1, "name": 1, "avatar": 1,
                                 "total_wins": 1, "total_plays": 1}).sort("total_wins", -1).limit(limit)
     rows = await cursor.to_list(limit)
-    return {"rows": rows}
+    return {"rows": [{**row, "name": _public_player_name(row)} for row in rows]}
 
 
 @api.get("/games/leaderboard/{game_id}")
@@ -570,7 +578,7 @@ async def game_leaderboard(game_id: str, limit: int = 20):
             continue
         rows.append({
             "user_id": u["id"],
-            "name": u.get("name", ""),
+            "name": _public_player_name(u),
             "avatar": u.get("avatar"),
             "plays": int(s.get("plays", 0)),
             "wins": int(s.get("wins", 0)),
@@ -691,7 +699,7 @@ async def create_battle(user: dict = Depends(get_current_user)):
     room = {
         "id": rid,
         "host_id": user["id"],
-        "host_name": user.get("name", "Host"),
+        "host_name": _public_player_name(user, "Host"),
         "guest_id": None,
         "guest_name": None,
         "board": _empty_board(),
@@ -716,7 +724,7 @@ async def join_battle(room_id: str, user: dict = Depends(get_current_user)):
     if room.get("guest_id") and room["guest_id"] != user["id"]:
         raise HTTPException(status_code=400, detail="Battle already full")
     room["guest_id"] = user["id"]
-    room["guest_name"] = user.get("name", "Guest")
+    room["guest_name"] = _public_player_name(user, "Guest")
     room["status"] = "playing"
     await broadcast_battle_state(room["id"])
     return _public_room(room)
@@ -951,7 +959,7 @@ async def weekly_leaderboard(game_id: Optional[str] = None, limit: int = 20):
         u = name_map.get(uid, {})
         rows.append({
             "user_id": uid,
-            "name": u.get("name", "Player"),
+            "name": _public_player_name(u),
             "avatar": u.get("avatar"),
             "plays": t["plays"],
             "wins": t["wins"],
@@ -978,7 +986,7 @@ async def add_friend(body: FriendAddIn, user: dict = Depends(get_current_user)):
     their_ids = list(set((friend.get("friend_ids") or []) + [user["id"]]))
     await db.users.update_one({"id": user["id"]}, {"$set": {"friend_ids": friend_ids}})
     await db.users.update_one({"id": friend["id"]}, {"$set": {"friend_ids": their_ids}})
-    return {"ok": True, "friend": {"id": friend["id"], "name": friend.get("name", ""), "email": friend["email"]}}
+    return {"ok": True, "friend": {"id": friend["id"], "name": _public_player_name(friend)}}
 
 
 @api.get("/friends")
@@ -987,7 +995,7 @@ async def list_friends(user: dict = Depends(get_current_user)):
     ids = [fid for fid in (user.get("friend_ids") or []) if fid not in blocked_ids]
     if not ids:
         return {"friends": []}
-    friends = await db.users.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1, "email": 1, "avatar": 1, "last_seen": 1, "total_wins": 1, "xp": 1}).to_list(1000)
+    friends = await db.users.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1, "avatar": 1, "last_seen": 1, "total_wins": 1, "xp": 1}).to_list(1000)
     now = datetime.now(timezone.utc)
     out = []
     for f in friends:
@@ -1000,8 +1008,7 @@ async def list_friends(user: dict = Depends(get_current_user)):
             online = False
         out.append({
             "id": f["id"],
-            "name": f.get("name", ""),
-            "email": f["email"],
+            "name": _public_player_name(f),
             "avatar": f.get("avatar"),
             "total_wins": f.get("total_wins", 0),
             "xp": f.get("xp", 0),
