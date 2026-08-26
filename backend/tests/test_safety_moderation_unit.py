@@ -83,11 +83,11 @@ def test_default_admin_credentials_are_removed_and_legacy_seed_is_disabled():
     text = SERVER.read_text()
     assert "admin123" not in text
     startup = functions()["startup"]
-    assert 'os.environ.get("ADMIN_EMAIL", "")' in startup
-    assert 'os.environ.get("ADMIN_PASSWORD", "")' in startup
+    assert "os.environ.get('ADMIN_EMAIL', '')" in startup
+    assert "os.environ.get('ADMIN_PASSWORD', '')" in startup
     assert "must be at least 12 characters" in startup
-    assert '"disabled": True' in startup
-    assert '"role": "moderation_operator"' in startup
+    assert "'disabled': True" in startup
+    assert "'role': 'moderation_operator'" in startup
 
 
 def test_disabled_accounts_cannot_login_or_reuse_existing_tokens():
