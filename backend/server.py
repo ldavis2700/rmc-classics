@@ -1150,9 +1150,6 @@ async def report_user(body: SafetyReportIn, user: dict = Depends(get_current_use
     if duplicate:
         return {"ok": True, "report_id": duplicate["id"], "duplicate": True}
 
-    if block_result.modified_count == 0:
-        return {"ok": True, "blocked_user_id": target_user_id, "already_blocked": True}
-
     report = {
         "id": str(uuid.uuid4()),
         "reporter_user_id": user["id"],
@@ -1246,6 +1243,9 @@ async def block_user(target_user_id: str, user: dict = Depends(get_current_user)
         participants = {room.get("host_id"), room.get("guest_id")}
         if user["id"] in participants and target_user_id in participants:
             _battle_rooms.pop(room_id, None)
+    if block_result.modified_count == 0:
+        return {"ok": True, "blocked_user_id": target_user_id, "already_blocked": True}
+
     report = {
         "id": str(uuid.uuid4()),
         "reporter_user_id": user["id"],
