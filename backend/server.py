@@ -257,13 +257,20 @@ async def get_current_user(
         if payload.get("type") != "access":
             raise HTTPException(status_code=401, detail="Invalid token type")
         user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0})
-        if not user:
+        if not user or user.get("disabled"):
             raise HTTPException(status_code=401, detail="User not found")
         return user
     except pyjwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except pyjwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+async def get_moderation_operator(user: dict = Depends(get_current_user)) -> dict:
+    """Require an explicitly provisioned moderation operator account."""
+    if user.get("role") != "moderation_operator":
+        raise HTTPException(status_code=403, detail="Moderation operator access required")
+    return user
 
 
 async def get_optional_current_user(
@@ -371,7 +378,7 @@ async def register(body: RegisterIn):
 async def login(body: LoginIn):
     email = body.email.lower().strip()
     user = await db.users.find_one({"email": email}, {"_id": 0})
-    if not user or not verify_password(body.password, user["password_hash"]):
+    if not user or user.get("disabled") or not verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = create_access_token(user["id"], user["email"])
     return {"user": public_user(user), "token": token}
@@ -1091,6 +1098,28 @@ class SafetyReportIn(BaseModel):
     context: str = Field(default="app", max_length=100)
 
 
+class SafetyReportResolutionIn(BaseModel):
+    status: str = Field(min_length=1, max_length=20)
+    note: str = Field(default="", max_length=500)
+
+
+_SAFETY_REPORT_CONTEXTS = {"app", "friends", "profile", "battle", "leaderboard", "block"}
+
+
+def _normalized_report_reason(value: str) -> str:
+    reason = " ".join((value or "").split())
+    if len(reason) < 3:
+        raise HTTPException(status_code=400, detail="Please provide a report reason")
+    return reason
+
+
+def _normalized_report_context(value: str) -> str:
+    context = (value or "app").strip().lower()
+    if context not in _SAFETY_REPORT_CONTEXTS:
+        raise HTTPException(status_code=400, detail="Invalid report context")
+    return context
+
+
 @api.post("/safety/report")
 async def report_user(body: SafetyReportIn, user: dict = Depends(get_current_user)):
     if body.reported_user_id == user["id"]:
@@ -1098,18 +1127,106 @@ async def report_user(body: SafetyReportIn, user: dict = Depends(get_current_use
     target = await db.users.find_one({"id": body.reported_user_id}, {"_id": 0, "id": 1})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    reason = _normalized_report_reason(body.reason)
+    context = _normalized_report_context(body.context)
+    now = datetime.now(timezone.utc)
+    recent_cutoff = (now - timedelta(hours=1)).isoformat()
+    recent_count = await db.safety_reports.count_documents({
+        "reporter_user_id": user["id"],
+        "created_at": {"$gte": recent_cutoff},
+        "context": {"$ne": "block"},
+    })
+    if recent_count >= 5:
+        raise HTTPException(status_code=429, detail="Too many recent reports")
+
+    duplicate = await db.safety_reports.find_one({
+        "reporter_user_id": user["id"],
+        "reported_user_id": body.reported_user_id,
+        "reason": reason,
+        "context": context,
+        "status": "open",
+        "created_at": {"$gte": (now - timedelta(minutes=15)).isoformat()},
+    }, {"_id": 0, "id": 1})
+    if duplicate:
+        return {"ok": True, "report_id": duplicate["id"], "duplicate": True}
+
+    if block_result.modified_count == 0:
+        return {"ok": True, "blocked_user_id": target_user_id, "already_blocked": True}
+
     report = {
         "id": str(uuid.uuid4()),
         "reporter_user_id": user["id"],
         "reported_user_id": body.reported_user_id,
-        "reason": body.reason.strip(),
-        "context": body.context,
+        "reason": reason,
+        "context": context,
         "status": "open",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": now.isoformat(),
     }
     await db.safety_reports.insert_one(report)
-    logger.warning("SAFETY REPORT %s: reporter=%s target=%s context=%s", report["id"], user["id"], body.reported_user_id, body.context)
-    return {"ok": True, "report_id": report["id"]}
+    logger.warning("SAFETY REPORT %s queued for moderation", report["id"])
+    return {"ok": True, "report_id": report["id"], "duplicate": False}
+
+
+@api.get("/safety/moderation/reports")
+async def list_safety_reports(
+    status: str = "open",
+    limit: int = Query(default=50, ge=1, le=100),
+    operator: dict = Depends(get_moderation_operator),
+):
+    if status not in {"open", "resolved", "dismissed", "all"}:
+        raise HTTPException(status_code=400, detail="Invalid report status")
+    query = {} if status == "all" else {"status": status}
+    reports = await (
+        db.safety_reports.find(
+            query,
+            {
+                "_id": 0,
+                "id": 1,
+                "reporter_user_id": 1,
+                "reported_user_id": 1,
+                "reason": 1,
+                "context": 1,
+                "status": 1,
+                "created_at": 1,
+                "resolved_at": 1,
+                "resolution_note": 1,
+                "resolved_by_user_id": 1,
+            },
+        )
+        .sort("created_at", -1)
+        .limit(limit)
+        .to_list(length=limit)
+    )
+    return {"reports": reports, "status": status}
+
+
+@api.patch("/safety/moderation/reports/{report_id}")
+async def resolve_safety_report(
+    report_id: str,
+    body: SafetyReportResolutionIn,
+    operator: dict = Depends(get_moderation_operator),
+):
+    status = body.status.strip().lower()
+    if status not in {"resolved", "dismissed"}:
+        raise HTTPException(status_code=400, detail="Invalid resolution status")
+    note = " ".join(body.note.split())
+    resolved_at = datetime.now(timezone.utc).isoformat()
+    result = await db.safety_reports.update_one(
+        {"id": report_id, "status": "open"},
+        {"$set": {
+            "status": status,
+            "resolution_note": note,
+            "resolved_at": resolved_at,
+            "resolved_by_user_id": operator["id"],
+        }},
+    )
+    if result.modified_count != 1:
+        existing = await db.safety_reports.find_one({"id": report_id}, {"_id": 0, "status": 1})
+        if not existing:
+            raise HTTPException(status_code=404, detail="Report not found")
+        raise HTTPException(status_code=409, detail="Report is already closed")
+    logger.info("SAFETY REPORT %s closed as %s by operator", report_id, status)
+    return {"ok": True, "report_id": report_id, "status": status, "resolved_at": resolved_at}
 
 
 @api.post("/safety/block/{target_user_id}")
@@ -1119,7 +1236,7 @@ async def block_user(target_user_id: str, user: dict = Depends(get_current_user)
     target = await db.users.find_one({"id": target_user_id}, {"_id": 0, "id": 1})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    await db.users.update_one(
+    block_result = await db.users.update_one(
         {"id": user["id"]},
         {"$addToSet": {"blocked_user_ids": target_user_id}, "$pull": {"friend_ids": target_user_id}},
     )
@@ -1311,27 +1428,47 @@ async def startup():
     await db.iap_events.create_index("event_id", unique=True)
     await db.safety_reports.create_index("reported_user_id")
     await db.safety_reports.create_index("created_at")
-    admin_email = os.environ.get("ADMIN_EMAIL", "admin@rmc.com").lower()
-    admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
-    existing = await db.users.find_one({"email": admin_email})
-    if not existing:
-        await db.users.insert_one({
-            "id": str(uuid.uuid4()),
-            "email": admin_email,
-            "name": "Admin",
+    await db.safety_reports.create_index([("status", 1), ("created_at", -1)])
+
+    # Operator provisioning is opt-in and must never fall back to public credentials.
+    admin_email = os.environ.get("ADMIN_EMAIL", "").lower().strip()
+    admin_password = os.environ.get("ADMIN_PASSWORD", "")
+    if bool(admin_email) != bool(admin_password):
+        raise RuntimeError("ADMIN_EMAIL and ADMIN_PASSWORD must be configured together")
+    if admin_email and len(admin_password) < 12:
+        raise RuntimeError("ADMIN_PASSWORD must be at least 12 characters")
+
+    if admin_email:
+        existing = await db.users.find_one({"email": admin_email})
+        operator_fields = {
+            "name": "RMC Safety Operator",
             "password_hash": hash_password(admin_password),
-            "avatar": None,
-            "stats": empty_stats(),
-            "total_wins": 0,
-            "total_plays": 0,
-            "xp": 0,
-            "daily": {"date": None, "progress": 0, "claimed": False},
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-        logger.info("Seeded admin user %s", admin_email)
-    elif not verify_password(admin_password, existing["password_hash"]):
-        await db.users.update_one({"email": admin_email},
-                                  {"$set": {"password_hash": hash_password(admin_password)}})
+            "role": "moderation_operator",
+            "disabled": False,
+        }
+        if not existing:
+            await db.users.insert_one({
+                "id": str(uuid.uuid4()),
+                "email": admin_email,
+                **operator_fields,
+                "avatar": None,
+                "stats": empty_stats(),
+                "total_wins": 0,
+                "total_plays": 0,
+                "xp": 0,
+                "daily": {"date": None, "progress": 0, "claimed": False},
+                "provisioned_by_config": True,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+        else:
+            await db.users.update_one({"email": admin_email}, {"$set": operator_fields})
+        logger.info("Configured moderation operator account")
+    else:
+        # Disable the legacy seed if a previous release created it with admin/admin123.
+        await db.users.update_many(
+            {"email": "admin@rmc.com", "terms_accepted_at": {"$exists": False}},
+            {"$set": {"disabled": True}, "$unset": {"role": ""}},
+        )
 
 
 @app.on_event("shutdown")
