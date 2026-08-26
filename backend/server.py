@@ -266,6 +266,17 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
+async def get_optional_current_user(
+    request: Request,
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(security),
+) -> Optional[dict]:
+    """Return the signed-in account when present while keeping rankings public."""
+    try:
+        return await get_current_user(request, creds)
+    except HTTPException:
+        return None
+
+
 # ---------- Public profile safety ----------
 # Usernames are the app's only public free-text UGC. Normalize and filter them
 # before persistence so objectionable material and off-platform contact details
@@ -554,21 +565,40 @@ async def challenge_today(user: dict = Depends(get_current_user)):
 
 
 @api.get("/games/leaderboard")
-async def overall_leaderboard(limit: int = 20):
-    cursor = db.users.find({}, {"_id": 0, "id": 1, "name": 1, "avatar": 1,
+async def overall_leaderboard(
+    limit: int = 20,
+    user: Optional[dict] = Depends(get_optional_current_user),
+):
+    query = {}
+    if user:
+        query = {
+            "id": {"$nin": list(set(user.get("blocked_user_ids") or []))},
+            "blocked_user_ids": {"$ne": user["id"]},
+        }
+    cursor = db.users.find(query, {"_id": 0, "id": 1, "name": 1, "avatar": 1,
                                 "total_wins": 1, "total_plays": 1}).sort("total_wins", -1).limit(limit)
     rows = await cursor.to_list(limit)
     return {"rows": [{**row, "name": _public_player_name(row)} for row in rows]}
 
 
 @api.get("/games/leaderboard/{game_id}")
-async def game_leaderboard(game_id: str, limit: int = 20):
+async def game_leaderboard(
+    game_id: str,
+    limit: int = 20,
+    user: Optional[dict] = Depends(get_optional_current_user),
+):
     if game_id not in GAME_IDS:
         raise HTTPException(status_code=400, detail="Unknown game_id")
     direction = GAME_META[game_id]["score_dir"]
     # Sort by wins desc, then by best_score in appropriate direction
+    query = {f"stats.{game_id}.plays": {"$gt": 0}}
+    if user:
+        query.update({
+            "id": {"$nin": list(set(user.get("blocked_user_ids") or []))},
+            "blocked_user_ids": {"$ne": user["id"]},
+        })
     users = await db.users.find(
-        {f"stats.{game_id}.plays": {"$gt": 0}},
+        query,
         {"_id": 0, "id": 1, "name": 1, "avatar": 1, f"stats.{game_id}": 1},
     ).to_list(1000)
     rows = []
@@ -723,6 +753,16 @@ async def join_battle(room_id: str, user: dict = Depends(get_current_user)):
         return _public_room(room)
     if room.get("guest_id") and room["guest_id"] != user["id"]:
         raise HTTPException(status_code=400, detail="Battle already full")
+    host = await db.users.find_one(
+        {"id": room["host_id"]},
+        {"_id": 0, "id": 1, "blocked_user_ids": 1},
+    )
+    if (
+        not host
+        or room["host_id"] in set(user.get("blocked_user_ids") or [])
+        or user["id"] in set(host.get("blocked_user_ids") or [])
+    ):
+        raise HTTPException(status_code=403, detail="Battle is not available")
     room["guest_id"] = user["id"]
     room["guest_name"] = _public_player_name(user, "Guest")
     room["status"] = "playing"
@@ -935,7 +975,11 @@ def _week_start_utc() -> datetime:
 
 
 @api.get("/games/leaderboard-week")
-async def weekly_leaderboard(game_id: Optional[str] = None, limit: int = 20):
+async def weekly_leaderboard(
+    game_id: Optional[str] = None,
+    limit: int = 20,
+    user: Optional[dict] = Depends(get_optional_current_user),
+):
     start = _week_start_utc().isoformat()
     q = {"created_at": {"$gte": start}}
     if game_id:
@@ -952,11 +996,22 @@ async def weekly_leaderboard(game_id: Optional[str] = None, limit: int = 20):
             t["wins"] += 1
     if not tally:
         return {"window": "week", "since": start, "rows": []}
-    users = await db.users.find({"id": {"$in": list(tally.keys())}}, {"_id": 0, "id": 1, "name": 1, "avatar": 1}).to_list(1000)
+    visible_ids = list(tally.keys())
+    user_query = {"id": {"$in": visible_ids}}
+    if user:
+        blocked_ids = set(user.get("blocked_user_ids") or [])
+        visible_ids = [uid for uid in visible_ids if uid not in blocked_ids]
+        user_query = {
+            "id": {"$in": visible_ids},
+            "blocked_user_ids": {"$ne": user["id"]},
+        }
+    users = await db.users.find(user_query, {"_id": 0, "id": 1, "name": 1, "avatar": 1}).to_list(1000)
     name_map = {u["id"]: u for u in users}
     rows = []
     for uid, t in tally.items():
-        u = name_map.get(uid, {})
+        u = name_map.get(uid)
+        if not u:
+            continue
         rows.append({
             "user_id": uid,
             "name": _public_player_name(u),
@@ -1069,6 +1124,11 @@ async def block_user(target_user_id: str, user: dict = Depends(get_current_user)
         {"$addToSet": {"blocked_user_ids": target_user_id}, "$pull": {"friend_ids": target_user_id}},
     )
     await db.users.update_one({"id": target_user_id}, {"$pull": {"friend_ids": user["id"]}})
+    # Blocking ends any live direct interaction between the two accounts immediately.
+    for room_id, room in list(_battle_rooms.items()):
+        participants = {room.get("host_id"), room.get("guest_id")}
+        if user["id"] in participants and target_user_id in participants:
+            _battle_rooms.pop(room_id, None)
     report = {
         "id": str(uuid.uuid4()),
         "reporter_user_id": user["id"],
