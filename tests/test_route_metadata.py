@@ -1,5 +1,7 @@
 import json
+import os
 import re
+import subprocess
 from pathlib import Path
 
 
@@ -10,6 +12,8 @@ METADATA = (
 ).read_text(encoding="utf-8")
 GAMES = (ROOT / "frontend" / "src" / "lib" / "games.js").read_text(encoding="utf-8")
 PUBLIC_INDEX = (ROOT / "frontend" / "public" / "index.html").read_text(encoding="utf-8")
+PACKAGE = (ROOT / "frontend" / "package.json").read_text(encoding="utf-8")
+ROUTE_SHELL_GENERATOR = ROOT / "frontend" / "scripts" / "generate-route-shells.mjs"
 
 
 def test_router_mounts_route_metadata_inside_browser_router():
@@ -76,3 +80,48 @@ def test_structured_catalog_is_strict_truthful_json_ld():
     serialized = json.dumps(graph).lower()
     for unsupported_claim in ("aggregateRating", "review", "downloadCount", "userInteractionCount"):
         assert unsupported_claim.lower() not in serialized
+
+
+def test_build_generates_initial_metadata_for_every_game_route(tmp_path):
+    assert "craco build && node scripts/generate-route-shells.mjs" in PACKAGE
+
+    build_dir = tmp_path / "build"
+    build_dir.mkdir()
+    (build_dir / "index.html").write_text(PUBLIC_INDEX, encoding="utf-8")
+    subprocess.run(
+        ["node", str(ROUTE_SHELL_GENERATOR)],
+        check=True,
+        env={**os.environ, "RMC_BUILD_DIR": str(build_dir)},
+        capture_output=True,
+        text=True,
+    )
+
+    games = re.findall(
+        r'id: "([^"]+)"[\s\S]*?name: "([^"]+)"[\s\S]*?'
+        r'path: "([^"]+)"[\s\S]*?description:\s*"([^"]+)"',
+        GAMES,
+    )
+    assert len(games) == 14
+    assert len(list((build_dir / "play").glob("*/index.html"))) == 14
+
+    for game_id, name, route, description in games:
+        route_shell = (build_dir / "play" / game_id / "index.html").read_text(
+            encoding="utf-8"
+        )
+        escape_attribute = lambda value: (
+            value.replace("&", "&amp;")
+            .replace('"', "&quot;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+        escaped_title = escape_attribute(f"{name} Online | RMC CLASSICS")
+        escaped_description = escape_attribute(
+            f"Play {name} online at RMC CLASSICS. {description}"
+        )
+        canonical = f"https://rmcclassics.com{route}"
+
+        assert f"<title>{escaped_title}</title>" in route_shell
+        assert f'<meta name="description" content="{escaped_description}" />' in route_shell
+        assert f'<link rel="canonical" href="{canonical}" />' in route_shell
+        assert f'<meta property="og:url" content="{canonical}" />' in route_shell
+        assert route_shell.count("<title>") == 1
