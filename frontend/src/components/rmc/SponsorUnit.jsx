@@ -1,9 +1,8 @@
 import { useEffect } from "react";
-import { ExternalLink, Mail } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ExternalLink, Handshake } from "lucide-react";
 import { MONETIZATION, getAdPreference } from "@/lib/monetization";
 import { trackEvent } from "@/lib/analytics";
-
-const SPONSOR_INQUIRY = "mailto:hello@rmcclassics.com?subject=RMC%20CLASSICS%20sponsor%20inventory%20inquiry";
 
 export default function SponsorUnit({ placement = "home" }) {
   const campaign = MONETIZATION.sponsorEnabled
@@ -22,8 +21,8 @@ export default function SponsorUnit({ placement = "home" }) {
   }, [campaign?.name, campaign?.type, campaign?.url, placement]);
 
   if (!campaign?.name || !campaign?.url) {
-    const openInventoryInquiry = () => {
-      trackEvent("sponsor_inventory_inquiry", {
+    const openInventoryDetails = () => {
+      trackEvent("sponsor_inventory_details_opened", {
         placement,
         inventory_status: "available",
       });
@@ -41,13 +40,13 @@ export default function SponsorUnit({ placement = "home" }) {
               Direct-sold sponsor and affiliate placements are available. No sponsor is shown until a real partner campaign is configured.
             </p>
           </div>
-          <a
-            href={SPONSOR_INQUIRY}
-            onClick={openInventoryInquiry}
+          <Link
+            to="/support-rmc#sponsorships"
+            onClick={openInventoryDetails}
             className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-neon-pink/40 bg-neon-pink/10 px-5 py-2.5 text-xs font-black uppercase tracking-widest text-neon-pink"
           >
-            Ask about inventory <Mail className="h-3.5 w-3.5" />
-          </a>
+            View sponsor details <Handshake className="h-3.5 w-3.5" />
+          </Link>
         </div>
       </aside>
     );
