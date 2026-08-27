@@ -76,7 +76,7 @@
   },
   "scripts": {
     "start": "craco start",
-    "build": "craco build",
+    "build": "craco build && node scripts/generate-route-shells.mjs",
     "test": "craco test"
   },
   "browserslist": {
