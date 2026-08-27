@@ -3,7 +3,8 @@ import { ArrowLeft, RotateCcw, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { sfx } from "@/lib/sound";
 import { share } from "@/lib/native";
-import { publicGameUrl } from "@/lib/routes";
+import { publicGameShareUrl } from "@/lib/routes";
+import { trackEvent } from "@/lib/analytics";
 
 export default function GameShell({ title, subtitle, color = "#FF479A", children, onReset, extraActions }) {
   const { pathname } = useLocation();
@@ -13,10 +14,19 @@ export default function GameShell({ title, subtitle, color = "#FF479A", children
     const result = await share({
       title: `${title} Online | RMC CLASSICS`,
       text: `Play ${title} online at RMC CLASSICS.`,
-      url: publicGameUrl(pathname),
+      url: publicGameShareUrl(pathname),
       dialogTitle: `Share ${title}`,
     });
-    if (result === true) toast.success("Game link shared or copied");
+    if (result === true) {
+      const gameId = pathname.match(/^\/play\/([a-z0-9-]+)$/)?.[1];
+      if (gameId) {
+        trackEvent("game_share_completed", {
+          game_id: gameId,
+          share_method: "native_web_or_clipboard",
+        });
+      }
+      toast.success("Game link shared or copied");
+    }
     if (result === false) toast.error("Couldn't share or copy the game link");
   };
 
