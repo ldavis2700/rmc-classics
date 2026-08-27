@@ -43,6 +43,7 @@ function sponsorPreviewLink() {
 
 export default function SupportRMC() {
   const [preference, setPreference] = useState(getAdPreference());
+  const [copyStatus, setCopyStatus] = useState("");
 
   useEffect(() => {
     const description = document.querySelector('meta[name="description"]');
@@ -76,6 +77,16 @@ export default function SupportRMC() {
     setAdPreference(value);
     setPreference(value);
     trackEvent("ad_preference_updated", { preference: value });
+  };
+
+  const copySponsorEmail = async () => {
+    try {
+      await navigator.clipboard.writeText(EMAIL);
+      setCopyStatus("Email copied");
+      trackEvent("founding_sponsor_email_copied", { placement: "support_rmc" });
+    } catch {
+      setCopyStatus(`Email us at ${EMAIL}`);
+    }
   };
 
   return (
@@ -134,15 +145,28 @@ export default function SupportRMC() {
           <li><b className="text-white">2.</b> Review a placement preview and written scope.</li>
           <li><b className="text-white">3.</b> Activation requires separate approval and confirmed payment.</li>
         </ol>
-        <a
-          href={sponsorPreviewLink()}
-          onClick={() => trackEvent("founding_sponsor_preview_started", { placement: "support_rmc" })}
-          className="btn-arcade mt-6 inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm"
-          data-testid="founding-sponsor-preview-btn"
-        >
-          Request a sponsor preview <Mail className="h-4 w-4" />
-        </a>
-        <p className="mt-3 text-xs text-[#77749d]">Inquiry only. No purchase, campaign, or recurring commitment is created.</p>
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <a
+            href={sponsorPreviewLink()}
+            onClick={() => trackEvent("founding_sponsor_preview_started", { placement: "support_rmc" })}
+            className="btn-arcade inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm"
+            data-testid="founding-sponsor-preview-btn"
+          >
+            Request a sponsor preview <Mail className="h-4 w-4" />
+          </a>
+          <button
+            type="button"
+            onClick={copySponsorEmail}
+            className="rounded-full border border-white/15 bg-white/5 px-5 py-3 text-xs font-black uppercase tracking-widest text-[#c9c8e2] hover:border-neon-cyan/40 hover:text-neon-cyan"
+            data-testid="founding-sponsor-copy-email-btn"
+          >
+            Copy contact email
+          </button>
+        </div>
+        <p className="mt-3 text-xs text-[#77749d]">
+          Inquiry only. No purchase, campaign, or recurring commitment is created. If the email button does not open, contact <span className="select-all text-[#c9c8e2]">{EMAIL}</span> directly.
+        </p>
+        <p className="mt-2 text-xs text-neon-cyan" role="status" aria-live="polite">{copyStatus}</p>
       </section>
 
       <h2 className="mt-10 font-display text-xl font-black uppercase text-white">Ways to work with RMC</h2>
