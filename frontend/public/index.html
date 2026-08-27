@@ -39,6 +39,65 @@
         <meta name="twitter:description" content="Play 14 childhood classics — Chess, Wild Cards, Ludo, Connect Four & more. Real-time friend battles. Zero downloads." />
         <meta name="twitter:image" content="https://rmcclassics.com/logo.svg" />
 
+        <script id="rmc-structured-data" type="application/ld+json">
+          {
+            "@context": "https://schema.org",
+            "@graph": [
+              {
+                "@type": "Organization",
+                "@id": "https://rmcclassics.com/#organization",
+                "name": "RMC FAMILY ENTERPRISES LLC",
+                "url": "https://rmcclassics.com/"
+              },
+              {
+                "@type": "WebSite",
+                "@id": "https://rmcclassics.com/#website",
+                "url": "https://rmcclassics.com/",
+                "name": "RMC CLASSICS",
+                "description": "Play 14 classic childhood games online, challenge friends, and climb the RMC CLASSICS leaderboards.",
+                "publisher": { "@id": "https://rmcclassics.com/#organization" }
+              },
+              {
+                "@type": "SoftwareApplication",
+                "@id": "https://rmcclassics.com/#web-app",
+                "name": "RMC CLASSICS",
+                "url": "https://rmcclassics.com/",
+                "applicationCategory": "GameApplication",
+                "operatingSystem": "Web",
+                "isAccessibleForFree": true,
+                "offers": {
+                  "@type": "Offer",
+                  "price": "0",
+                  "priceCurrency": "USD"
+                },
+                "publisher": { "@id": "https://rmcclassics.com/#organization" }
+              },
+              {
+                "@type": "ItemList",
+                "@id": "https://rmcclassics.com/#game-catalog",
+                "name": "RMC CLASSICS Game Catalog",
+                "numberOfItems": 14,
+                "itemListElement": [
+                  { "@type": "ListItem", "position": 1, "name": "Memory Match", "url": "https://rmcclassics.com/play/memory" },
+                  { "@type": "ListItem", "position": 2, "name": "Snakes & Ladders", "url": "https://rmcclassics.com/play/snakes" },
+                  { "@type": "ListItem", "position": 3, "name": "Connect Four", "url": "https://rmcclassics.com/play/connect4" },
+                  { "@type": "ListItem", "position": 4, "name": "Checkers", "url": "https://rmcclassics.com/play/checkers" },
+                  { "@type": "ListItem", "position": 5, "name": "Rock Paper Scissors", "url": "https://rmcclassics.com/play/rps" },
+                  { "@type": "ListItem", "position": 6, "name": "Crazy Eights", "url": "https://rmcclassics.com/play/crazy8" },
+                  { "@type": "ListItem", "position": 7, "name": "Chess", "url": "https://rmcclassics.com/play/chess" },
+                  { "@type": "ListItem", "position": 8, "name": "Wild Cards", "url": "https://rmcclassics.com/play/uno" },
+                  { "@type": "ListItem", "position": 9, "name": "Ludo", "url": "https://rmcclassics.com/play/ludo" },
+                  { "@type": "ListItem", "position": 10, "name": "Word Tiles", "url": "https://rmcclassics.com/play/scrabble" },
+                  { "@type": "ListItem", "position": 11, "name": "Dominoes", "url": "https://rmcclassics.com/play/dominoes" },
+                  { "@type": "ListItem", "position": 12, "name": "Go Fish", "url": "https://rmcclassics.com/play/gofish" },
+                  { "@type": "ListItem", "position": 13, "name": "Old Maid", "url": "https://rmcclassics.com/play/oldmaid" },
+                  { "@type": "ListItem", "position": 14, "name": "Tumble Tower", "url": "https://rmcclassics.com/play/jenga" }
+                ]
+              }
+            ]
+          }
+        </script>
+
         <!-- Search Console verification is managed outside source control. -->
 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
