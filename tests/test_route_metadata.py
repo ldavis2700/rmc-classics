@@ -142,7 +142,8 @@ def test_every_game_has_explicit_consent_based_sharing():
     assert "url: publicGameShareUrl(pathname)" in GAME_SHELL
     assert 'dialogTitle: `Share ${title}`' in GAME_SHELL
     assert 'if (result === false) toast.error' in GAME_SHELL
-    assert 'if (result === true) toast.success' in GAME_SHELL
+    assert 'if (result === true) {' in GAME_SHELL
+    assert 'toast.success("Game link shared or copied")' in GAME_SHELL
 
     assert "export function publicGameUrl(gamePath)" in ROUTES
     assert '/^\\/play\\/[a-z0-9-]+$/.test(gamePath)' in ROUTES
