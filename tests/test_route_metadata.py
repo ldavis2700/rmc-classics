@@ -195,6 +195,9 @@ def test_sponsor_inventory_uses_a_truthful_consent_based_inbound_funnel():
     assert 'window.location.hash !== "#sponsorships"' in SUPPORT_RMC
     assert 'document.getElementById("sponsorships")?.scrollIntoView' in SUPPORT_RMC
     assert 'data-testid="founding-sponsor-preview-btn"' in SUPPORT_RMC
+    assert 'data-testid="founding-sponsor-copy-email-btn"' in SUPPORT_RMC
+    assert 'founding_sponsor_email_copied' in SUPPORT_RMC
+    assert 'If the email button does not open' in SUPPORT_RMC
     assert 'data-testid="founding-sponsor-placement-preview"' in SUPPORT_RMC
     assert "Illustrative preview only—not a live sponsor" in SUPPORT_RMC
     assert "audience-size claim, or performance claim" in SUPPORT_RMC
