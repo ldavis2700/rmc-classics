@@ -1,4 +1,3 @@
-import html
 import json
 import os
 import re
@@ -109,9 +108,15 @@ def test_build_generates_initial_metadata_for_every_game_route(tmp_path):
         route_shell = (build_dir / "play" / game_id / "index.html").read_text(
             encoding="utf-8"
         )
-        escaped_title = html.escape(f"{name} Online | RMC CLASSICS", quote=True)
-        escaped_description = html.escape(
-            f"Play {name} online at RMC CLASSICS. {description}", quote=True
+        escape_attribute = lambda value: (
+            value.replace("&", "&amp;")
+            .replace('"', "&quot;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+        escaped_title = escape_attribute(f"{name} Online | RMC CLASSICS")
+        escaped_description = escape_attribute(
+            f"Play {name} online at RMC CLASSICS. {description}"
         )
         canonical = f"https://rmcclassics.com{route}"
 
