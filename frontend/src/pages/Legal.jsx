@@ -1,7 +1,7 @@
 /* eslint-disable react/no-unescaped-entities */
 import { Link } from "react-router-dom";
 
-const LAST_UPDATED = "August 20, 2026";
+const LAST_UPDATED = "August 27, 2026";
 const CONTACT_EMAIL = "hello@rmcclassics.com";
 
 function Shell({ eyebrow, title, children }) {
@@ -50,8 +50,9 @@ export function Privacy() {
           <b>Device data:</b> anonymous device type and screen size for responsive rendering.
         </li>
         <li>
-          <b>Analytics:</b> aggregated, non-identifying usage counts (page views, game starts) via
-          privacy-friendly analytics.
+          <b>Analytics:</b> aggregated, non-identifying usage counts (page views, game starts,
+          voluntary share completions, and visits from player-shared game links) via
+          privacy-friendly analytics. We do not record who receives a shared link.
         </li>
         <li>
           <b>Advertising preference:</b> whether you selected contextual or personalized advertising.
