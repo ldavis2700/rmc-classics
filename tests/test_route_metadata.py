@@ -18,6 +18,8 @@ GAME_SHELL = (ROOT / "frontend" / "src" / "components" / "rmc" / "GameShell.jsx"
 NATIVE = (ROOT / "frontend" / "src" / "lib" / "native.js").read_text(encoding="utf-8")
 ROUTES = (ROOT / "frontend" / "src" / "lib" / "routes.js").read_text(encoding="utf-8")
 GAME_PAGES = list((ROOT / "frontend" / "src" / "pages" / "games").glob("*.jsx"))
+LAYOUT = (ROOT / "frontend" / "src" / "components" / "rmc" / "Layout.jsx").read_text(encoding="utf-8")
+LEGAL = (ROOT / "frontend" / "src" / "pages" / "Legal.jsx").read_text(encoding="utf-8")
 
 
 def test_router_mounts_route_metadata_inside_browser_router():
@@ -137,7 +139,7 @@ def test_every_game_has_explicit_consent_based_sharing():
 
     assert 'data-testid="game-share"' in GAME_SHELL
     assert "onClick={shareGame}" in GAME_SHELL
-    assert "url: publicGameUrl(pathname)" in GAME_SHELL
+    assert "url: publicGameShareUrl(pathname)" in GAME_SHELL
     assert 'dialogTitle: `Share ${title}`' in GAME_SHELL
     assert 'if (result === false) toast.error' in GAME_SHELL
     assert 'if (result === true) toast.success' in GAME_SHELL
@@ -150,3 +152,34 @@ def test_every_game_has_explicit_consent_based_sharing():
     assert "await Share.share({ title, text, url, dialogTitle })" in NATIVE
     assert 'error?.name === "AbortError"' in NATIVE
     assert "return null" in NATIVE
+
+
+def test_share_referrals_are_attributed_without_personal_data():
+    assert "export function publicGameShareUrl(gamePath)" in ROUTES
+    assert 'url.searchParams.set("ref", "player-share")' in ROUTES
+    assert "url: publicGameShareUrl(pathname)" in GAME_SHELL
+    assert 'trackEvent("game_share_completed"' in GAME_SHELL
+    assert 'share_method: "native_web_or_clipboard"' in GAME_SHELL
+    assert 'if (result === true) {' in GAME_SHELL
+
+    assert 'referralSource !== "player-share"' in LAYOUT
+    assert 'trackEvent("game_referral_landing"' in LAYOUT
+    assert 'referral_source: "player_share"' in LAYOUT
+    assert "sessionStorage.getItem(dedupeKey)" in LAYOUT
+    assert "sessionStorage.setItem(dedupeKey, \"1\")" in LAYOUT
+
+    assert "voluntary share completions" in LEGAL
+    assert "visits from player-shared game links" in LEGAL
+    assert "We do not record who receives a shared link." in LEGAL
+
+    forbidden_personal_fields = (
+        "recipient",
+        "contact",
+        "email",
+        "phone",
+        "message_text",
+        "destination_url",
+    )
+    attribution_contract = GAME_SHELL + LAYOUT
+    for field in forbidden_personal_fields:
+        assert field not in attribution_contract.lower()
