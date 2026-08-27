@@ -27,6 +27,20 @@ function partnershipLink() {
   return `mailto:${EMAIL}?subject=${encodeURIComponent("RMC CLASSICS partnership inquiry")}&body=${encodeURIComponent(body)}`;
 }
 
+function sponsorPreviewLink() {
+  const body = [
+    "I'd like to review a Founding Sponsor preview for RMC CLASSICS.",
+    "",
+    "Organization:",
+    "Website:",
+    "What we offer:",
+    "Preferred destination link:",
+    "Desired timing:",
+  ].join("\n");
+
+  return `mailto:${EMAIL}?subject=${encodeURIComponent("RMC CLASSICS Founding Sponsor preview")}&body=${encodeURIComponent(body)}`;
+}
+
 export default function SupportRMC() {
   const [preference, setPreference] = useState(getAdPreference());
 
@@ -49,6 +63,15 @@ export default function SupportRMC() {
       if (previous.canonical) canonical?.setAttribute("href", previous.canonical);
     };
   }, []);
+
+  useEffect(() => {
+    if (window.location.hash !== "#sponsorships") return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById("sponsorships")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
   const updatePreference = (value) => {
     setAdPreference(value);
     setPreference(value);
@@ -72,6 +95,42 @@ export default function SupportRMC() {
         Request partnership details
       </a>
       <p className="mt-3 text-xs text-[#77749d]">No obligation. Your email opens with a short qualification checklist.</p>
+
+      <section id="sponsorships" className="mt-10 scroll-mt-24 rounded-3xl border border-neon-pink/35 bg-[#16152b] p-6 sm:p-8">
+        <p className="font-pixel text-xs text-neon-pink">// FOUNDING SPONSOR</p>
+        <h2 className="mt-2 font-display text-2xl font-black uppercase tracking-tight text-white">
+          Preview the placement before deciding
+        </h2>
+        <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#c9c8e2]">
+          RMC CLASSICS is preparing one clearly labeled, direct-sold sponsor placement for a relevant business or organization. We will confirm fit and availability, then show the proposed name, short message, destination link, and dates before either side commits.
+        </p>
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          {[
+            ["Contextual by default", "Placement is based on the RMC CLASSICS experience—not sensitive traits or cross-app tracking."],
+            ["Reviewed before launch", "Creative and destination links require approval. No campaign activates from this inquiry."],
+            ["Truthful measurement", "We can report first-party placement activity, but we do not promise traffic, clicks, conversions, or revenue."],
+          ].map(([title, detail]) => (
+            <article key={title} className="rounded-2xl border border-white/10 bg-white/5 p-5">
+              <h3 className="font-display text-base font-black uppercase text-white">{title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-[#a3a1c6]">{detail}</p>
+            </article>
+          ))}
+        </div>
+        <ol className="mt-6 grid gap-3 text-sm text-[#c9c8e2] sm:grid-cols-3">
+          <li><b className="text-white">1.</b> Send the short qualification email.</li>
+          <li><b className="text-white">2.</b> Review a placement preview and written scope.</li>
+          <li><b className="text-white">3.</b> Activation requires separate approval and confirmed payment.</li>
+        </ol>
+        <a
+          href={sponsorPreviewLink()}
+          onClick={() => trackEvent("founding_sponsor_preview_started", { placement: "support_rmc" })}
+          className="btn-arcade mt-6 inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm"
+          data-testid="founding-sponsor-preview-btn"
+        >
+          Request a sponsor preview <Mail className="h-4 w-4" />
+        </a>
+        <p className="mt-3 text-xs text-[#77749d]">Inquiry only. No purchase, campaign, or recurring commitment is created.</p>
+      </section>
 
       <h2 className="mt-10 font-display text-xl font-black uppercase text-white">Ways to work with RMC</h2>
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
