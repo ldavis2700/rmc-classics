@@ -104,6 +104,19 @@ export default function SupportRMC() {
         <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#c9c8e2]">
           RMC CLASSICS is preparing one clearly labeled, direct-sold sponsor placement for a relevant business or organization. We will confirm fit and availability, then show the proposed name, short message, destination link, and dates before either side commits.
         </p>
+        <div className="mt-6 rounded-2xl border border-neon-pink/25 bg-[#0d0c1d] p-5" data-testid="founding-sponsor-placement-preview">
+          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#7a789e]">Sponsored · Placement preview</p>
+          <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="font-display text-lg font-black uppercase text-white">Your organization</h3>
+              <p className="mt-1 text-sm text-[#a3a1c6]">Your approved one-sentence message appears here.</p>
+            </div>
+            <span className="inline-flex shrink-0 items-center justify-center rounded-full border border-neon-cyan/40 bg-neon-cyan/10 px-5 py-2.5 text-xs font-black uppercase tracking-widest text-neon-cyan">
+              Learn more
+            </span>
+          </div>
+          <p className="mt-4 text-xs text-[#77749d]">Illustrative preview only—not a live sponsor, endorsement, audience-size claim, or performance claim.</p>
+        </div>
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           {[
             ["Contextual by default", "Placement is based on the RMC CLASSICS experience—not sensitive traits or cross-app tracking."],
