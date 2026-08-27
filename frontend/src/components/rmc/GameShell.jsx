@@ -1,8 +1,25 @@
-import { Link } from "react-router-dom";
-import { ArrowLeft, RotateCcw } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { ArrowLeft, RotateCcw, Share2 } from "lucide-react";
+import { toast } from "sonner";
 import { sfx } from "@/lib/sound";
+import { share } from "@/lib/native";
+import { publicGameUrl } from "@/lib/routes";
 
 export default function GameShell({ title, subtitle, color = "#FF479A", children, onReset, extraActions }) {
+  const { pathname } = useLocation();
+
+  const shareGame = async () => {
+    sfx.click();
+    const result = await share({
+      title: `${title} Online | RMC CLASSICS`,
+      text: `Play ${title} online at RMC CLASSICS.`,
+      url: publicGameUrl(pathname),
+      dialogTitle: `Share ${title}`,
+    });
+    if (result === true) toast.success("Game link shared or copied");
+    if (result === false) toast.error("Couldn't share or copy the game link");
+  };
+
   return (
     <section className="mx-auto max-w-5xl px-4 pt-8 md:px-8 md:pt-12">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -30,6 +47,14 @@ export default function GameShell({ title, subtitle, color = "#FF479A", children
         </div>
         <div className="flex items-center gap-2">
           {extraActions}
+          <button
+            type="button"
+            onClick={shareGame}
+            data-testid="game-share"
+            className="inline-flex items-center gap-2 rounded-full border border-neon-cyan/40 bg-neon-cyan/10 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-neon-cyan hover:border-neon-cyan/70"
+          >
+            <Share2 className="h-3.5 w-3.5" /> Share
+          </button>
           {onReset && (
             <button
               type="button"
