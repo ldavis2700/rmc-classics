@@ -45,14 +45,14 @@ export async function haptic(style = "light") {
  * Native share sheet. Falls back to navigator.share on web, then clipboard.
  * Returns true when shared/copied, null when the user cancels, and false only
  * when every available sharing method fails.
- * @param {{ title?: string, text?: string, url?: string }} payload
+ * @param {{ title?: string, text?: string, url?: string, dialogTitle?: string }} payload
  */
 export async function share(payload) {
-  const { title = "RMC CLASSICS", text = "", url = "" } = payload || {};
+  const { title = "RMC CLASSICS", text = "", url = "", dialogTitle = "Share RMC CLASSICS" } = payload || {};
   if (isNative()) {
     try {
       const { Share } = await import("@capacitor/share");
-      await Share.share({ title, text, url, dialogTitle: "Share your win" });
+      await Share.share({ title, text, url, dialogTitle });
       return true;
     } catch (error) {
       if ((error?.message || "").toLowerCase().includes("cancel")) return null;
