@@ -50,7 +50,7 @@ def test_route_metadata_updates_search_and_social_contracts():
 
 def test_structured_catalog_is_strict_truthful_json_ld():
     match = re.search(
-        r'<script id="rmc-structured-data" type="application/ld\\+json">\\s*(.*?)\\s*</script>',
+        r'<script id="rmc-structured-data" type="application/ld\+json">\s*(.*?)\s*</script>',
         PUBLIC_INDEX,
         re.DOTALL,
     )
