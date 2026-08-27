@@ -20,6 +20,8 @@ ROUTES = (ROOT / "frontend" / "src" / "lib" / "routes.js").read_text(encoding="u
 GAME_PAGES = list((ROOT / "frontend" / "src" / "pages" / "games").glob("*.jsx"))
 LAYOUT = (ROOT / "frontend" / "src" / "components" / "rmc" / "Layout.jsx").read_text(encoding="utf-8")
 LEGAL = (ROOT / "frontend" / "src" / "pages" / "Legal.jsx").read_text(encoding="utf-8")
+SPONSOR_UNIT = (ROOT / "frontend" / "src" / "components" / "rmc" / "SponsorUnit.jsx").read_text(encoding="utf-8")
+SUPPORT_RMC = (ROOT / "frontend" / "src" / "pages" / "SupportRMC.jsx").read_text(encoding="utf-8")
 
 
 def test_router_mounts_route_metadata_inside_browser_router():
@@ -184,3 +186,21 @@ def test_share_referrals_are_attributed_without_personal_data():
     attribution_contract = GAME_SHELL + LAYOUT
     for field in forbidden_personal_fields:
         assert field not in attribution_contract.lower()
+
+
+def test_sponsor_inventory_uses_a_truthful_consent_based_inbound_funnel():
+    assert 'to="/support-rmc#sponsorships"' in SPONSOR_UNIT
+    assert 'trackEvent("sponsor_inventory_details_opened"' in SPONSOR_UNIT
+    assert 'id="sponsorships"' in SUPPORT_RMC
+    assert 'window.location.hash !== "#sponsorships"' in SUPPORT_RMC
+    assert 'document.getElementById("sponsorships")?.scrollIntoView' in SUPPORT_RMC
+    assert 'data-testid="founding-sponsor-preview-btn"' in SUPPORT_RMC
+    assert 'trackEvent("founding_sponsor_preview_started"' in SUPPORT_RMC
+    assert "No campaign activates from this inquiry." in SUPPORT_RMC
+    assert "we do not promise traffic, clicks, conversions, or revenue" in SUPPORT_RMC
+    assert "Activation requires separate approval and confirmed payment." in SUPPORT_RMC
+    assert "Inquiry only. No purchase, campaign, or recurring commitment is created." in SUPPORT_RMC
+
+    forbidden_claims = ("guaranteed traffic", "guaranteed clicks", "guaranteed sales", "guaranteed revenue")
+    for claim in forbidden_claims:
+        assert claim not in SUPPORT_RMC.lower()
