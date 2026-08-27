@@ -14,6 +14,10 @@ GAMES = (ROOT / "frontend" / "src" / "lib" / "games.js").read_text(encoding="utf
 PUBLIC_INDEX = (ROOT / "frontend" / "public" / "index.html").read_text(encoding="utf-8")
 PACKAGE = (ROOT / "frontend" / "package.json").read_text(encoding="utf-8")
 ROUTE_SHELL_GENERATOR = ROOT / "frontend" / "scripts" / "generate-route-shells.mjs"
+GAME_SHELL = (ROOT / "frontend" / "src" / "components" / "rmc" / "GameShell.jsx").read_text(encoding="utf-8")
+NATIVE = (ROOT / "frontend" / "src" / "lib" / "native.js").read_text(encoding="utf-8")
+ROUTES = (ROOT / "frontend" / "src" / "lib" / "routes.js").read_text(encoding="utf-8")
+GAME_PAGES = list((ROOT / "frontend" / "src" / "pages" / "games").glob("*.jsx"))
 
 
 def test_router_mounts_route_metadata_inside_browser_router():
@@ -125,3 +129,24 @@ def test_build_generates_initial_metadata_for_every_game_route(tmp_path):
         assert f'<link rel="canonical" href="{canonical}" />' in route_shell
         assert f'<meta property="og:url" content="{canonical}" />' in route_shell
         assert route_shell.count("<title>") == 1
+
+
+def test_every_game_has_explicit_consent_based_sharing():
+    assert len(GAME_PAGES) == 14
+    assert all("<GameShell" in page.read_text(encoding="utf-8") for page in GAME_PAGES)
+
+    assert 'data-testid="game-share"' in GAME_SHELL
+    assert "onClick={shareGame}" in GAME_SHELL
+    assert "url: publicGameUrl(pathname)" in GAME_SHELL
+    assert 'dialogTitle: `Share ${title}`' in GAME_SHELL
+    assert 'if (result === false) toast.error' in GAME_SHELL
+    assert 'if (result === true) toast.success' in GAME_SHELL
+
+    assert "export function publicGameUrl(gamePath)" in ROUTES
+    assert '/^\\/play\\/[a-z0-9-]+$/.test(gamePath)' in ROUTES
+    assert '      : "/library";' in ROUTES
+
+    assert 'dialogTitle = "Share RMC CLASSICS"' in NATIVE
+    assert "await Share.share({ title, text, url, dialogTitle })" in NATIVE
+    assert 'error?.name === "AbortError"' in NATIVE
+    assert "return null" in NATIVE
