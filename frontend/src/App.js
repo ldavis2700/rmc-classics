@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import Layout from "@/components/rmc/Layout";
 import InstallPrompt from "@/components/rmc/InstallPrompt";
+import RouteMetadata from "@/components/rmc/RouteMetadata";
 import Home from "@/pages/Home";
 import Library from "@/pages/Library";
 import Leaderboard from "@/pages/Leaderboard";
@@ -56,6 +57,7 @@ function App() {
       <AuthProvider>
         <ThemeProvider>
           <BrowserRouter>
+            <RouteMetadata />
             <Layout>
               <Routes>
                 <Route path="/" element={<Home />} />
