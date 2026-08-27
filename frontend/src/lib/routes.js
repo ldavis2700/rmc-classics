@@ -15,6 +15,14 @@ export function publicBattleInviteUrl(roomId) {
   return `${publicAppBaseUrl()}/battle/${encodeURIComponent(roomId || "")}`;
 }
 
+export function publicGameUrl(gamePath) {
+  const safePath =
+    typeof gamePath === "string" && /^\/play\/[a-z0-9-]+$/.test(gamePath)
+      ? gamePath
+      : "/library";
+  return `${publicAppBaseUrl()}${safePath}`;
+}
+
 export function safeReturnPath(value, fallback = "/profile") {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
     return fallback;
