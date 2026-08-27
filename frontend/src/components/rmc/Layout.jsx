@@ -3,7 +3,7 @@ import { Home, Gamepad2, Trophy, User, Volume2, VolumeX, Swords, Users } from "l
 import { useEffect, useState } from "react";
 import { isSoundEnabled, setSoundEnabled, sfx } from "@/lib/sound";
 import { useAuth } from "@/context/AuthContext";
-import { trackPageview } from "@/lib/analytics";
+import { trackEvent, trackPageview } from "@/lib/analytics";
 
 const navItems = [
   { to: "/", label: "Home", icon: Home, id: "nav-home" },
@@ -25,6 +25,24 @@ export default function Layout({ children }) {
     // GA pageview
     trackPageview(location.pathname);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const referralSource = new URLSearchParams(location.search).get("ref");
+    const gameId = location.pathname.match(/^\/play\/([a-z0-9-]+)$/)?.[1];
+    if (referralSource !== "player-share" || !gameId) return;
+
+    const dedupeKey = `rmc:referral-landing:player-share:${gameId}`;
+    try {
+      if (sessionStorage.getItem(dedupeKey)) return;
+      sessionStorage.setItem(dedupeKey, "1");
+    } catch {
+      // Session storage can be unavailable; the allowlisted aggregate event is still safe.
+    }
+    trackEvent("game_referral_landing", {
+      game_id: gameId,
+      referral_source: "player_share",
+    });
+  }, [location.pathname, location.search]);
 
   const toggleSound = () => {
     const v = !sound;

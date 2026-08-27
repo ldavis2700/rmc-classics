@@ -23,6 +23,12 @@ export function publicGameUrl(gamePath) {
   return `${publicAppBaseUrl()}${safePath}`;
 }
 
+export function publicGameShareUrl(gamePath) {
+  const url = new URL(publicGameUrl(gamePath));
+  url.searchParams.set("ref", "player-share");
+  return url.toString();
+}
+
 export function safeReturnPath(value, fallback = "/profile") {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
     return fallback;
