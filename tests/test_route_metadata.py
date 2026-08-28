@@ -156,8 +156,22 @@ def test_build_generates_initial_metadata_for_every_game_route(tmp_path):
         )
         route_shell = route_shell_path.read_text(encoding="utf-8")
         canonical = f"https://rmcclassics.com{route}"
-        assert f"<title>{route_metadata['title']}</title>" in route_shell
-        assert f'<meta name="description" content="{route_metadata["description"]}" />' in route_shell
+        escaped_title = (
+            route_metadata["title"]
+            .replace("&", "&amp;")
+            .replace('"', "&quot;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+        escaped_description = (
+            route_metadata["description"]
+            .replace("&", "&amp;")
+            .replace('"', "&quot;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+        assert f"<title>{escaped_title}</title>" in route_shell
+        assert f'<meta name="description" content="{escaped_description}" />' in route_shell
         assert f'<link rel="canonical" href="{canonical}" />' in route_shell
         assert f'<meta property="og:url" content="{canonical}" />' in route_shell
         assert '<meta name="robots" content="index,follow" />' in route_shell
