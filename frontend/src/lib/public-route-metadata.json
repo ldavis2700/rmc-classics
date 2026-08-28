@@ -1,0 +1,30 @@
+{
+  "/": {
+    "title": "RMC CLASSICS — Remembering My Childhood",
+    "description": "Play 14 classic childhood games online, challenge friends, and climb the RMC CLASSICS leaderboards."
+  },
+  "/library": {
+    "title": "Classic Games Library | RMC CLASSICS",
+    "description": "Browse and play 14 classic childhood games online, including Chess, Checkers, Dominoes, Ludo, and Tumble Tower."
+  },
+  "/leaderboard": {
+    "title": "Classic Games Leaderboards | RMC CLASSICS",
+    "description": "See the leading RMC CLASSICS players across daily challenges and 14 classic online games."
+  },
+  "/support-rmc": {
+    "title": "Sponsor or Partner with RMC CLASSICS",
+    "description": "Sponsor RMC CLASSICS, license the classic-games collection, or explore branded tournaments and partnership opportunities."
+  },
+  "/privacy": {
+    "title": "Privacy Policy | RMC CLASSICS",
+    "description": "Read the RMC CLASSICS privacy policy."
+  },
+  "/terms": {
+    "title": "Terms of Use | RMC CLASSICS",
+    "description": "Read the RMC CLASSICS terms of use."
+  },
+  "/support": {
+    "title": "Help & Support | RMC CLASSICS",
+    "description": "Get help with RMC CLASSICS accounts, games, purchases, and safety features."
+  }
+}
