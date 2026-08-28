@@ -2,45 +2,11 @@ import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 
 import { GAMES } from "@/lib/games";
+import PUBLIC_ROUTES from "@/lib/public-route-metadata.json";
 
 const SITE_URL = "https://rmcclassics.com";
-const DEFAULT_TITLE = "RMC CLASSICS — Remembering My Childhood";
-const DEFAULT_DESCRIPTION =
-  "Play 14 classic childhood games online, challenge friends, and climb the RMC CLASSICS leaderboards.";
-
-const PUBLIC_ROUTES = {
-  "/": {
-    title: DEFAULT_TITLE,
-    description: DEFAULT_DESCRIPTION,
-  },
-  "/library": {
-    title: "Classic Games Library | RMC CLASSICS",
-    description:
-      "Browse and play 14 classic childhood games online, including Chess, Checkers, Dominoes, Ludo, and Tumble Tower.",
-  },
-  "/leaderboard": {
-    title: "Classic Games Leaderboards | RMC CLASSICS",
-    description:
-      "See the leading RMC CLASSICS players across daily challenges and 14 classic online games.",
-  },
-  "/support-rmc": {
-    title: "Support RMC CLASSICS",
-    description:
-      "Support the independent development of RMC CLASSICS and help keep classic games available online.",
-  },
-  "/privacy": {
-    title: "Privacy Policy | RMC CLASSICS",
-    description: "Read the RMC CLASSICS privacy policy.",
-  },
-  "/terms": {
-    title: "Terms of Use | RMC CLASSICS",
-    description: "Read the RMC CLASSICS terms of use.",
-  },
-  "/support": {
-    title: "Help & Support | RMC CLASSICS",
-    description: "Get help with RMC CLASSICS accounts, games, purchases, and safety features.",
-  },
-};
+const DEFAULT_TITLE = PUBLIC_ROUTES["/"].title;
+const DEFAULT_DESCRIPTION = PUBLIC_ROUTES["/"].description;
 
 const PRIVATE_ROUTE_PREFIXES = [
   "/account",

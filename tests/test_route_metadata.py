@@ -12,6 +12,9 @@ METADATA = (
 ).read_text(encoding="utf-8")
 GAMES = (ROOT / "frontend" / "src" / "lib" / "games.js").read_text(encoding="utf-8")
 PUBLIC_INDEX = (ROOT / "frontend" / "public" / "index.html").read_text(encoding="utf-8")
+PUBLIC_ROUTE_METADATA = json.loads(
+    (ROOT / "frontend" / "src" / "lib" / "public-route-metadata.json").read_text(encoding="utf-8")
+)
 PACKAGE = (ROOT / "frontend" / "package.json").read_text(encoding="utf-8")
 ROUTE_SHELL_GENERATOR = ROOT / "frontend" / "scripts" / "generate-route-shells.mjs"
 GAME_SHELL = (ROOT / "frontend" / "src" / "components" / "rmc" / "GameShell.jsx").read_text(encoding="utf-8")
@@ -34,6 +37,7 @@ def test_router_mounts_route_metadata_inside_browser_router():
 
 def test_every_game_path_is_derived_from_authoritative_game_catalog():
     assert 'import { GAMES } from "@/lib/games";' in METADATA
+    assert 'import PUBLIC_ROUTES from "@/lib/public-route-metadata.json";' in METADATA
     assert "GAMES.find(({ path }) => path === pathname)" in METADATA
     assert "canonicalPath: game.path" in METADATA
     assert GAMES.count('path: "/play/') == 14
@@ -133,6 +137,50 @@ def test_build_generates_initial_metadata_for_every_game_route(tmp_path):
         assert f'<link rel="canonical" href="{canonical}" />' in route_shell
         assert f'<meta property="og:url" content="{canonical}" />' in route_shell
         assert route_shell.count("<title>") == 1
+        assert '<meta name="robots" content="index,follow" />' in route_shell
+
+    assert set(PUBLIC_ROUTE_METADATA) == {
+        "/",
+        "/library",
+        "/leaderboard",
+        "/support-rmc",
+        "/privacy",
+        "/terms",
+        "/support",
+    }
+    for route, route_metadata in PUBLIC_ROUTE_METADATA.items():
+        route_shell_path = (
+            build_dir / "index.html"
+            if route == "/"
+            else build_dir / route.removeprefix("/") / "index.html"
+        )
+        route_shell = route_shell_path.read_text(encoding="utf-8")
+        canonical = f"https://rmcclassics.com{route}"
+        escaped_title = (
+            route_metadata["title"]
+            .replace("&", "&amp;")
+            .replace('"', "&quot;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+        escaped_description = (
+            route_metadata["description"]
+            .replace("&", "&amp;")
+            .replace('"', "&quot;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+        assert f"<title>{escaped_title}</title>" in route_shell
+        assert f'<meta name="description" content="{escaped_description}" />' in route_shell
+        assert f'<link rel="canonical" href="{canonical}" />' in route_shell
+        assert f'<meta property="og:url" content="{canonical}" />' in route_shell
+        assert '<meta name="robots" content="index,follow" />' in route_shell
+        assert route_shell.count("<title>") == 1
+
+    sponsor = PUBLIC_ROUTE_METADATA["/support-rmc"]
+    assert sponsor["title"] == "Sponsor or Partner with RMC CLASSICS"
+    assert "Sponsor RMC CLASSICS" in sponsor["description"]
+    assert "guarantee" not in json.dumps(sponsor).lower()
 
 
 def test_every_game_has_explicit_consent_based_sharing():
