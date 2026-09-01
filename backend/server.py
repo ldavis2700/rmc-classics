@@ -841,6 +841,16 @@ async def join_battle(room_id: str, user: dict = Depends(get_current_user)):
         or user["id"] in set(host.get("blocked_user_ids") or [])
     ):
         raise HTTPException(status_code=403, detail="Battle is not available")
+    # The host lookup yields: another join or room removal may have completed.
+    # Revalidate and claim the slot without another await between these steps.
+    if _battle_rooms.get(room["id"]) is not room:
+        raise HTTPException(status_code=404, detail="Battle not found")
+    if room.get("guest_id"):
+        if room["guest_id"] != user["id"]:
+            raise HTTPException(status_code=400, detail="Battle already full")
+        return _public_room(room)
+    if room["status"] != "waiting":
+        raise HTTPException(status_code=400, detail="Battle is not available")
     room["guest_id"] = user["id"]
     room["guest_name"] = _public_player_name(user, "Guest")
     room["status"] = "playing"
