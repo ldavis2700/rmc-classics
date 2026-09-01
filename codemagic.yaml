@@ -60,11 +60,14 @@ workflows:
     scripts:
       - name: Verify release source is current main
         script: |
+          set -eu
           # Refuse stale tags/branches before dependency installation, signing,
           # or other expensive release work.
-          git fetch origin main --depth=1
-          CURRENT_COMMIT="$(git rev-parse HEAD)"
-          MAIN_COMMIT="$(git rev-parse origin/main)"
+          # Codemagic may fetch only a tag/SHA, with no remote-tracking main.
+          # Refresh that ref explicitly and stop immediately if fetching fails.
+          git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main
+          CURRENT_COMMIT="$(git rev-parse --verify 'HEAD^{commit}')"
+          MAIN_COMMIT="$(git rev-parse --verify 'refs/remotes/origin/main^{commit}')"
           if [ "$CURRENT_COMMIT" != "$MAIN_COMMIT" ]; then
             echo "Refusing stale TestFlight source: $CURRENT_COMMIT"
             echo "Current main is: $MAIN_COMMIT"

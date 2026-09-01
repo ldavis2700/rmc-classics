@@ -5,6 +5,7 @@ on:
     paths:
       - 'frontend/**'
       - 'backend/**'
+      - 'tests/**'
       - '.github/workflows/**'
       - 'codemagic.yaml'
   push:
@@ -13,6 +14,7 @@ on:
     paths:
       - 'frontend/**'
       - 'backend/**'
+      - 'tests/**'
       - '.github/workflows/**'
       - 'codemagic.yaml'
 
@@ -107,12 +109,11 @@ jobs:
 
       - name: Validate Codemagic monetization release gate
         run: |
+          set -eu
           ruby -e "require 'yaml'; YAML.safe_load_file('codemagic.yaml', aliases: true)"
           ! grep -Eq 'APP_STORE_APPLE_ID:[[:space:]]*0+' codemagic.yaml
           grep -q 'APP_STORE_APPLE_ID must be the real numeric App Store Connect Apple ID' codemagic.yaml
           grep -q 'REACT_APP_REVENUECAT_IOS_KEY must be configured as a protected Codemagic variable' codemagic.yaml
           grep -q 'Verify release source is current main' codemagic.yaml
-          grep -q 'git fetch origin main --depth=1' codemagic.yaml
-          grep -q 'CURRENT_COMMIT=.*git rev-parse HEAD' codemagic.yaml
-          grep -q 'MAIN_COMMIT=.*git rev-parse origin/main' codemagic.yaml
+          python tests/test_release_source_guard.py
           grep -q 'release-source.txt' codemagic.yaml
