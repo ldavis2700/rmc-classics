@@ -80,21 +80,28 @@ workflows:
             echo "verified_against=origin/main"
           } > "$CM_BUILD_DIR/release-source.txt"
 
+      - name: Validate monetization release configuration
+        script: |
+          set -eu
+          invalid=0
+          if ! [[ "${APP_STORE_APPLE_ID:-}" =~ ^[1-9][0-9]+$ ]]; then
+            echo "APP_STORE_APPLE_ID must be the real numeric App Store Connect Apple ID"
+            invalid=1
+          fi
+          sdk_key="${REACT_APP_REVENUECAT_IOS_KEY:-}"
+          if [[ -z "${sdk_key//[[:space:]]/}" ]]; then
+            echo "REACT_APP_REVENUECAT_IOS_KEY must be configured as a protected Codemagic variable"
+            invalid=1
+          fi
+          if [ "$invalid" -ne 0 ]; then
+            echo "Configure both variables in the imported rmc_release group before starting another signed build."
+            exit 1
+          fi
+
       - name: Install frontend deps
         script: |
           cd frontend
           yarn install --frozen-lockfile
-
-      - name: Validate monetization release configuration
-        script: |
-          if ! echo "$APP_STORE_APPLE_ID" | grep -Eq '^[1-9][0-9]+$'; then
-            echo "APP_STORE_APPLE_ID must be the real numeric App Store Connect Apple ID"
-            exit 1
-          fi
-          if [ -z "$REACT_APP_REVENUECAT_IOS_KEY" ]; then
-            echo "REACT_APP_REVENUECAT_IOS_KEY must be configured as a protected Codemagic variable"
-            exit 1
-          fi
 
       - name: Build the web bundle
         script: |

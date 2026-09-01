@@ -43,15 +43,15 @@ A `codemagic.yaml` is already committed at the repo root. Setup:
    - Upload the `.p8` file to Codemagic, name the integration exactly **`RMC ASC Key`** (matches the yaml)
 5. Get your App Store Connect Apple ID:
    - App Store Connect → your app → **App Information** → find the numeric **Apple ID** (a big number)
-   - Edit `codemagic.yaml` → replace `APP_STORE_APPLE_ID: 0000000000` with your number
-   - Push the change
+   - Set `APP_STORE_APPLE_ID` in the protected Codemagic `rmc_release` environment variable group imported by `ios-testflight`; do not edit a YAML placeholder
+   - Set `REACT_APP_REVENUECAT_IOS_KEY` in the same group to the public iOS SDK key (never the private/server key)
 6. In Codemagic: pick the workflow **`ios-testflight`** → click **Start new build**
 7. ~15 min later:
    - You receive an email with the signed IPA attached
    - The build is auto-uploaded to TestFlight in App Store Connect
    - Download the raw .ipa from Codemagic's artifacts UI if you want a local copy
 
-Every push to `main` triggers a new build automatically (line 34 of the yaml).
+Ordinary pushes to `main` do not trigger signed builds. Use one deliberate `rmc-testflight/*` branch, `rmc-testflight-*` tag, or manual start from current `main`, and inspect that build before starting another. See `docs/TESTFLIGHT_RELEASE_GATE.md` for the source and configuration gates.
 
 ### Codemagic — unsigned build variant
 
