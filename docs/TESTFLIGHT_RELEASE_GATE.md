@@ -24,7 +24,9 @@ Before a signed build can continue, the workflow verifies:
 4. signing files can be fetched from the configured App Store Connect integration
 5. the web bundle, Capacitor sync, CocoaPods install, and signed IPA build succeed
 
-The current-main comparison runs first so stale sources fail before dependency installation, signing, or upload.
+The current-main comparison runs first, followed by release-configuration validation, before dependency installation or the scripted signing/upload steps. Missing configuration reports variable names and the `rmc_release` group without printing values. Codemagic may perform its own signing setup before custom scripts.
+
+If configuration validation fails, open the RMC Classics app's Codemagic environment variables and configure both values in the imported `rmc_release` group. Obtain the numeric Apple ID from **App Store Connect → RMC Classics → App Information**; it is not the bundle ID, Apple login, or API key ID. The RevenueCat value must be the **public iOS SDK key**, never a private/server key. Do not restart builds until configuration has been corrected. Presence/format checks do not prove the ID belongs to this app or that purchases work; signed build and sandbox purchase evidence are still required.
 
 ## Release sequence
 
