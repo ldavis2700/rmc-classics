@@ -969,9 +969,21 @@ async def ws_battle(websocket: WebSocket, room_id: str, token: str = Query(None)
         # send initial state
         await websocket.send_json({"type": "state", "room": _public_room(room)})
         while True:
-            data = await websocket.receive_json()
+            try:
+                data = await websocket.receive_json()
+            except ValueError:
+                await websocket.send_json({"type": "error", "detail": "Invalid message"})
+                continue
+            if not isinstance(data, dict):
+                await websocket.send_json({"type": "error", "detail": "Invalid message"})
+                continue
             if data.get("type") == "move":
-                col = int(data.get("col", -1))
+                col = data.get("col")
+                # JSON integer columns only: bool is an int subclass, and int()
+                # silently truncates floats or throws on malformed client input.
+                if type(col) is not int or col < 0 or col >= BATTLE_COLS:
+                    await websocket.send_json({"type": "error", "detail": "Invalid column"})
+                    continue
                 if room["status"] != "playing":
                     await websocket.send_json({"type": "error", "detail": "Battle not active"})
                     continue
@@ -980,9 +992,6 @@ async def ws_battle(websocket: WebSocket, room_id: str, token: str = Query(None)
                 my_turn = (is_host and room["turn"] == "host") or (is_guest and room["turn"] == "guest")
                 if not my_turn:
                     await websocket.send_json({"type": "error", "detail": "Not your turn"})
-                    continue
-                if col < 0 or col >= BATTLE_COLS:
-                    await websocket.send_json({"type": "error", "detail": "Invalid column"})
                     continue
                 marker = 1 if is_host else 2
                 dropped = _c4_drop(room["board"], col, marker)
