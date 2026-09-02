@@ -52,7 +52,7 @@ jobs:
         run: |
           python -m py_compile backend/server.py
           python -m pip install --disable-pip-version-check pytest
-          python -m pytest -q backend/tests/test_iap_idempotency_unit.py backend/tests/test_username_safety_unit.py backend/tests/test_block_visibility_unit.py backend/tests/test_safety_moderation_unit.py backend/tests/test_account_deletion_unit.py backend/tests/test_terms_consent_unit.py backend/tests/test_battle_invite_unit.py backend/tests/test_battle_join_unit.py tests/test_public_shell_privacy.py tests/test_route_metadata.py
+          python -m pytest -q backend/tests/test_iap_idempotency_unit.py backend/tests/test_username_safety_unit.py backend/tests/test_block_visibility_unit.py backend/tests/test_safety_moderation_unit.py backend/tests/test_account_deletion_unit.py backend/tests/test_terms_consent_unit.py backend/tests/test_battle_invite_unit.py backend/tests/test_battle_join_unit.py backend/tests/test_battle_rematch_unit.py tests/test_public_shell_privacy.py tests/test_route_metadata.py
 
       - name: Protect Apple Review remediation
         run: |
