@@ -101,12 +101,12 @@ workflows:
       - name: Install frontend deps
         script: |
           cd frontend
-          yarn install --frozen-lockfile
+          npm ci
 
       - name: Build the web bundle
         script: |
           cd frontend
-          CI=false yarn build
+          CI=false npm run build
 
       - name: Sync Capacitor iOS
         script: |
@@ -172,12 +172,12 @@ workflows:
       - name: Install frontend deps
         script: |
           cd frontend
-          yarn install --frozen-lockfile
+          npm ci
 
       - name: Build web bundle
         script: |
           cd frontend
-          CI=false yarn build
+          CI=false npm run build
 
       - name: Sync Capacitor iOS
         script: |
