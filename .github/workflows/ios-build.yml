@@ -8,6 +8,8 @@ name: iOS Build & Upload to TestFlight
 #   - IOS_DISTRIBUTION_CERTIFICATE_BASE64 (exported Apple Distribution .p12, base64-encoded)
 #   - IOS_DISTRIBUTION_CERTIFICATE_PASSWORD
 #   - IOS_PROVISIONING_PROFILE_BASE64
+#   - APP_STORE_APPLE_ID (numeric App Store Connect app record ID)
+#   - REACT_APP_REVENUECAT_IOS_KEY (public iOS SDK key, never a server key)
 # Trigger manually from Actions or with an intentional vX.Y.Z release tag.
 
 on:
@@ -25,6 +27,58 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify release source is current main
+        run: |
+          set -eu
+          git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main
+          current_commit="$(git rev-parse --verify 'HEAD^{commit}')"
+          main_commit="$(git rev-parse --verify 'refs/remotes/origin/main^{commit}')"
+          if [ "$current_commit" != "$main_commit" ]; then
+            echo "Refusing stale TestFlight source: $current_commit"
+            echo "Current main is: $main_commit"
+            echo "Run the workflow from current main or create a release tag at current main."
+            exit 1
+          fi
+          {
+            echo "repository=${GITHUB_REPOSITORY}"
+            echo "commit=$current_commit"
+            echo "verified_against=origin/main"
+          } > "$GITHUB_WORKSPACE/release-source.txt"
+
+      - name: Validate release configuration
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
+          IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          APP_STORE_APPLE_ID: ${{ secrets.APP_STORE_APPLE_ID }}
+          REACT_APP_REVENUECAT_IOS_KEY: ${{ secrets.REACT_APP_REVENUECAT_IOS_KEY }}
+        run: |
+          set -eu
+          invalid=0
+          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 IOS_DISTRIBUTION_CERTIFICATE_BASE64 IOS_DISTRIBUTION_CERTIFICATE_PASSWORD IOS_PROVISIONING_PROFILE_BASE64; do
+            value="$(printenv "$name" || true)"
+            if [ -z "${value//[[:space:]]/}" ]; then
+              echo "Missing required release secret: $name"
+              invalid=1
+            fi
+          done
+          if ! [[ "${APP_STORE_APPLE_ID:-}" =~ ^[1-9][0-9]+$ ]]; then
+            echo "APP_STORE_APPLE_ID must be the real numeric App Store Connect Apple ID"
+            invalid=1
+          fi
+          sdk_key="${REACT_APP_REVENUECAT_IOS_KEY:-}"
+          if [[ -z "${sdk_key//[[:space:]]/}" ]]; then
+            echo "REACT_APP_REVENUECAT_IOS_KEY must be the public iOS SDK key"
+            invalid=1
+          fi
+          if [ "$invalid" -ne 0 ]; then
+            echo "Configure every named GitHub Actions secret before starting another signed build."
+            exit 1
+          fi
+
       - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
@@ -38,6 +92,7 @@ jobs:
         working-directory: frontend
         env:
           CI: 'false'
+          REACT_APP_REVENUECAT_IOS_KEY: ${{ secrets.REACT_APP_REVENUECAT_IOS_KEY }}
         run: yarn build
 
       - name: Sync Capacitor iOS
@@ -50,22 +105,6 @@ jobs:
 
       - name: Install fastlane
         run: gem install fastlane -N -v 2.222
-
-      - name: Validate signing secrets
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
-          ASC_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
-          IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
-          IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
-          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
-        run: |
-          test -n "$ASC_KEY_ID" || (echo "Missing ASC_API_KEY_ID" && exit 1)
-          test -n "$ASC_ISSUER_ID" || (echo "Missing ASC_API_ISSUER_ID" && exit 1)
-          test -n "$ASC_KEY_P8" || (echo "Missing ASC_API_KEY_P8" && exit 1)
-          test -n "$IOS_DISTRIBUTION_CERTIFICATE_BASE64" || (echo "Missing IOS_DISTRIBUTION_CERTIFICATE_BASE64" && exit 1)
-          test -n "$IOS_DISTRIBUTION_CERTIFICATE_PASSWORD" || (echo "Missing IOS_DISTRIBUTION_CERTIFICATE_PASSWORD" && exit 1)
-          test -n "$IOS_PROVISIONING_PROFILE_BASE64" || (echo "Missing IOS_PROVISIONING_PROFILE_BASE64" && exit 1)
 
       - name: Install Apple Distribution certificate
         env:
@@ -107,4 +146,13 @@ jobs:
           name: RMC-Classics-IPA
           path: frontend/ios/App/build/ios/ipa/*.ipa
           if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload release-source receipt
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: RMC-Classics-release-source
+          path: release-source.txt
+          if-no-files-found: ignore
           retention-days: 30
