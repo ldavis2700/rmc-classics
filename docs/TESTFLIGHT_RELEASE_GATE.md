@@ -1,6 +1,7 @@
 # RMC Classics TestFlight release gate
 
-Signed RMC Classics releases use Codemagic's `ios-testflight` workflow. The
+Signed RMC Classics releases use Codemagic's manually started `ios-testflight`
+workflow. Repository pushes and tags do not start that signed workflow. The
 manual/tag-triggered GitHub `iOS Build & Upload to TestFlight` workflow is a
 fallback and enforces the same current-main and monetization preflight gates.
 
@@ -40,10 +41,10 @@ If configuration validation fails, open the RMC Classics app's Codemagic environ
 
 1. Merge all intended corrections into `main`.
 2. Wait for GitHub validation and the Vercel deployment check to pass.
-3. Create a fresh `rmc-testflight/*` branch or `rmc-testflight-*` tag from that exact `main` commit, or manually select current `main` in Codemagic.
+3. Manually select current `main` in Codemagic and start `ios-testflight`; repository pushes and tags are intentionally ignored for this signed workflow.
 4. Confirm **Verify release source is current main** succeeds.
 5. Confirm the remaining Codemagic steps succeed and the build appears in TestFlight.
 6. Retain the generated `release-source.txt` artifact as commit evidence.
 7. Smoke-test that exact TestFlight build before App Store submission.
 
-A stale trigger must be replaced with a new trigger from current `main`; it must not be forced past the gate.
+A stale manual selection must be replaced with current `main`; it must not be forced past the gate.

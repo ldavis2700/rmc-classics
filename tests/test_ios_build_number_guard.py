@@ -21,6 +21,16 @@ class IOSBuildNumberGuardTests(unittest.TestCase):
         self.assertIn("latest_testflight_build_number(", FASTFILE)
         self.assertIn("build_number: latest_build + 1", FASTFILE)
 
+    def test_signed_codemagic_release_is_manual_only(self):
+        signed = CODEMAGIC.split("  ios-unsigned:", 1)[0]
+        self.assertNotIn("    triggering:", signed)
+        self.assertNotIn("rmc-testflight/*", signed)
+        self.assertNotIn("rmc-testflight-*", signed)
+        self.assertIn(
+            "Automatic branch/tag triggers are intentionally disabled",
+            signed,
+        )
+
     def test_codemagic_uses_app_store_not_runner_sequence(self):
         signed = CODEMAGIC.split("  ios-unsigned:", 1)[0]
         self.assertIn(
