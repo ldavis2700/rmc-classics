@@ -31,6 +31,22 @@ class GitHubReleaseGuardTests(unittest.TestCase):
                      "Install Apple Distribution certificate", "Build & upload via fastlane"):
             self.assertLess(config, WORKFLOW.index("      - name: " + step))
 
+    def test_manual_upload_requires_explicit_confirmation(self):
+        self.assertIn("confirm_testflight:", WORKFLOW)
+        self.assertIn("required: true", WORKFLOW)
+        self.assertIn("type: boolean", WORKFLOW)
+        self.assertIn("default: false", WORKFLOW)
+        self.assertIn(
+            "if: ${{ github.event_name == 'push' || inputs.confirm_testflight }}",
+            WORKFLOW,
+        )
+
+    def test_signed_upload_is_serialized_and_environment_protected(self):
+        self.assertIn("permissions:\n  contents: read", WORKFLOW)
+        self.assertIn("group: rmc-classics-testflight-upload", WORKFLOW)
+        self.assertIn("cancel-in-progress: false", WORKFLOW)
+        self.assertIn("environment: app-store-production", WORKFLOW)
+
     def test_revenuecat_key_is_injected_into_web_build(self):
         build = WORKFLOW.split("      - name: Build web bundle\n", 1)[1]
         build = build.split("      - name:", 1)[0]
