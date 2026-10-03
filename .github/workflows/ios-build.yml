@@ -14,9 +14,18 @@ name: iOS Build & Upload to TestFlight
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm_testflight:
+        description: Confirm a signed build and upload to TestFlight
+        required: true
+        type: boolean
+        default: false
   push:
     tags:
       - 'v*.*.*'
+
+permissions:
+  contents: read
 
 # Never allow two signed builds to race the same App Store Connect record.
 concurrency:
@@ -26,8 +35,10 @@ concurrency:
 jobs:
   build-ios:
     name: Build iOS IPA
+    if: ${{ github.event_name == 'push' || inputs.confirm_testflight }}
     runs-on: macos-14
     timeout-minutes: 45
+    environment: app-store-production
 
     steps:
       - uses: actions/checkout@v4
