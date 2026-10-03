@@ -18,6 +18,13 @@ on:
       - '.github/workflows/**'
       - 'codemagic.yaml'
 
+permissions:
+  contents: read
+
+concurrency:
+  group: rmc-pr-validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
