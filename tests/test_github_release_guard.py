@@ -109,9 +109,11 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             with self.subTest(app_id=repr(app_id)):
                 result = self.run_config(**{**valid, "APP_STORE_APPLE_ID": app_id})
                 self.assertNotEqual(result.returncode, 0)
-        for sdk_key in ("", " ", "\t\n"):
+        for sdk_key in ("", " ", "\t\n", "sk_live_secret",
+                        "test_public", "appl_bad key"):
             with self.subTest(sdk_key=repr(sdk_key)):
-                result = self.run_config(**{**valid, "REACT_APP_REVENUECAT_IOS_KEY": sdk_key})
+                result = self.run_config(**{
+                    **valid, "REACT_APP_REVENUECAT_IOS_KEY": sdk_key})
                 self.assertNotEqual(result.returncode, 0)
 
     def test_source_gate_accepts_current_main_and_rejects_stale_source(self):

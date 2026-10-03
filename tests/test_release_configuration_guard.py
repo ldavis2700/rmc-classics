@@ -54,7 +54,8 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
                 self.assertNotIn("appl_test_fixture", result.stdout + result.stderr)
 
     def test_absent_empty_or_whitespace_sdk_key_fails(self):
-        for key in (None, "", " ", "\t\n"):
+        for key in (None, "", " ", "\t\n", "sk_live_secret",
+                    "test_public", "appl_bad key"):
             with self.subTest(key=repr(key)):
                 result = self.run_gate("1234567890", key)
                 self.assertNotEqual(result.returncode, 0)
