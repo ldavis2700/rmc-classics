@@ -18,6 +18,11 @@ on:
     tags:
       - 'v*.*.*'
 
+# Never allow two signed builds to race the same App Store Connect record.
+concurrency:
+  group: rmc-classics-testflight-upload
+  cancel-in-progress: false
+
 jobs:
   build-ios:
     name: Build iOS IPA
