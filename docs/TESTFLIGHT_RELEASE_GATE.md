@@ -1,6 +1,8 @@
 # RMC Classics TestFlight release gate
 
-Signed RMC Classics releases use Codemagic's `ios-testflight` workflow.
+Signed RMC Classics releases use Codemagic's `ios-testflight` workflow. The
+manual/tag-triggered GitHub `iOS Build & Upload to TestFlight` workflow is a
+fallback and enforces the same current-main and monetization preflight gates.
 
 ## Protected Codemagic configuration
 
@@ -13,6 +15,12 @@ The Codemagic app must retain:
 - App Store signing access for bundle ID `com.rmcclassics.app`
 
 Do not commit signing keys, private RevenueCat keys, or App Store credentials.
+
+If the GitHub fallback is used, configure the equivalent repository Actions
+secrets, including `APP_STORE_APPLE_ID` and `REACT_APP_REVENUECAT_IOS_KEY`.
+That workflow validates every named secret before installing dependencies and
+injects the public RevenueCat key into the web build. It also retains a
+`RMC-Classics-release-source` receipt alongside the IPA artifact.
 
 ## Required release checks
 
