@@ -129,4 +129,5 @@ jobs:
           python tests/test_release_source_guard.py
           python tests/test_release_configuration_guard.py
           python tests/test_github_release_guard.py
+          python tests/test_ios_build_number_guard.py
           grep -q 'release-source.txt' codemagic.yaml
