@@ -196,6 +196,17 @@ workflows:
           SIGNED_GET_TASK_ALLOW="$(/usr/libexec/PlistBuddy -c 'Print :get-task-allow' "$SIGNED_ENTITLEMENTS")"
           PROFILE_GET_TASK_ALLOW="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:get-task-allow' "$PROFILE_PLIST")"
           PROFILE_EXPIRATION="$(/usr/libexec/PlistBuddy -c 'Print :ExpirationDate' "$PROFILE_PLIST")"
+          if /usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "$PROFILE_PLIST" >/dev/null 2>&1; then
+            echo 'App Store profile must not target provisioned devices'
+            exit 1
+          fi
+          PROFILE_PROVISIONS_ALL_DEVICES="$(/usr/libexec/PlistBuddy -c 'Print :ProvisionsAllDevices' "$PROFILE_PLIST" 2>/dev/null || true)"
+          case "$(printf '%s' "$PROFILE_PROVISIONS_ALL_DEVICES" | tr '[:upper:]' '[:lower:]')" in
+            true|1)
+              echo 'App Store profile must not use enterprise all-device distribution'
+              exit 1
+              ;;
+          esac
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
           VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")"
           BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")"

@@ -89,6 +89,16 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             'test "$PROFILE_GET_TASK_ALLOW" = "false"',
             verification,
         )
+        self.assertIn("Print :ProvisionedDevices", verification)
+        self.assertIn(
+            "App Store profile must not target provisioned devices",
+            verification,
+        )
+        self.assertIn("Print :ProvisionsAllDevices", verification)
+        self.assertIn(
+            "App Store profile must not use enterprise all-device distribution",
+            verification,
+        )
         self.assertIn("Provisioning profile is expired", verification)
         self.assertIn("IPA build number must be numeric", verification)
         self.assertIn('shasum -a 256 "$IPA_PATH"', verification)

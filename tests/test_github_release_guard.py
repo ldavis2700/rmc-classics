@@ -84,6 +84,16 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             "App Store profile must disable get-task-allow",
             FASTFILE,
         )
+        self.assertIn("Print :ProvisionedDevices", FASTFILE)
+        self.assertIn(
+            "App Store profile must not target provisioned devices",
+            FASTFILE,
+        )
+        self.assertIn("Print :ProvisionsAllDevices", FASTFILE)
+        self.assertIn(
+            "App Store profile must not use enterprise all-device distribution",
+            FASTFILE,
+        )
         self.assertLess(
             FASTFILE.index("codesign -d --entitlements :-"),
             upload,

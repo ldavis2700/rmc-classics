@@ -1,5 +1,6 @@
 require "digest"
 require "fileutils"
+require "open3"
 require "shellwords"
 require "time"
 
@@ -107,6 +108,18 @@ platform :ios do
     profile_expiration = get_info_plist_value(
       path: profile_plist, key: "ExpirationDate"
     )
+    _, _, provisioned_devices_status = Open3.capture3(
+      "/usr/libexec/PlistBuddy", "-c", "Print :ProvisionedDevices",
+      profile_plist
+    )
+    UI.user_error!("App Store profile must not target provisioned devices") if provisioned_devices_status.success?
+    provisions_all_devices, _, all_devices_status = Open3.capture3(
+      "/usr/libexec/PlistBuddy", "-c", "Print :ProvisionsAllDevices",
+      profile_plist
+    )
+    if all_devices_status.success? && ["true", "1"].include?(provisions_all_devices.strip.downcase)
+      UI.user_error!("App Store profile must not use enterprise all-device distribution")
+    end
 
     info_plist = File.join(app_path, "Info.plist")
     bundle_id = get_info_plist_value(path: info_plist, key: "CFBundleIdentifier")
