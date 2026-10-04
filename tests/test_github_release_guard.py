@@ -67,6 +67,19 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         self.assertIn(
             'key: "Entitlements:application-identifier"', FASTFILE)
         self.assertIn("profile_expiration_time > Time.now", FASTFILE)
+        self.assertIn("codesign -d --entitlements :-", FASTFILE)
+        self.assertIn(
+            "signed_application_identifier == profile_application_identifier",
+            FASTFILE,
+        )
+        self.assertIn(
+            "signed_team_identifier == profile_team_identifier",
+            FASTFILE,
+        )
+        self.assertLess(
+            FASTFILE.index("codesign -d --entitlements :-"),
+            upload,
+        )
         self.assertIn(
             '"profile_application_identifier=#{profile_application_identifier}"',
             FASTFILE,

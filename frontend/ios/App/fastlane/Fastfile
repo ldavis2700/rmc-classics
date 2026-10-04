@@ -59,6 +59,18 @@ platform :ios do
     profile_application_identifier = get_info_plist_value(
       path: profile_plist, key: "Entitlements:application-identifier"
     )
+    signed_entitlements = File.join(verify_dir, "signed-entitlements.plist")
+    sh(
+      "codesign -d --entitlements :- #{Shellwords.escape(app_path)} > " \
+      "#{Shellwords.escape(signed_entitlements)}"
+    )
+    signed_application_identifier = get_info_plist_value(
+      path: signed_entitlements, key: "application-identifier"
+    )
+    signed_team_identifier = get_info_plist_value(
+      path: signed_entitlements,
+      key: "com.apple.developer.team-identifier"
+    )
     profile_team_identifier = get_info_plist_value(
       path: profile_plist,
       key: "Entitlements:com.apple.developer.team-identifier"
@@ -76,6 +88,8 @@ platform :ios do
     UI.user_error!("Unexpected IPA bundle identifier") unless bundle_id == "com.rmcclassics.app"
     expected_application_identifier = "#{profile_team_identifier}.#{bundle_id}"
     UI.user_error!("Provisioning profile does not authorize the IPA bundle identifier") unless profile_application_identifier == expected_application_identifier
+    UI.user_error!("Signed app identifier does not match its provisioning profile") unless signed_application_identifier == profile_application_identifier
+    UI.user_error!("Signed team identifier does not match its provisioning profile") unless signed_team_identifier == profile_team_identifier
     begin
       profile_expiration_time = Time.parse(profile_expiration.to_s)
     rescue ArgumentError
@@ -99,6 +113,8 @@ platform :ios do
       "version=#{verified_version}",
       "build_number=#{verified_build}",
       "profile_application_identifier=#{profile_application_identifier}",
+      "signed_application_identifier=#{signed_application_identifier}",
+      "signed_team_identifier=#{signed_team_identifier}",
       "profile_expiration=#{profile_expiration_time.utc.iso8601}",
       "sha256=#{Digest::SHA256.file(ipa_path).hexdigest}",
     ].join("\n") + "\n")

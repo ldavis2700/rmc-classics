@@ -165,6 +165,10 @@ workflows:
           security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST"
           PROFILE_APPLICATION_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$PROFILE_PLIST")"
           PROFILE_TEAM_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.team-identifier' "$PROFILE_PLIST")"
+          SIGNED_ENTITLEMENTS="$VERIFY_DIR/signed-entitlements.plist"
+          codesign -d --entitlements :- "$APP_PATH" > "$SIGNED_ENTITLEMENTS"
+          SIGNED_APPLICATION_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :application-identifier' "$SIGNED_ENTITLEMENTS")"
+          SIGNED_TEAM_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.team-identifier' "$SIGNED_ENTITLEMENTS")"
           PROFILE_EXPIRATION="$(/usr/libexec/PlistBuddy -c 'Print :ExpirationDate' "$PROFILE_PLIST")"
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
           VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")"
@@ -172,6 +176,14 @@ workflows:
           test "$BUNDLE_ID" = "com.rmcclassics.app"
           test "$PROFILE_APPLICATION_IDENTIFIER" = "$PROFILE_TEAM_IDENTIFIER.$BUNDLE_ID" || {
             echo 'Provisioning profile does not authorize the IPA bundle identifier'
+            exit 1
+          }
+          test "$SIGNED_APPLICATION_IDENTIFIER" = "$PROFILE_APPLICATION_IDENTIFIER" || {
+            echo 'Signed app identifier does not match its provisioning profile'
+            exit 1
+          }
+          test "$SIGNED_TEAM_IDENTIFIER" = "$PROFILE_TEAM_IDENTIFIER" || {
+            echo 'Signed team identifier does not match its provisioning profile'
             exit 1
           }
           ruby -rtime -e '
@@ -187,6 +199,8 @@ workflows:
             echo "version=$VERSION"
             echo "build_number=$BUILD_NUMBER"
             echo "profile_application_identifier=$PROFILE_APPLICATION_IDENTIFIER"
+            echo "signed_application_identifier=$SIGNED_APPLICATION_IDENTIFIER"
+            echo "signed_team_identifier=$SIGNED_TEAM_IDENTIFIER"
             echo "profile_expiration=$PROFILE_EXPIRATION"
             shasum -a 256 "$IPA_PATH"
           } > "$CM_BUILD_DIR/release-ipa-metadata.txt"

@@ -51,6 +51,16 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             verification,
         )
         self.assertIn("security cms -D -i", verification)
+        self.assertIn("codesign -d --entitlements :-", verification)
+        self.assertIn(
+            'test "$SIGNED_APPLICATION_IDENTIFIER" = '
+            '"$PROFILE_APPLICATION_IDENTIFIER"',
+            verification,
+        )
+        self.assertIn(
+            'test "$SIGNED_TEAM_IDENTIFIER" = "$PROFILE_TEAM_IDENTIFIER"',
+            verification,
+        )
         self.assertIn("Provisioning profile is expired", verification)
         self.assertIn("IPA build number must be numeric", verification)
         self.assertIn('shasum -a 256 "$IPA_PATH"', verification)
