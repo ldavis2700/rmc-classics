@@ -20,6 +20,7 @@ def step_script(name):
 
 SOURCE_SCRIPT = step_script("Verify release source is current main")
 CONFIG_SCRIPT = step_script("Validate release configuration")
+CLEANUP_SCRIPT = step_script("Remove temporary signing material")
 
 
 class GitHubReleaseGuardTests(unittest.TestCase):
@@ -55,6 +56,27 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         upload = WORKFLOW.split("      - name: Upload release-source receipt\n", 1)[1]
         self.assertIn("if: ${{ always() }}", upload)
         self.assertIn("path: release-source.txt", upload)
+
+    def test_signing_material_cleanup_is_explicit_and_always_runs(self):
+        cleanup = WORKFLOW.split(
+            "      - name: Remove temporary signing material\n", 1)[1]
+        self.assertIn("if: ${{ always() }}", cleanup)
+        for path in (
+            "$RUNNER_TEMP/distribution.p12",
+            "$RUNNER_TEMP/rmc-build.keychain-db",
+            "$HOME/Library/MobileDevice/Provisioning Profiles/"
+            "RMC_Classics_App_Store_2026.mobileprovision",
+        ):
+            self.assertIn(path, CLEANUP_SCRIPT)
+        self.assertIn('security delete-keychain "$KEYCHAIN_PATH" || true',
+                      CLEANUP_SCRIPT)
+        self.assertIn('rm -f "$CERTIFICATE_PATH" "$PROFILE_PATH"',
+                      CLEANUP_SCRIPT)
+        self.assertNotIn("rm -rf", CLEANUP_SCRIPT)
+        self.assertGreater(
+            WORKFLOW.index("      - name: Remove temporary signing material"),
+            WORKFLOW.index("      - name: Upload release-source receipt"),
+        )
 
     def run_config(self, **overrides):
         names = (

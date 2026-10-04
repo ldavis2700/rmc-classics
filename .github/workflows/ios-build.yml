@@ -171,3 +171,16 @@ jobs:
           path: release-source.txt
           if-no-files-found: ignore
           retention-days: 30
+
+      - name: Remove temporary signing material
+        if: ${{ always() }}
+        run: |
+          set -eu
+          CERTIFICATE_PATH="$RUNNER_TEMP/distribution.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/rmc-build.keychain-db"
+          PROFILE_PATH="$HOME/Library/MobileDevice/Provisioning Profiles/RMC_Classics_App_Store_2026.mobileprovision"
+
+          security default-keychain -s login.keychain-db || true
+          security list-keychain -d user -s login.keychain-db || true
+          security delete-keychain "$KEYCHAIN_PATH" || true
+          rm -f "$CERTIFICATE_PATH" "$PROFILE_PATH"
