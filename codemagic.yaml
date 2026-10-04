@@ -169,6 +169,8 @@ workflows:
           codesign -d --entitlements :- "$APP_PATH" > "$SIGNED_ENTITLEMENTS"
           SIGNED_APPLICATION_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :application-identifier' "$SIGNED_ENTITLEMENTS")"
           SIGNED_TEAM_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.team-identifier' "$SIGNED_ENTITLEMENTS")"
+          SIGNED_GET_TASK_ALLOW="$(/usr/libexec/PlistBuddy -c 'Print :get-task-allow' "$SIGNED_ENTITLEMENTS")"
+          PROFILE_GET_TASK_ALLOW="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:get-task-allow' "$PROFILE_PLIST")"
           PROFILE_EXPIRATION="$(/usr/libexec/PlistBuddy -c 'Print :ExpirationDate' "$PROFILE_PLIST")"
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
           VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")"
@@ -186,6 +188,14 @@ workflows:
             echo 'Signed team identifier does not match its provisioning profile'
             exit 1
           }
+          test "$SIGNED_GET_TASK_ALLOW" = "false" || {
+            echo 'Signed App Store IPA must disable get-task-allow'
+            exit 1
+          }
+          test "$PROFILE_GET_TASK_ALLOW" = "false" || {
+            echo 'App Store profile must disable get-task-allow'
+            exit 1
+          }
           ruby -rtime -e '
             expiration = Time.parse(ARGV.fetch(0))
             abort("Provisioning profile is expired") unless expiration > Time.now
@@ -201,6 +211,8 @@ workflows:
             echo "profile_application_identifier=$PROFILE_APPLICATION_IDENTIFIER"
             echo "signed_application_identifier=$SIGNED_APPLICATION_IDENTIFIER"
             echo "signed_team_identifier=$SIGNED_TEAM_IDENTIFIER"
+            echo "signed_get_task_allow=$SIGNED_GET_TASK_ALLOW"
+            echo "profile_get_task_allow=$PROFILE_GET_TASK_ALLOW"
             echo "profile_expiration=$PROFILE_EXPIRATION"
             shasum -a 256 "$IPA_PATH"
           } > "$CM_BUILD_DIR/release-ipa-metadata.txt"

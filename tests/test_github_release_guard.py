@@ -76,6 +76,14 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             "signed_team_identifier == profile_team_identifier",
             FASTFILE,
         )
+        self.assertIn(
+            "Signed App Store IPA must disable get-task-allow",
+            FASTFILE,
+        )
+        self.assertIn(
+            "App Store profile must disable get-task-allow",
+            FASTFILE,
+        )
         self.assertLess(
             FASTFILE.index("codesign -d --entitlements :-"),
             upload,

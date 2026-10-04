@@ -61,6 +61,14 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             'test "$SIGNED_TEAM_IDENTIFIER" = "$PROFILE_TEAM_IDENTIFIER"',
             verification,
         )
+        self.assertIn(
+            'test "$SIGNED_GET_TASK_ALLOW" = "false"',
+            verification,
+        )
+        self.assertIn(
+            'test "$PROFILE_GET_TASK_ALLOW" = "false"',
+            verification,
+        )
         self.assertIn("Provisioning profile is expired", verification)
         self.assertIn("IPA build number must be numeric", verification)
         self.assertIn('shasum -a 256 "$IPA_PATH"', verification)
