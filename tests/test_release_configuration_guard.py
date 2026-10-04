@@ -31,6 +31,25 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
         for step in ("Install frontend deps", "Build the web bundle", "Build .ipa"):
             self.assertLess(signed.index(GATE), signed.index("      - name: " + step))
 
+    def test_signed_ipa_is_verified_before_publishing(self):
+        signed = CONFIG.split("  ios-unsigned:", 1)[0]
+        build = signed.index("      - name: Build .ipa")
+        verify = signed.index(
+            "      - name: Verify signed IPA identity and record provenance")
+        artifacts = signed.index("    artifacts:")
+        publishing = signed.index("    publishing:")
+        self.assertLess(build, verify)
+        self.assertLess(verify, artifacts)
+        self.assertLess(artifacts, publishing)
+        verification = signed[verify:artifacts]
+        self.assertIn('test "$IPA_COUNT" = "1"', verification)
+        self.assertIn('codesign --verify --deep --strict "$APP_PATH"', verification)
+        self.assertIn('test "$BUNDLE_ID" = "com.rmcclassics.app"', verification)
+        self.assertIn("IPA build number must be numeric", verification)
+        self.assertIn('shasum -a 256 "$IPA_PATH"', verification)
+        self.assertIn(
+            "- $CM_BUILD_DIR/release-ipa-metadata.txt", signed)
+
     def test_both_missing_reports_all_required_names_without_unbound_error(self):
         result = self.run_gate()
         self.assertNotEqual(result.returncode, 0)

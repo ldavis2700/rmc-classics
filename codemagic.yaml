@@ -137,8 +137,43 @@ workflows:
             --workspace App.xcworkspace \
             --scheme App
 
+      - name: Verify signed IPA identity and record provenance
+        script: |
+          set -eu
+          IPA_DIR="$CM_BUILD_DIR/frontend/ios/App/build/ios/ipa"
+          IPA_COUNT="$(find "$IPA_DIR" -maxdepth 1 -type f -name '*.ipa' | wc -l | tr -d '[:space:]')"
+          test "$IPA_COUNT" = "1" || {
+            echo "Expected exactly one signed IPA, found $IPA_COUNT"
+            exit 1
+          }
+          IPA_PATH="$(find "$IPA_DIR" -maxdepth 1 -type f -name '*.ipa' -print -quit)"
+          VERIFY_DIR="$CM_BUILD_DIR/ipa-verify"
+          mkdir -p "$VERIFY_DIR"
+          unzip -q "$IPA_PATH" -d "$VERIFY_DIR"
+          APP_PATH="$(find "$VERIFY_DIR/Payload" -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$APP_PATH" || {
+            echo 'Signed IPA does not contain one application bundle'
+            exit 1
+          }
+          codesign --verify --deep --strict "$APP_PATH"
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")"
+          BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")"
+          test "$BUNDLE_ID" = "com.rmcclassics.app"
+          test -n "$VERSION"
+          case "$BUILD_NUMBER" in ''|*[!0-9]*) echo 'IPA build number must be numeric'; exit 1;; esac
+          {
+            echo "repository=ldavis2700/rmc-classics"
+            echo "commit=$(git rev-parse --verify 'HEAD^{commit}')"
+            echo "bundle_id=$BUNDLE_ID"
+            echo "version=$VERSION"
+            echo "build_number=$BUILD_NUMBER"
+            shasum -a 256 "$IPA_PATH"
+          } > "$CM_BUILD_DIR/release-ipa-metadata.txt"
+
     artifacts:
       - $CM_BUILD_DIR/release-source.txt
+      - $CM_BUILD_DIR/release-ipa-metadata.txt
       - frontend/ios/App/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - frontend/ios/App/App.xcarchive
