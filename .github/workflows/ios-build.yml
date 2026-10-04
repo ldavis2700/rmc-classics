@@ -10,7 +10,7 @@ name: iOS Build & Upload to TestFlight
 #   - IOS_PROVISIONING_PROFILE_BASE64
 #   - APP_STORE_APPLE_ID (numeric App Store Connect app record ID)
 #   - REACT_APP_REVENUECAT_IOS_KEY (public iOS SDK key, never a server key)
-# Trigger manually from Actions or with an intentional vX.Y.Z release tag.
+# Trigger manually from Actions; repository pushes and tags never start signing.
 
 on:
   workflow_dispatch:
@@ -20,9 +20,6 @@ on:
         required: true
         type: boolean
         default: false
-  push:
-    tags:
-      - 'v*.*.*'
 
 permissions:
   contents: read
@@ -35,7 +32,7 @@ concurrency:
 jobs:
   build-ios:
     name: Build iOS IPA
-    if: ${{ github.event_name == 'push' || inputs.confirm_testflight }}
+    if: ${{ inputs.confirm_testflight }}
     runs-on: macos-14
     timeout-minutes: 45
     environment: app-store-production
@@ -52,7 +49,7 @@ jobs:
           if [ "$current_commit" != "$main_commit" ]; then
             echo "Refusing stale TestFlight source: $current_commit"
             echo "Current main is: $main_commit"
-            echo "Run the workflow from current main or create a release tag at current main."
+            echo "Run the workflow manually from current main."
             exit 1
           fi
           {

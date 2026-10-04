@@ -36,10 +36,9 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         self.assertIn("required: true", WORKFLOW)
         self.assertIn("type: boolean", WORKFLOW)
         self.assertIn("default: false", WORKFLOW)
-        self.assertIn(
-            "if: ${{ github.event_name == 'push' || inputs.confirm_testflight }}",
-            WORKFLOW,
-        )
+        self.assertIn("if: ${{ inputs.confirm_testflight }}", WORKFLOW)
+        self.assertNotIn("  push:\n", WORKFLOW)
+        self.assertNotIn("v*.*.*", WORKFLOW)
 
     def test_signed_upload_is_serialized_and_environment_protected(self):
         self.assertIn("permissions:\n  contents: read", WORKFLOW)

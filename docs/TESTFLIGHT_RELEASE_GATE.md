@@ -2,7 +2,7 @@
 
 Signed RMC Classics releases use Codemagic's manually started `ios-testflight`
 workflow. Repository pushes and tags do not start that signed workflow. The
-manual/tag-triggered GitHub `iOS Build & Upload to TestFlight` workflow is a
+manually dispatched GitHub `iOS Build & Upload to TestFlight` workflow is a
 fallback and enforces the same current-main and monetization preflight gates.
 
 ## Protected Codemagic configuration
@@ -19,7 +19,9 @@ Do not commit signing keys, private RevenueCat keys, or App Store credentials.
 
 If the GitHub fallback is used, configure the equivalent repository Actions
 secrets, including `APP_STORE_APPLE_ID` and `REACT_APP_REVENUECAT_IOS_KEY`.
-That workflow validates every named secret before installing dependencies and
+Repository pushes and tags do not start the GitHub fallback. A manual dispatch
+must explicitly confirm the TestFlight upload. That workflow validates every
+named secret before installing dependencies and
 injects the public RevenueCat key into the web build. It also retains a
 `RMC-Classics-release-source` receipt alongside the IPA artifact.
 
