@@ -159,7 +159,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: RMC-Classics-IPA
-          path: frontend/ios/App/build/ios/ipa/*.ipa
+          path: |
+            frontend/ios/App/build/ios/ipa/*.ipa
+            frontend/ios/App/build/ios/ipa/release-ipa-metadata.txt
           if-no-files-found: error
           retention-days: 30
 

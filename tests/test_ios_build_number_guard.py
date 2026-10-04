@@ -21,6 +21,19 @@ class IOSBuildNumberGuardTests(unittest.TestCase):
         self.assertIn("latest_testflight_build_number(", FASTFILE)
         self.assertIn("build_number: latest_build + 1", FASTFILE)
 
+    def test_fastlane_verifies_signed_ipa_before_upload(self):
+        build = FASTFILE.index("    build_app(")
+        verify = FASTFILE.index(
+            'sh("codesign --verify --deep --strict ')
+        upload = FASTFILE.index("    upload_to_testflight(")
+        self.assertLess(build, verify)
+        self.assertLess(verify, upload)
+        self.assertIn(
+            'bundle_id == "com.rmcclassics.app"', FASTFILE)
+        self.assertIn("IPA build number must be numeric", FASTFILE)
+        self.assertIn("Digest::SHA256.file(ipa_path).hexdigest", FASTFILE)
+        self.assertIn("release-ipa-metadata.txt", FASTFILE)
+
     def test_signed_codemagic_release_is_manual_only(self):
         signed = CODEMAGIC.split("  ios-unsigned:", 1)[0]
         self.assertNotIn("    triggering:", signed)

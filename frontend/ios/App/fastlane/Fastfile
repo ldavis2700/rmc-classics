@@ -1,3 +1,7 @@
+require "digest"
+require "fileutils"
+require "shellwords"
+
 default_platform(:ios)
 
 platform :ios do
@@ -34,6 +38,41 @@ platform :ios do
       output_directory: "build/ios/ipa",
       xcargs: "-allowProvisioningUpdates"
     )
+
+    ipa_path = File.expand_path("build/ios/ipa/App.ipa", Dir.pwd)
+    verify_dir = File.expand_path("build/ios/ipa/verify", Dir.pwd)
+    FileUtils.mkdir_p(verify_dir)
+    sh("unzip -q #{Shellwords.escape(ipa_path)} -d #{Shellwords.escape(verify_dir)}")
+    app_paths = Dir[File.join(verify_dir, "Payload", "*.app")]
+    UI.user_error!("Expected exactly one application bundle in the IPA") unless app_paths.length == 1
+    app_path = app_paths.first
+    sh("codesign --verify --deep --strict #{Shellwords.escape(app_path)}")
+
+    info_plist = File.join(app_path, "Info.plist")
+    bundle_id = get_info_plist_value(path: info_plist, key: "CFBundleIdentifier")
+    verified_version = get_info_plist_value(
+      path: info_plist, key: "CFBundleShortVersionString"
+    )
+    verified_build = get_info_plist_value(path: info_plist, key: "CFBundleVersion")
+    UI.user_error!("Unexpected IPA bundle identifier") unless bundle_id == "com.rmcclassics.app"
+    UI.user_error!("IPA marketing version is missing") if verified_version.to_s.empty?
+    UI.user_error!("IPA build number must be numeric") unless verified_build.to_s.match?(/\A[0-9]+\z/)
+
+    receipt_path = File.expand_path(
+      "build/ios/ipa/release-ipa-metadata.txt", Dir.pwd
+    )
+    repository = ENV.fetch("GITHUB_REPOSITORY", "ldavis2700/rmc-classics")
+    commit = ENV.fetch("GITHUB_SHA") {
+      sh("git rev-parse --verify 'HEAD^{commit}'").strip
+    }
+    File.write(receipt_path, [
+      "repository=#{repository}",
+      "commit=#{commit}",
+      "bundle_id=#{bundle_id}",
+      "version=#{verified_version}",
+      "build_number=#{verified_build}",
+      "sha256=#{Digest::SHA256.file(ipa_path).hexdigest}",
+    ].join("\n") + "\n")
 
     upload_to_testflight(
       api_key: api_key,
