@@ -10,6 +10,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = (ROOT / ".github/workflows/ios-build.yml").read_text()
+FASTFILE = (ROOT / "frontend/ios/App/fastlane/Fastfile").read_text()
 
 
 def step_script(name):
@@ -51,6 +52,25 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         build = WORKFLOW.split("      - name: Build web bundle\n", 1)[1]
         build = build.split("      - name:", 1)[0]
         self.assertIn("REACT_APP_REVENUECAT_IOS_KEY: ${{ secrets.REACT_APP_REVENUECAT_IOS_KEY }}", build)
+
+    def test_fastlane_verifies_profile_identity_and_expiry_before_upload(self):
+        profile = FASTFILE.index(
+            'profile_path = File.join(app_path, "embedded.mobileprovision")')
+        identity = FASTFILE.index(
+            "Provisioning profile does not authorize the IPA bundle identifier")
+        expiry = FASTFILE.index("Provisioning profile is expired")
+        upload = FASTFILE.index("upload_to_testflight(")
+        self.assertLess(profile, identity)
+        self.assertLess(identity, upload)
+        self.assertLess(expiry, upload)
+        self.assertIn("security cms -D -i", FASTFILE)
+        self.assertIn(
+            'key: "Entitlements:application-identifier"', FASTFILE)
+        self.assertIn("profile_expiration_time > Time.now", FASTFILE)
+        self.assertIn(
+            '"profile_application_identifier=#{profile_application_identifier}"',
+            FASTFILE,
+        )
 
     def test_source_receipt_is_retained_after_later_failures(self):
         upload = WORKFLOW.split("      - name: Upload release-source receipt\n", 1)[1]

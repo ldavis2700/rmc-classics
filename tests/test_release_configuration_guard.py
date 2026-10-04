@@ -45,6 +45,13 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
         self.assertIn('test "$IPA_COUNT" = "1"', verification)
         self.assertIn('codesign --verify --deep --strict "$APP_PATH"', verification)
         self.assertIn('test "$BUNDLE_ID" = "com.rmcclassics.app"', verification)
+        self.assertIn(
+            'test "$PROFILE_APPLICATION_IDENTIFIER" = '
+            '"$PROFILE_TEAM_IDENTIFIER.$BUNDLE_ID"',
+            verification,
+        )
+        self.assertIn("security cms -D -i", verification)
+        self.assertIn("Provisioning profile is expired", verification)
         self.assertIn("IPA build number must be numeric", verification)
         self.assertIn('shasum -a 256 "$IPA_PATH"', verification)
         self.assertIn(

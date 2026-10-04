@@ -156,10 +156,28 @@ workflows:
             exit 1
           }
           codesign --verify --deep --strict "$APP_PATH"
+          PROFILE_PATH="$APP_PATH/embedded.mobileprovision"
+          test -s "$PROFILE_PATH" || {
+            echo 'Signed IPA is missing its embedded provisioning profile'
+            exit 1
+          }
+          PROFILE_PLIST="$VERIFY_DIR/embedded-profile.plist"
+          security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST"
+          PROFILE_APPLICATION_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$PROFILE_PLIST")"
+          PROFILE_TEAM_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.team-identifier' "$PROFILE_PLIST")"
+          PROFILE_EXPIRATION="$(/usr/libexec/PlistBuddy -c 'Print :ExpirationDate' "$PROFILE_PLIST")"
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
           VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")"
           BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")"
           test "$BUNDLE_ID" = "com.rmcclassics.app"
+          test "$PROFILE_APPLICATION_IDENTIFIER" = "$PROFILE_TEAM_IDENTIFIER.$BUNDLE_ID" || {
+            echo 'Provisioning profile does not authorize the IPA bundle identifier'
+            exit 1
+          }
+          ruby -rtime -e '
+            expiration = Time.parse(ARGV.fetch(0))
+            abort("Provisioning profile is expired") unless expiration > Time.now
+          ' "$PROFILE_EXPIRATION"
           test -n "$VERSION"
           case "$BUILD_NUMBER" in ''|*[!0-9]*) echo 'IPA build number must be numeric'; exit 1;; esac
           {
@@ -168,6 +186,8 @@ workflows:
             echo "bundle_id=$BUNDLE_ID"
             echo "version=$VERSION"
             echo "build_number=$BUILD_NUMBER"
+            echo "profile_application_identifier=$PROFILE_APPLICATION_IDENTIFIER"
+            echo "profile_expiration=$PROFILE_EXPIRATION"
             shasum -a 256 "$IPA_PATH"
           } > "$CM_BUILD_DIR/release-ipa-metadata.txt"
 
