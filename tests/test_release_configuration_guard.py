@@ -51,6 +51,19 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             verification,
         )
         self.assertIn('echo "signing_authority=$SIGNING_AUTHORITY"', verification)
+        self.assertIn(
+            'codesign -d --extract-certificates "$CERTIFICATE_PREFIX"',
+            verification,
+        )
+        self.assertIn(
+            'openssl x509 -inform DER -checkend 0 -noout',
+            verification,
+        )
+        self.assertIn(
+            'echo "signing_certificate_not_after='
+            '$SIGNING_CERTIFICATE_NOT_AFTER"',
+            verification,
+        )
         self.assertIn('test "$BUNDLE_ID" = "com.rmcclassics.app"', verification)
         self.assertIn(
             'test "$PROFILE_APPLICATION_IDENTIFIER" = '

@@ -55,6 +55,22 @@ platform :ios do
       line.start_with?("Authority=")
     }&.split("=", 2)&.last&.strip
     UI.user_error!("Signed IPA must use an Apple Distribution certificate") unless signing_authority&.start_with?("Apple Distribution")
+    certificate_prefix = File.join(verify_dir, "signing-certificate-")
+    sh(
+      "codesign -d --extract-certificates #{Shellwords.escape(certificate_prefix)} " \
+      "#{Shellwords.escape(app_path)}"
+    )
+    leaf_certificate = "#{certificate_prefix}0"
+    UI.user_error!("Signed IPA leaf certificate was not extracted") unless File.file?(leaf_certificate) && File.size?(leaf_certificate)
+    sh(
+      "openssl x509 -inform DER -checkend 0 -noout -in " \
+      "#{Shellwords.escape(leaf_certificate)}"
+    )
+    certificate_not_after = sh(
+      "openssl x509 -inform DER -enddate -noout -in " \
+      "#{Shellwords.escape(leaf_certificate)}"
+    ).sub(/\AnotAfter=/, "").strip
+    UI.user_error!("Signing certificate expiration is unavailable") if certificate_not_after.empty?
 
     profile_path = File.join(app_path, "embedded.mobileprovision")
     UI.user_error!("Signed IPA is missing its embedded provisioning profile") unless File.file?(profile_path) && File.size?(profile_path)
@@ -132,6 +148,7 @@ platform :ios do
       "signed_application_identifier=#{signed_application_identifier}",
       "signed_team_identifier=#{signed_team_identifier}",
       "signing_authority=#{signing_authority}",
+      "signing_certificate_not_after=#{certificate_not_after}",
       "signed_get_task_allow=#{signed_get_task_allow}",
       "profile_get_task_allow=#{profile_get_task_allow}",
       "profile_expiration=#{profile_expiration_time.utc.iso8601}",

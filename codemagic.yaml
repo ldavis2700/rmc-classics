@@ -164,6 +164,22 @@ workflows:
               exit 1
               ;;
           esac
+          CERTIFICATE_PREFIX="$VERIFY_DIR/signing-certificate-"
+          codesign -d --extract-certificates "$CERTIFICATE_PREFIX" "$APP_PATH"
+          LEAF_CERTIFICATE="${CERTIFICATE_PREFIX}0"
+          test -s "$LEAF_CERTIFICATE" || {
+            echo 'Signed IPA leaf certificate was not extracted'
+            exit 1
+          }
+          openssl x509 -inform DER -checkend 0 -noout -in "$LEAF_CERTIFICATE" || {
+            echo 'Signed IPA uses an expired distribution certificate'
+            exit 1
+          }
+          SIGNING_CERTIFICATE_NOT_AFTER="$(openssl x509 -inform DER -enddate -noout -in "$LEAF_CERTIFICATE" | sed 's/^notAfter=//')"
+          test -n "$SIGNING_CERTIFICATE_NOT_AFTER" || {
+            echo 'Signing certificate expiration is unavailable'
+            exit 1
+          }
           PROFILE_PATH="$APP_PATH/embedded.mobileprovision"
           test -s "$PROFILE_PATH" || {
             echo 'Signed IPA is missing its embedded provisioning profile'
@@ -220,6 +236,7 @@ workflows:
             echo "signed_application_identifier=$SIGNED_APPLICATION_IDENTIFIER"
             echo "signed_team_identifier=$SIGNED_TEAM_IDENTIFIER"
             echo "signing_authority=$SIGNING_AUTHORITY"
+            echo "signing_certificate_not_after=$SIGNING_CERTIFICATE_NOT_AFTER"
             echo "signed_get_task_allow=$SIGNED_GET_TASK_ALLOW"
             echo "profile_get_task_allow=$PROFILE_GET_TASK_ALLOW"
             echo "profile_expiration=$PROFILE_EXPIRATION"
