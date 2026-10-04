@@ -44,6 +44,13 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
         verification = signed[verify:artifacts]
         self.assertIn('test "$IPA_COUNT" = "1"', verification)
         self.assertIn('codesign --verify --deep --strict "$APP_PATH"', verification)
+        self.assertIn('codesign -dv --verbose=4 "$APP_PATH"', verification)
+        self.assertIn('"Apple Distribution"*)', verification)
+        self.assertIn(
+            "Signed IPA must use an Apple Distribution certificate",
+            verification,
+        )
+        self.assertIn('echo "signing_authority=$SIGNING_AUTHORITY"', verification)
         self.assertIn('test "$BUNDLE_ID" = "com.rmcclassics.app"', verification)
         self.assertIn(
             'test "$PROFILE_APPLICATION_IDENTIFIER" = '

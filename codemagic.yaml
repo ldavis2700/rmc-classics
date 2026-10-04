@@ -156,6 +156,14 @@ workflows:
             exit 1
           }
           codesign --verify --deep --strict "$APP_PATH"
+          SIGNING_AUTHORITY="$(codesign -dv --verbose=4 "$APP_PATH" 2>&1 | awk -F= '/^Authority=/{print substr($0, index($0, "=") + 1); exit}')"
+          case "$SIGNING_AUTHORITY" in
+            "Apple Distribution"*) ;;
+            *)
+              echo 'Signed IPA must use an Apple Distribution certificate'
+              exit 1
+              ;;
+          esac
           PROFILE_PATH="$APP_PATH/embedded.mobileprovision"
           test -s "$PROFILE_PATH" || {
             echo 'Signed IPA is missing its embedded provisioning profile'
@@ -211,6 +219,7 @@ workflows:
             echo "profile_application_identifier=$PROFILE_APPLICATION_IDENTIFIER"
             echo "signed_application_identifier=$SIGNED_APPLICATION_IDENTIFIER"
             echo "signed_team_identifier=$SIGNED_TEAM_IDENTIFIER"
+            echo "signing_authority=$SIGNING_AUTHORITY"
             echo "signed_get_task_allow=$SIGNED_GET_TASK_ALLOW"
             echo "profile_get_task_allow=$PROFILE_GET_TASK_ALLOW"
             echo "profile_expiration=$PROFILE_EXPIRATION"

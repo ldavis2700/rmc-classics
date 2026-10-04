@@ -48,6 +48,13 @@ platform :ios do
     UI.user_error!("Expected exactly one application bundle in the IPA") unless app_paths.length == 1
     app_path = app_paths.first
     sh("codesign --verify --deep --strict #{Shellwords.escape(app_path)}")
+    signing_info = sh(
+      "codesign -dv --verbose=4 #{Shellwords.escape(app_path)} 2>&1"
+    )
+    signing_authority = signing_info.lines.find { |line|
+      line.start_with?("Authority=")
+    }&.split("=", 2)&.last&.strip
+    UI.user_error!("Signed IPA must use an Apple Distribution certificate") unless signing_authority&.start_with?("Apple Distribution")
 
     profile_path = File.join(app_path, "embedded.mobileprovision")
     UI.user_error!("Signed IPA is missing its embedded provisioning profile") unless File.file?(profile_path) && File.size?(profile_path)
@@ -124,6 +131,7 @@ platform :ios do
       "profile_application_identifier=#{profile_application_identifier}",
       "signed_application_identifier=#{signed_application_identifier}",
       "signed_team_identifier=#{signed_team_identifier}",
+      "signing_authority=#{signing_authority}",
       "signed_get_task_allow=#{signed_get_task_allow}",
       "profile_get_task_allow=#{profile_get_task_allow}",
       "profile_expiration=#{profile_expiration_time.utc.iso8601}",
