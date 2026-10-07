@@ -153,6 +153,7 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          APP_STORE_APPLE_ID: ${{ secrets.APP_STORE_APPLE_ID }}
         run: fastlane testflight
 
       - name: Upload IPA artifact

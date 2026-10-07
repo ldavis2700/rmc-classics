@@ -171,9 +171,12 @@ platform :ios do
     commit = ENV.fetch("GITHUB_SHA") {
       sh("git rev-parse --verify 'HEAD^{commit}'").strip
     }
+    app_store_apple_id = ENV.fetch("APP_STORE_APPLE_ID")
+    UI.user_error!("App Store Apple ID must be numeric") unless app_store_apple_id.match?(/\A[1-9][0-9]+\z/)
     File.write(receipt_path, [
       "repository=#{repository}",
       "commit=#{commit}",
+      "app_store_apple_id=#{app_store_apple_id}",
       "bundle_id=#{bundle_id}",
       "version=#{verified_version}",
       "build_number=#{verified_build}",

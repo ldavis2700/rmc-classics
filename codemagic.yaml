@@ -249,6 +249,7 @@ workflows:
           {
             echo "repository=ldavis2700/rmc-classics"
             echo "commit=$(git rev-parse --verify 'HEAD^{commit}')"
+            echo "app_store_apple_id=$APP_STORE_APPLE_ID"
             echo "bundle_id=$BUNDLE_ID"
             echo "version=$VERSION"
             echo "build_number=$BUILD_NUMBER"

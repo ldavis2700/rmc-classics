@@ -52,6 +52,10 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
         )
         self.assertIn('echo "signing_authority=$SIGNING_AUTHORITY"', verification)
         self.assertIn(
+            'echo "app_store_apple_id=$APP_STORE_APPLE_ID"',
+            verification,
+        )
+        self.assertIn(
             'codesign -d --extract-certificates "$CERTIFICATE_PREFIX"',
             verification,
         )

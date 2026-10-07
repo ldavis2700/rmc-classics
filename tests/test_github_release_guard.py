@@ -109,6 +109,14 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             '"profile_application_identifier=#{profile_application_identifier}"',
             FASTFILE,
         )
+        self.assertIn(
+            '"app_store_apple_id=#{app_store_apple_id}"',
+            FASTFILE,
+        )
+        self.assertIn(
+            'APP_STORE_APPLE_ID: ${{ secrets.APP_STORE_APPLE_ID }}',
+            WORKFLOW,
+        )
 
     def test_source_receipt_is_retained_after_later_failures(self):
         upload = WORKFLOW.split("      - name: Upload release-source receipt\n", 1)[1]
