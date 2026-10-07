@@ -80,6 +80,14 @@ platform :ios do
       "security cms -D -i #{Shellwords.escape(profile_path)} > " \
       "#{Shellwords.escape(profile_plist)}"
     )
+    certificate_verifier = File.expand_path(
+      "../../../scripts/verify_ios_profile_certificate.py", Dir.pwd
+    )
+    sh(
+      "python3 #{Shellwords.escape(certificate_verifier)} --profile " \
+      "#{Shellwords.escape(profile_plist)} --certificate " \
+      "#{Shellwords.escape(leaf_certificate)}"
+    )
     profile_application_identifier = get_info_plist_value(
       path: profile_plist, key: "Entitlements:application-identifier"
     )

@@ -64,6 +64,8 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         self.assertLess(identity, upload)
         self.assertLess(expiry, upload)
         self.assertIn("security cms -D -i", FASTFILE)
+        self.assertIn("verify_ios_profile_certificate.py", FASTFILE)
+        self.assertIn("--certificate", FASTFILE)
         self.assertIn(
             'key: "Entitlements:application-identifier"', FASTFILE)
         self.assertIn("profile_expiration_time > Time.now", FASTFILE)
