@@ -118,6 +118,7 @@ workflows:
           esac
           NEXT_BUILD_NUMBER="$((LATEST_BUILD_NUMBER + 1))"
           test "$NEXT_BUILD_NUMBER" -gt "$LATEST_BUILD_NUMBER"
+          printf '%s\n' "$NEXT_BUILD_NUMBER" > "$CM_BUILD_DIR/reserved-build-number.txt"
           cd frontend/ios/App
           agvtool new-version -all "$NEXT_BUILD_NUMBER"
 
@@ -220,6 +221,7 @@ workflows:
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
           VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")"
           BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")"
+          RESERVED_BUILD_NUMBER="$(cat "$CM_BUILD_DIR/reserved-build-number.txt")"
           test "$BUNDLE_ID" = "com.rmcclassics.app"
           test "$PROFILE_TOP_LEVEL_TEAM_IDENTIFIER" = "$PROFILE_TEAM_IDENTIFIER" || {
             echo 'Provisioning profile team identifiers do not agree'
@@ -251,6 +253,10 @@ workflows:
           ' "$PROFILE_EXPIRATION"
           test -n "$VERSION"
           case "$BUILD_NUMBER" in ''|*[!0-9]*) echo 'IPA build number must be numeric'; exit 1;; esac
+          test "$BUILD_NUMBER" = "$RESERVED_BUILD_NUMBER" || {
+            echo 'Final IPA build number does not match the reserved App Store build number'
+            exit 1
+          }
           {
             echo "repository=ldavis2700/rmc-classics"
             echo "commit=$(git rev-parse --verify 'HEAD^{commit}')"
@@ -258,6 +264,7 @@ workflows:
             echo "bundle_id=$BUNDLE_ID"
             echo "version=$VERSION"
             echo "build_number=$BUILD_NUMBER"
+            echo "reserved_build_number=$RESERVED_BUILD_NUMBER"
             echo "profile_application_identifier=$PROFILE_APPLICATION_IDENTIFIER"
             echo "profile_top_level_team_identifier=$PROFILE_TOP_LEVEL_TEAM_IDENTIFIER"
             echo "signed_application_identifier=$SIGNED_APPLICATION_IDENTIFIER"

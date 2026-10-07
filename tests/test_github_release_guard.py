@@ -11,6 +11,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = (ROOT / ".github/workflows/ios-build.yml").read_text()
 FASTFILE = (ROOT / "frontend/ios/App/fastlane/Fastfile").read_text()
+CODEMAGIC = (ROOT / "codemagic.yaml").read_text()
 
 
 def step_script(name):
@@ -25,6 +26,26 @@ CLEANUP_SCRIPT = step_script("Remove temporary signing material")
 
 
 class GitHubReleaseGuardTests(unittest.TestCase):
+    def test_codemagic_final_ipa_matches_reserved_build_number(self):
+        self.assertIn(
+            'printf \'%s\\n\' "$NEXT_BUILD_NUMBER" > '
+            '"$CM_BUILD_DIR/reserved-build-number.txt"',
+            CODEMAGIC,
+        )
+        self.assertIn(
+            'RESERVED_BUILD_NUMBER="$(cat '
+            '"$CM_BUILD_DIR/reserved-build-number.txt")"',
+            CODEMAGIC,
+        )
+        self.assertIn(
+            'test "$BUILD_NUMBER" = "$RESERVED_BUILD_NUMBER"',
+            CODEMAGIC,
+        )
+        self.assertIn(
+            'echo "reserved_build_number=$RESERVED_BUILD_NUMBER"',
+            CODEMAGIC,
+        )
+
     def test_guards_precede_setup_install_build_and_signing(self):
         source = WORKFLOW.index("      - name: Verify release source is current main")
         config = WORKFLOW.index("      - name: Validate release configuration")
