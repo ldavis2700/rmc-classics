@@ -28,8 +28,9 @@ platform :ios do
       version: app_version,
       initial_build_number: 14
     )
+    expected_build_number = latest_build + 1
     increment_build_number(
-      build_number: latest_build + 1,
+      build_number: expected_build_number,
       xcodeproj: "App.xcodeproj"
     )
 
@@ -168,8 +169,8 @@ platform :ios do
       UI.user_error!("Provisioning profile expiration is invalid")
     end
     UI.user_error!("Provisioning profile is expired") unless profile_expiration_time > Time.now
-    UI.user_error!("IPA marketing version is missing") if verified_version.to_s.empty?
-    UI.user_error!("IPA build number must be numeric") unless verified_build.to_s.match?(/\A[0-9]+\z/)
+    UI.user_error!("IPA marketing version does not match the reviewed Xcode version") unless verified_version.to_s == app_version.to_s
+    UI.user_error!("IPA build number does not match the reserved TestFlight build") unless verified_build.to_s == expected_build_number.to_s
 
     receipt_path = File.expand_path(
       "build/ios/ipa/release-ipa-metadata.txt", Dir.pwd

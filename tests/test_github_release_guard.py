@@ -92,6 +92,11 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             '"profile_top_level_team_identifier=#{profile_top_level_team_identifier}"',
             FASTFILE,
         )
+        self.assertIn("expected_build_number = latest_build + 1", FASTFILE)
+        self.assertIn(
+            "verified_version.to_s == app_version.to_s", FASTFILE)
+        self.assertIn(
+            "verified_build.to_s == expected_build_number.to_s", FASTFILE)
         self.assertIn(
             "Signed App Store IPA must disable get-task-allow",
             FASTFILE,
