@@ -115,6 +115,19 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         self.assertIn("if: ${{ always() }}", upload)
         self.assertIn("path: release-source.txt", upload)
 
+    def test_ipa_verification_receipt_survives_upload_failure(self):
+        receipt = WORKFLOW.split(
+            "      - name: Retain IPA verification receipt\n", 1)[1]
+        receipt = receipt.split(
+            "      - name: Upload release-source receipt\n", 1)[0]
+        self.assertIn("if: ${{ always() }}", receipt)
+        self.assertIn(
+            "path: frontend/ios/App/build/ios/ipa/"
+            "release-ipa-metadata.txt",
+            receipt,
+        )
+        self.assertIn("if-no-files-found: ignore", receipt)
+
     def test_signing_material_cleanup_is_explicit_and_always_runs(self):
         cleanup = WORKFLOW.split(
             "      - name: Remove temporary signing material\n", 1)[1]

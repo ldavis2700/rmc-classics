@@ -23,7 +23,10 @@ Repository pushes and tags do not start the GitHub fallback. A manual dispatch
 must explicitly confirm the TestFlight upload. That workflow validates every
 named secret before installing dependencies and
 injects the public RevenueCat key into the web build. It also retains a
-`RMC-Classics-release-source` receipt alongside the IPA artifact.
+`RMC-Classics-release-source` receipt alongside the IPA artifact. The
+signed-IPA verification receipt uses an `always()` upload guard so
+certificate, profile, version, and checksum evidence survives a later
+TestFlight upload failure.
 
 ## Required release checks
 

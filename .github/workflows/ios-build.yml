@@ -165,6 +165,15 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Retain IPA verification receipt
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: RMC-Classics-IPA-verification
+          path: frontend/ios/App/build/ios/ipa/release-ipa-metadata.txt
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Upload release-source receipt
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
