@@ -46,6 +46,15 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             CODEMAGIC,
         )
 
+    def test_codemagic_final_ipa_matches_reviewed_marketing_version(self):
+        self.assertIn('IOS_MARKETING_VERSION: "1.0"', CODEMAGIC)
+        self.assertIn(
+            'test "$VERSION" = "$IOS_MARKETING_VERSION"', CODEMAGIC)
+        self.assertIn(
+            'echo "reviewed_marketing_version=$IOS_MARKETING_VERSION"',
+            CODEMAGIC,
+        )
+
     def test_guards_precede_setup_install_build_and_signing(self):
         source = WORKFLOW.index("      - name: Verify release source is current main")
         config = WORKFLOW.index("      - name: Validate release configuration")
