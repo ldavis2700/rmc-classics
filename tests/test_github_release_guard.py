@@ -122,6 +122,9 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             '"app_store_apple_id=#{app_store_apple_id}"',
             FASTFILE,
         )
+        upload_block = FASTFILE.split("upload_to_testflight(", 1)[1]
+        self.assertIn("app_identifier: bundle_id", upload_block)
+        self.assertIn("apple_id: app_store_apple_id", upload_block)
         self.assertIn(
             'APP_STORE_APPLE_ID: ${{ secrets.APP_STORE_APPLE_ID }}',
             WORKFLOW,
