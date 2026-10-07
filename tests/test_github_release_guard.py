@@ -128,6 +128,10 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         self.assertIn(
             "verified_build.to_s == expected_build_number.to_s", FASTFILE)
         self.assertIn(
+            '"reviewed_marketing_version=#{app_version}"', FASTFILE)
+        self.assertIn(
+            '"reserved_build_number=#{expected_build_number}"', FASTFILE)
+        self.assertIn(
             "Signed App Store IPA must disable get-task-allow",
             FASTFILE,
         )
