@@ -121,6 +121,12 @@ platform :ios do
       path: profile_plist,
       key: "Entitlements:com.apple.developer.team-identifier"
     )
+    profile_top_level_team_identifier, profile_team_error, profile_team_status = Open3.capture3(
+      "/usr/libexec/PlistBuddy", "-c", "Print :TeamIdentifier:0",
+      profile_plist
+    )
+    UI.user_error!("Provisioning profile top-level team identifier is missing: #{profile_team_error.strip}") unless profile_team_status.success?
+    profile_top_level_team_identifier = profile_top_level_team_identifier.strip
     profile_expiration = get_info_plist_value(
       path: profile_plist, key: "ExpirationDate"
     )
@@ -148,6 +154,7 @@ platform :ios do
     )
     verified_build = get_info_plist_value(path: info_plist, key: "CFBundleVersion")
     UI.user_error!("Unexpected IPA bundle identifier") unless bundle_id == "com.rmcclassics.app"
+    UI.user_error!("Provisioning profile team identifiers do not agree") unless profile_top_level_team_identifier == profile_team_identifier
     expected_application_identifier = "#{profile_team_identifier}.#{bundle_id}"
     UI.user_error!("Provisioning profile does not authorize the IPA bundle identifier") unless profile_application_identifier == expected_application_identifier
     UI.user_error!("Signed app identifier does not match its provisioning profile") unless signed_application_identifier == profile_application_identifier
@@ -181,6 +188,7 @@ platform :ios do
       "version=#{verified_version}",
       "build_number=#{verified_build}",
       "profile_application_identifier=#{profile_application_identifier}",
+      "profile_top_level_team_identifier=#{profile_top_level_team_identifier}",
       "signed_application_identifier=#{signed_application_identifier}",
       "signed_team_identifier=#{signed_team_identifier}",
       "signing_authority=#{signing_authority}",

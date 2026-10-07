@@ -194,6 +194,7 @@ workflows:
             --digest-file "$PROFILE_CERTIFICATE_DIGEST"
           PROFILE_APPLICATION_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$PROFILE_PLIST")"
           PROFILE_TEAM_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.team-identifier' "$PROFILE_PLIST")"
+          PROFILE_TOP_LEVEL_TEAM_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$PROFILE_PLIST")"
           SIGNED_ENTITLEMENTS="$VERIFY_DIR/signed-entitlements.plist"
           codesign -d --entitlements :- "$APP_PATH" > "$SIGNED_ENTITLEMENTS"
           SIGNED_APPLICATION_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :application-identifier' "$SIGNED_ENTITLEMENTS")"
@@ -220,6 +221,10 @@ workflows:
           VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")"
           BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")"
           test "$BUNDLE_ID" = "com.rmcclassics.app"
+          test "$PROFILE_TOP_LEVEL_TEAM_IDENTIFIER" = "$PROFILE_TEAM_IDENTIFIER" || {
+            echo 'Provisioning profile team identifiers do not agree'
+            exit 1
+          }
           test "$PROFILE_APPLICATION_IDENTIFIER" = "$PROFILE_TEAM_IDENTIFIER.$BUNDLE_ID" || {
             echo 'Provisioning profile does not authorize the IPA bundle identifier'
             exit 1
@@ -254,6 +259,7 @@ workflows:
             echo "version=$VERSION"
             echo "build_number=$BUILD_NUMBER"
             echo "profile_application_identifier=$PROFILE_APPLICATION_IDENTIFIER"
+            echo "profile_top_level_team_identifier=$PROFILE_TOP_LEVEL_TEAM_IDENTIFIER"
             echo "signed_application_identifier=$SIGNED_APPLICATION_IDENTIFIER"
             echo "signed_team_identifier=$SIGNED_TEAM_IDENTIFIER"
             echo "signing_authority=$SIGNING_AUTHORITY"

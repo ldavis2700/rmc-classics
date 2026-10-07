@@ -74,6 +74,17 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             '"$PROFILE_TEAM_IDENTIFIER.$BUNDLE_ID"',
             verification,
         )
+        self.assertIn("Print :TeamIdentifier:0", verification)
+        self.assertIn(
+            'test "$PROFILE_TOP_LEVEL_TEAM_IDENTIFIER" = '
+            '"$PROFILE_TEAM_IDENTIFIER"',
+            verification,
+        )
+        self.assertIn(
+            'echo "profile_top_level_team_identifier='
+            '$PROFILE_TOP_LEVEL_TEAM_IDENTIFIER"',
+            verification,
+        )
         self.assertIn("security cms -D -i", verification)
         self.assertIn("verify_ios_profile_certificate.py", verification)
         self.assertIn('--certificate "$LEAF_CERTIFICATE"', verification)

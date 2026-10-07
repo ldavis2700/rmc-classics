@@ -83,6 +83,15 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             "signed_team_identifier == profile_team_identifier",
             FASTFILE,
         )
+        self.assertIn("Print :TeamIdentifier:0", FASTFILE)
+        self.assertIn(
+            "profile_top_level_team_identifier == profile_team_identifier",
+            FASTFILE,
+        )
+        self.assertIn(
+            '"profile_top_level_team_identifier=#{profile_top_level_team_identifier}"',
+            FASTFILE,
+        )
         self.assertIn(
             "Signed App Store IPA must disable get-task-allow",
             FASTFILE,
