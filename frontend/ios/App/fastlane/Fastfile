@@ -83,11 +83,19 @@ platform :ios do
     certificate_verifier = File.expand_path(
       "../../../scripts/verify_ios_profile_certificate.py", Dir.pwd
     )
+    profile_certificate_digest_path = File.join(
+      verify_dir, "profile-certificate.sha256"
+    )
     sh(
       "python3 #{Shellwords.escape(certificate_verifier)} --profile " \
       "#{Shellwords.escape(profile_plist)} --certificate " \
-      "#{Shellwords.escape(leaf_certificate)}"
+      "#{Shellwords.escape(leaf_certificate)} --digest-file " \
+      "#{Shellwords.escape(profile_certificate_digest_path)}"
     )
+    profile_certificate_digest = File.read(
+      profile_certificate_digest_path, encoding: "UTF-8"
+    ).strip
+    UI.user_error!("Profile certificate digest is invalid") unless profile_certificate_digest.match?(/\A[0-9a-f]{64}\z/)
     profile_application_identifier = get_info_plist_value(
       path: profile_plist, key: "Entitlements:application-identifier"
     )
@@ -170,6 +178,7 @@ platform :ios do
       "signed_team_identifier=#{signed_team_identifier}",
       "signing_authority=#{signing_authority}",
       "signing_certificate_not_after=#{certificate_not_after}",
+      "profile_certificate_sha256=#{profile_certificate_digest}",
       "signed_get_task_allow=#{signed_get_task_allow}",
       "profile_get_task_allow=#{profile_get_task_allow}",
       "profile_expiration=#{profile_expiration_time.utc.iso8601}",

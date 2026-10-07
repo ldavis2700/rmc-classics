@@ -38,6 +38,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", required=True, type=Path)
     parser.add_argument("--certificate", required=True, type=Path)
+    parser.add_argument("--digest-file", type=Path)
     args = parser.parse_args()
     try:
         with args.profile.open("rb") as handle:
@@ -50,6 +51,8 @@ def main() -> int:
     except (OSError, plistlib.InvalidFileException, CertificateProfileError) as exc:
         print(f"ERROR: {exc}")
         return 1
+    if args.digest_file:
+        args.digest_file.write_text(digest + "\n", encoding="utf-8")
     print(f"Verified provisioning-profile certificate binding: {digest}")
     return 0
 

@@ -187,9 +187,11 @@ workflows:
           }
           PROFILE_PLIST="$VERIFY_DIR/embedded-profile.plist"
           security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST"
+          PROFILE_CERTIFICATE_DIGEST="$VERIFY_DIR/profile-certificate.sha256"
           python3 scripts/verify_ios_profile_certificate.py \
             --profile "$PROFILE_PLIST" \
-            --certificate "$LEAF_CERTIFICATE"
+            --certificate "$LEAF_CERTIFICATE" \
+            --digest-file "$PROFILE_CERTIFICATE_DIGEST"
           PROFILE_APPLICATION_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$PROFILE_PLIST")"
           PROFILE_TEAM_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.team-identifier' "$PROFILE_PLIST")"
           SIGNED_ENTITLEMENTS="$VERIFY_DIR/signed-entitlements.plist"
@@ -251,6 +253,7 @@ workflows:
             echo "signed_team_identifier=$SIGNED_TEAM_IDENTIFIER"
             echo "signing_authority=$SIGNING_AUTHORITY"
             echo "signing_certificate_not_after=$SIGNING_CERTIFICATE_NOT_AFTER"
+            echo "profile_certificate_sha256=$(cat "$PROFILE_CERTIFICATE_DIGEST")"
             echo "signed_get_task_allow=$SIGNED_GET_TASK_ALLOW"
             echo "profile_get_task_allow=$PROFILE_GET_TASK_ALLOW"
             echo "profile_expiration=$PROFILE_EXPIRATION"

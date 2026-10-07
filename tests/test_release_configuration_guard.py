@@ -73,6 +73,7 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
         self.assertIn("security cms -D -i", verification)
         self.assertIn("verify_ios_profile_certificate.py", verification)
         self.assertIn('--certificate "$LEAF_CERTIFICATE"', verification)
+        self.assertIn("profile_certificate_sha256=", verification)
         self.assertIn("codesign -d --entitlements :-", verification)
         self.assertIn(
             'test "$SIGNED_APPLICATION_IDENTIFIER" = '
