@@ -74,6 +74,10 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
         self.assertIn("verify_ios_profile_certificate.py", verification)
         self.assertIn('--certificate "$LEAF_CERTIFICATE"', verification)
         self.assertIn("profile_certificate_sha256=", verification)
+        self.assertIn('echo "profile_uuid=$PROFILE_UUID"', verification)
+        self.assertIn('echo "profile_name=$PROFILE_NAME"', verification)
+        self.assertIn("Provisioning profile UUID is missing", verification)
+        self.assertIn("Provisioning profile name is missing", verification)
         self.assertIn("codesign -d --entitlements :-", verification)
         self.assertIn(
             'test "$SIGNED_APPLICATION_IDENTIFIER" = '

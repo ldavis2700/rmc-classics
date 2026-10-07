@@ -67,6 +67,10 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         self.assertIn("verify_ios_profile_certificate.py", FASTFILE)
         self.assertIn("--certificate", FASTFILE)
         self.assertIn("profile_certificate_sha256=", FASTFILE)
+        self.assertIn('"profile_uuid=#{profile_uuid}"', FASTFILE)
+        self.assertIn('"profile_name=#{profile_name}"', FASTFILE)
+        self.assertIn("Provisioning profile UUID is missing", FASTFILE)
+        self.assertIn("Provisioning profile name is missing", FASTFILE)
         self.assertIn(
             'key: "Entitlements:application-identifier"', FASTFILE)
         self.assertIn("profile_expiration_time > Time.now", FASTFILE)

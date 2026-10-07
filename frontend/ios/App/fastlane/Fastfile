@@ -124,6 +124,10 @@ platform :ios do
     profile_expiration = get_info_plist_value(
       path: profile_plist, key: "ExpirationDate"
     )
+    profile_uuid = get_info_plist_value(path: profile_plist, key: "UUID")
+    profile_name = get_info_plist_value(path: profile_plist, key: "Name")
+    UI.user_error!("Provisioning profile UUID is missing") if profile_uuid.to_s.empty?
+    UI.user_error!("Provisioning profile name is missing") if profile_name.to_s.empty?
     _, _, provisioned_devices_status = Open3.capture3(
       "/usr/libexec/PlistBuddy", "-c", "Print :ProvisionedDevices",
       profile_plist
@@ -179,6 +183,8 @@ platform :ios do
       "signing_authority=#{signing_authority}",
       "signing_certificate_not_after=#{certificate_not_after}",
       "profile_certificate_sha256=#{profile_certificate_digest}",
+      "profile_uuid=#{profile_uuid}",
+      "profile_name=#{profile_name}",
       "signed_get_task_allow=#{signed_get_task_allow}",
       "profile_get_task_allow=#{profile_get_task_allow}",
       "profile_expiration=#{profile_expiration_time.utc.iso8601}",

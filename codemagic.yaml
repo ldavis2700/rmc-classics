@@ -201,6 +201,10 @@ workflows:
           SIGNED_GET_TASK_ALLOW="$(/usr/libexec/PlistBuddy -c 'Print :get-task-allow' "$SIGNED_ENTITLEMENTS")"
           PROFILE_GET_TASK_ALLOW="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:get-task-allow' "$PROFILE_PLIST")"
           PROFILE_EXPIRATION="$(/usr/libexec/PlistBuddy -c 'Print :ExpirationDate' "$PROFILE_PLIST")"
+          PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$PROFILE_PLIST")"
+          PROFILE_NAME="$(/usr/libexec/PlistBuddy -c 'Print :Name' "$PROFILE_PLIST")"
+          test -n "$PROFILE_UUID" || { echo 'Provisioning profile UUID is missing'; exit 1; }
+          test -n "$PROFILE_NAME" || { echo 'Provisioning profile name is missing'; exit 1; }
           if /usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "$PROFILE_PLIST" >/dev/null 2>&1; then
             echo 'App Store profile must not target provisioned devices'
             exit 1
@@ -254,6 +258,8 @@ workflows:
             echo "signing_authority=$SIGNING_AUTHORITY"
             echo "signing_certificate_not_after=$SIGNING_CERTIFICATE_NOT_AFTER"
             echo "profile_certificate_sha256=$(cat "$PROFILE_CERTIFICATE_DIGEST")"
+            echo "profile_uuid=$PROFILE_UUID"
+            echo "profile_name=$PROFILE_NAME"
             echo "signed_get_task_allow=$SIGNED_GET_TASK_ALLOW"
             echo "profile_get_task_allow=$PROFILE_GET_TASK_ALLOW"
             echo "profile_expiration=$PROFILE_EXPIRATION"
