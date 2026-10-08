@@ -1,8 +1,19 @@
+require "digest"
+require "fileutils"
+require "open3"
+require "shellwords"
+require "time"
+
 default_platform(:ios)
 
 platform :ios do
   desc "Build and upload RMC Classics to TestFlight using the App Store Connect API key"
   lane :testflight do
+    app_version = get_version_number(
+      xcodeproj: "App.xcodeproj",
+      target: "App"
+    )
+
     api_key = app_store_connect_api_key(
       key_id: ENV.fetch("ASC_KEY_ID"),
       issuer_id: ENV.fetch("ASC_ISSUER_ID"),
@@ -14,11 +25,12 @@ platform :ios do
     latest_build = latest_testflight_build_number(
       api_key: api_key,
       app_identifier: "com.rmcclassics.app",
-      version: "1.0",
+      version: app_version,
       initial_build_number: 14
     )
+    expected_build_number = latest_build + 1
     increment_build_number(
-      build_number: latest_build + 1,
+      build_number: expected_build_number,
       xcodeproj: "App.xcodeproj"
     )
 
@@ -30,8 +42,173 @@ platform :ios do
       xcargs: "-allowProvisioningUpdates"
     )
 
+    ipa_path = File.expand_path("build/ios/ipa/App.ipa", Dir.pwd)
+    verify_dir = File.expand_path("build/ios/ipa/verify", Dir.pwd)
+    FileUtils.mkdir_p(verify_dir)
+    sh("unzip -q #{Shellwords.escape(ipa_path)} -d #{Shellwords.escape(verify_dir)}")
+    app_paths = Dir[File.join(verify_dir, "Payload", "*.app")]
+    UI.user_error!("Expected exactly one application bundle in the IPA") unless app_paths.length == 1
+    app_path = app_paths.first
+    sh("codesign --verify --deep --strict #{Shellwords.escape(app_path)}")
+    signing_info = sh(
+      "codesign -dv --verbose=4 #{Shellwords.escape(app_path)} 2>&1"
+    )
+    signing_authority = signing_info.lines.find { |line|
+      line.start_with?("Authority=")
+    }&.split("=", 2)&.last&.strip
+    UI.user_error!("Signed IPA must use an Apple Distribution certificate") unless signing_authority&.start_with?("Apple Distribution")
+    certificate_prefix = File.join(verify_dir, "signing-certificate-")
+    sh(
+      "codesign -d --extract-certificates #{Shellwords.escape(certificate_prefix)} " \
+      "#{Shellwords.escape(app_path)}"
+    )
+    leaf_certificate = "#{certificate_prefix}0"
+    UI.user_error!("Signed IPA leaf certificate was not extracted") unless File.file?(leaf_certificate) && File.size?(leaf_certificate)
+    sh(
+      "openssl x509 -inform DER -checkend 0 -noout -in " \
+      "#{Shellwords.escape(leaf_certificate)}"
+    )
+    certificate_not_after = sh(
+      "openssl x509 -inform DER -enddate -noout -in " \
+      "#{Shellwords.escape(leaf_certificate)}"
+    ).sub(/\AnotAfter=/, "").strip
+    UI.user_error!("Signing certificate expiration is unavailable") if certificate_not_after.empty?
+
+    profile_path = File.join(app_path, "embedded.mobileprovision")
+    UI.user_error!("Signed IPA is missing its embedded provisioning profile") unless File.file?(profile_path) && File.size?(profile_path)
+    profile_plist = File.join(verify_dir, "embedded-profile.plist")
+    sh(
+      "security cms -D -i #{Shellwords.escape(profile_path)} > " \
+      "#{Shellwords.escape(profile_plist)}"
+    )
+    certificate_verifier = File.expand_path(
+      "../../../scripts/verify_ios_profile_certificate.py", Dir.pwd
+    )
+    profile_certificate_digest_path = File.join(
+      verify_dir, "profile-certificate.sha256"
+    )
+    sh(
+      "python3 #{Shellwords.escape(certificate_verifier)} --profile " \
+      "#{Shellwords.escape(profile_plist)} --certificate " \
+      "#{Shellwords.escape(leaf_certificate)} --digest-file " \
+      "#{Shellwords.escape(profile_certificate_digest_path)}"
+    )
+    profile_certificate_digest = File.read(
+      profile_certificate_digest_path, encoding: "UTF-8"
+    ).strip
+    UI.user_error!("Profile certificate digest is invalid") unless profile_certificate_digest.match?(/\A[0-9a-f]{64}\z/)
+    profile_application_identifier = get_info_plist_value(
+      path: profile_plist, key: "Entitlements:application-identifier"
+    )
+    signed_entitlements = File.join(verify_dir, "signed-entitlements.plist")
+    sh(
+      "codesign -d --entitlements :- #{Shellwords.escape(app_path)} > " \
+      "#{Shellwords.escape(signed_entitlements)}"
+    )
+    signed_application_identifier = get_info_plist_value(
+      path: signed_entitlements, key: "application-identifier"
+    )
+    signed_team_identifier = get_info_plist_value(
+      path: signed_entitlements,
+      key: "com.apple.developer.team-identifier"
+    )
+    signed_get_task_allow = get_info_plist_value(
+      path: signed_entitlements, key: "get-task-allow"
+    )
+    profile_get_task_allow = get_info_plist_value(
+      path: profile_plist, key: "Entitlements:get-task-allow"
+    )
+    profile_team_identifier = get_info_plist_value(
+      path: profile_plist,
+      key: "Entitlements:com.apple.developer.team-identifier"
+    )
+    profile_top_level_team_identifier, profile_team_error, profile_team_status = Open3.capture3(
+      "/usr/libexec/PlistBuddy", "-c", "Print :TeamIdentifier:0",
+      profile_plist
+    )
+    UI.user_error!("Provisioning profile top-level team identifier is missing: #{profile_team_error.strip}") unless profile_team_status.success?
+    profile_top_level_team_identifier = profile_top_level_team_identifier.strip
+    profile_expiration = get_info_plist_value(
+      path: profile_plist, key: "ExpirationDate"
+    )
+    profile_uuid = get_info_plist_value(path: profile_plist, key: "UUID")
+    profile_name = get_info_plist_value(path: profile_plist, key: "Name")
+    UI.user_error!("Provisioning profile UUID is missing") if profile_uuid.to_s.empty?
+    UI.user_error!("Provisioning profile name is missing") if profile_name.to_s.empty?
+    _, _, provisioned_devices_status = Open3.capture3(
+      "/usr/libexec/PlistBuddy", "-c", "Print :ProvisionedDevices",
+      profile_plist
+    )
+    UI.user_error!("App Store profile must not target provisioned devices") if provisioned_devices_status.success?
+    provisions_all_devices, _, all_devices_status = Open3.capture3(
+      "/usr/libexec/PlistBuddy", "-c", "Print :ProvisionsAllDevices",
+      profile_plist
+    )
+    if all_devices_status.success? && ["true", "1"].include?(provisions_all_devices.strip.downcase)
+      UI.user_error!("App Store profile must not use enterprise all-device distribution")
+    end
+
+    info_plist = File.join(app_path, "Info.plist")
+    bundle_id = get_info_plist_value(path: info_plist, key: "CFBundleIdentifier")
+    verified_version = get_info_plist_value(
+      path: info_plist, key: "CFBundleShortVersionString"
+    )
+    verified_build = get_info_plist_value(path: info_plist, key: "CFBundleVersion")
+    UI.user_error!("Unexpected IPA bundle identifier") unless bundle_id == "com.rmcclassics.app"
+    UI.user_error!("Provisioning profile team identifiers do not agree") unless profile_top_level_team_identifier == profile_team_identifier
+    expected_application_identifier = "#{profile_team_identifier}.#{bundle_id}"
+    UI.user_error!("Provisioning profile does not authorize the IPA bundle identifier") unless profile_application_identifier == expected_application_identifier
+    UI.user_error!("Signed app identifier does not match its provisioning profile") unless signed_application_identifier == profile_application_identifier
+    UI.user_error!("Signed team identifier does not match its provisioning profile") unless signed_team_identifier == profile_team_identifier
+    debuggable_values = [true, 1, "true", "1"]
+    UI.user_error!("Signed App Store IPA must disable get-task-allow") if debuggable_values.include?(signed_get_task_allow)
+    UI.user_error!("App Store profile must disable get-task-allow") if debuggable_values.include?(profile_get_task_allow)
+    begin
+      profile_expiration_time = Time.parse(profile_expiration.to_s)
+    rescue ArgumentError
+      UI.user_error!("Provisioning profile expiration is invalid")
+    end
+    UI.user_error!("Provisioning profile is expired") unless profile_expiration_time > Time.now
+    UI.user_error!("IPA marketing version does not match the reviewed Xcode version") unless verified_version.to_s == app_version.to_s
+    UI.user_error!("IPA build number does not match the reserved TestFlight build") unless verified_build.to_s == expected_build_number.to_s
+
+    receipt_path = File.expand_path(
+      "build/ios/ipa/release-ipa-metadata.txt", Dir.pwd
+    )
+    repository = ENV.fetch("GITHUB_REPOSITORY", "ldavis2700/rmc-classics")
+    commit = ENV.fetch("GITHUB_SHA") {
+      sh("git rev-parse --verify 'HEAD^{commit}'").strip
+    }
+    app_store_apple_id = ENV.fetch("APP_STORE_APPLE_ID")
+    UI.user_error!("App Store Apple ID must be numeric") unless app_store_apple_id.match?(/\A[1-9][0-9]+\z/)
+    File.write(receipt_path, [
+      "repository=#{repository}",
+      "commit=#{commit}",
+      "app_store_apple_id=#{app_store_apple_id}",
+      "bundle_id=#{bundle_id}",
+      "version=#{verified_version}",
+      "reviewed_marketing_version=#{app_version}",
+      "build_number=#{verified_build}",
+      "reserved_build_number=#{expected_build_number}",
+      "profile_application_identifier=#{profile_application_identifier}",
+      "profile_top_level_team_identifier=#{profile_top_level_team_identifier}",
+      "signed_application_identifier=#{signed_application_identifier}",
+      "signed_team_identifier=#{signed_team_identifier}",
+      "signing_authority=#{signing_authority}",
+      "signing_certificate_not_after=#{certificate_not_after}",
+      "profile_certificate_sha256=#{profile_certificate_digest}",
+      "profile_uuid=#{profile_uuid}",
+      "profile_name=#{profile_name}",
+      "signed_get_task_allow=#{signed_get_task_allow}",
+      "profile_get_task_allow=#{profile_get_task_allow}",
+      "profile_expiration=#{profile_expiration_time.utc.iso8601}",
+      "sha256=#{Digest::SHA256.file(ipa_path).hexdigest}",
+    ].join("\n") + "\n")
+
     upload_to_testflight(
       api_key: api_key,
+      app_identifier: bundle_id,
+      apple_id: app_store_apple_id,
       ipa: "build/ios/ipa/App.ipa",
       skip_waiting_for_build_processing: true
     )

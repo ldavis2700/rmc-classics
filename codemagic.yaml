@@ -6,20 +6,17 @@
 #   3. Connect your repo -> Codemagic detects this file automatically
 #   4. In Codemagic dashboard: Team settings -> Integrations -> App Store Connect
 #      Upload the .p8 API key (Users and Access -> Integrations -> App Store Connect API)
-#   5. For a deliberate release, either:
-#      - push a guarded branch matching rmc-testflight/*, or
-#      - create a Git tag matching rmc-testflight-*.
-#      Codemagic will start the signed ios-testflight workflow automatically.
-#      Manual starts remain available as a fallback.
+#   5. Start the signed ios-testflight workflow manually from current main.
+#      Automatic branch/tag triggers are intentionally disabled so signing and
+#      TestFlight upload always require an owner-controlled Codemagic action.
 #
 # Two workflows below:
-#   * ios-testflight  -> signed IPA uploaded to TestFlight automatically (recommended)
+#   * ios-testflight  -> manually started signed IPA upload to TestFlight
 #   * ios-unsigned    -> unsigned IPA for local inspection only
 #
 # Cost/release guardrail:
-#   Signed iOS release builds do NOT run on ordinary pushes to main.
-#   They run only from an intentional rmc-testflight/* branch push,
-#   an intentional rmc-testflight-* tag, or a deliberate manual start.
+#   Signed iOS release builds never start from repository pushes or tags.
+#   They require a deliberate manual start in Codemagic from current main.
 #
 # Docs: https://docs.codemagic.io/yaml-running-builds/starting-builds-automatically/
 
@@ -27,17 +24,6 @@ workflows:
   ios-testflight:
     name: RMC Classics -> TestFlight
     max_build_duration: 60
-    triggering:
-      events:
-        - push
-        - tag
-      branch_patterns:
-        - pattern: 'rmc-testflight/*'
-          include: true
-          source: true
-      tag_patterns:
-        - pattern: 'rmc-testflight-*'
-          include: true
     environment:
       groups:
         - rmc_release
@@ -47,12 +33,14 @@ workflows:
       vars:
         XCODE_WORKSPACE: "frontend/ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
+        IOS_MARKETING_VERSION: "1.0"
         # APP_STORE_APPLE_ID and REACT_APP_REVENUECAT_IOS_KEY are loaded from
         # the protected rmc_release Codemagic environment variable group.
         # Never commit store IDs as placeholders or any RevenueCat private/server key.
         REACT_APP_BACKEND_URL: "https://rmcclassics.com"
       node: 20
-      xcode: latest
+      # Keep the reviewed toolchain stable between QA and the signed binary.
+      xcode: 26.5
       cocoapods: default
     integrations:
       app_store_connect: RMC ASC Key
@@ -71,7 +59,7 @@ workflows:
           if [ "$CURRENT_COMMIT" != "$MAIN_COMMIT" ]; then
             echo "Refusing stale TestFlight source: $CURRENT_COMMIT"
             echo "Current main is: $MAIN_COMMIT"
-            echo "Create a new rmc-testflight/* branch or rmc-testflight-* tag from current main."
+            echo "Manually select the current main revision before restarting this workflow."
             exit 1
           fi
           {
@@ -89,8 +77,8 @@ workflows:
             invalid=1
           fi
           sdk_key="${REACT_APP_REVENUECAT_IOS_KEY:-}"
-          if [[ -z "${sdk_key//[[:space:]]/}" ]]; then
-            echo "REACT_APP_REVENUECAT_IOS_KEY must be configured as a protected Codemagic variable"
+          if [[ ! "$sdk_key" =~ ^appl_[^[:space:]]+$ ]]; then
+            echo "REACT_APP_REVENUECAT_IOS_KEY must be a protected public iOS SDK key beginning with appl_"
             invalid=1
           fi
           if [ "$invalid" -ne 0 ]; then
@@ -101,12 +89,12 @@ workflows:
       - name: Install frontend deps
         script: |
           cd frontend
-          yarn install --frozen-lockfile
+          npm ci
 
       - name: Build the web bundle
         script: |
           cd frontend
-          CI=false yarn build
+          CI=false npm run build
 
       - name: Sync Capacitor iOS
         script: |
@@ -118,10 +106,23 @@ workflows:
           cd frontend/ios/App
           pod install --repo-update
 
-      - name: Set build number
+      - name: Set collision-safe App Store build number
         script: |
+          set -eu
+          LATEST_BUILD_NUMBER="$(
+            app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID"
+          )"
+          case "$LATEST_BUILD_NUMBER" in
+            ''|*[!0-9]*)
+              echo "App Store Connect returned an invalid latest build number"
+              exit 1
+              ;;
+          esac
+          NEXT_BUILD_NUMBER="$((LATEST_BUILD_NUMBER + 1))"
+          test "$NEXT_BUILD_NUMBER" -gt "$LATEST_BUILD_NUMBER"
+          printf '%s\n' "$NEXT_BUILD_NUMBER" > "$CM_BUILD_DIR/reserved-build-number.txt"
           cd frontend/ios/App
-          agvtool new-version -all "$(($BUILD_NUMBER + 1))"
+          agvtool new-version -all "$NEXT_BUILD_NUMBER"
 
       - name: Fetch iOS signing files from App Store Connect
         script: |
@@ -139,8 +140,156 @@ workflows:
             --workspace App.xcworkspace \
             --scheme App
 
+      - name: Verify signed IPA identity and record provenance
+        script: |
+          set -eu
+          IPA_DIR="$CM_BUILD_DIR/frontend/ios/App/build/ios/ipa"
+          IPA_COUNT="$(find "$IPA_DIR" -maxdepth 1 -type f -name '*.ipa' | wc -l | tr -d '[:space:]')"
+          test "$IPA_COUNT" = "1" || {
+            echo "Expected exactly one signed IPA, found $IPA_COUNT"
+            exit 1
+          }
+          IPA_PATH="$(find "$IPA_DIR" -maxdepth 1 -type f -name '*.ipa' -print -quit)"
+          VERIFY_DIR="$CM_BUILD_DIR/ipa-verify"
+          mkdir -p "$VERIFY_DIR"
+          unzip -q "$IPA_PATH" -d "$VERIFY_DIR"
+          APP_PATH="$(find "$VERIFY_DIR/Payload" -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$APP_PATH" || {
+            echo 'Signed IPA does not contain one application bundle'
+            exit 1
+          }
+          codesign --verify --deep --strict "$APP_PATH"
+          SIGNING_AUTHORITY="$(codesign -dv --verbose=4 "$APP_PATH" 2>&1 | awk -F= '/^Authority=/{print substr($0, index($0, "=") + 1); exit}')"
+          case "$SIGNING_AUTHORITY" in
+            "Apple Distribution"*) ;;
+            *)
+              echo 'Signed IPA must use an Apple Distribution certificate'
+              exit 1
+              ;;
+          esac
+          CERTIFICATE_PREFIX="$VERIFY_DIR/signing-certificate-"
+          codesign -d --extract-certificates "$CERTIFICATE_PREFIX" "$APP_PATH"
+          LEAF_CERTIFICATE="${CERTIFICATE_PREFIX}0"
+          test -s "$LEAF_CERTIFICATE" || {
+            echo 'Signed IPA leaf certificate was not extracted'
+            exit 1
+          }
+          openssl x509 -inform DER -checkend 0 -noout -in "$LEAF_CERTIFICATE" || {
+            echo 'Signed IPA uses an expired distribution certificate'
+            exit 1
+          }
+          SIGNING_CERTIFICATE_NOT_AFTER="$(openssl x509 -inform DER -enddate -noout -in "$LEAF_CERTIFICATE" | sed 's/^notAfter=//')"
+          test -n "$SIGNING_CERTIFICATE_NOT_AFTER" || {
+            echo 'Signing certificate expiration is unavailable'
+            exit 1
+          }
+          PROFILE_PATH="$APP_PATH/embedded.mobileprovision"
+          test -s "$PROFILE_PATH" || {
+            echo 'Signed IPA is missing its embedded provisioning profile'
+            exit 1
+          }
+          PROFILE_PLIST="$VERIFY_DIR/embedded-profile.plist"
+          security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST"
+          PROFILE_CERTIFICATE_DIGEST="$VERIFY_DIR/profile-certificate.sha256"
+          python3 scripts/verify_ios_profile_certificate.py \
+            --profile "$PROFILE_PLIST" \
+            --certificate "$LEAF_CERTIFICATE" \
+            --digest-file "$PROFILE_CERTIFICATE_DIGEST"
+          PROFILE_APPLICATION_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$PROFILE_PLIST")"
+          PROFILE_TEAM_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.team-identifier' "$PROFILE_PLIST")"
+          PROFILE_TOP_LEVEL_TEAM_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$PROFILE_PLIST")"
+          SIGNED_ENTITLEMENTS="$VERIFY_DIR/signed-entitlements.plist"
+          codesign -d --entitlements :- "$APP_PATH" > "$SIGNED_ENTITLEMENTS"
+          SIGNED_APPLICATION_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :application-identifier' "$SIGNED_ENTITLEMENTS")"
+          SIGNED_TEAM_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.team-identifier' "$SIGNED_ENTITLEMENTS")"
+          SIGNED_GET_TASK_ALLOW="$(/usr/libexec/PlistBuddy -c 'Print :get-task-allow' "$SIGNED_ENTITLEMENTS")"
+          PROFILE_GET_TASK_ALLOW="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:get-task-allow' "$PROFILE_PLIST")"
+          PROFILE_EXPIRATION="$(/usr/libexec/PlistBuddy -c 'Print :ExpirationDate' "$PROFILE_PLIST")"
+          PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$PROFILE_PLIST")"
+          PROFILE_NAME="$(/usr/libexec/PlistBuddy -c 'Print :Name' "$PROFILE_PLIST")"
+          test -n "$PROFILE_UUID" || { echo 'Provisioning profile UUID is missing'; exit 1; }
+          test -n "$PROFILE_NAME" || { echo 'Provisioning profile name is missing'; exit 1; }
+          if /usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "$PROFILE_PLIST" >/dev/null 2>&1; then
+            echo 'App Store profile must not target provisioned devices'
+            exit 1
+          fi
+          PROFILE_PROVISIONS_ALL_DEVICES="$(/usr/libexec/PlistBuddy -c 'Print :ProvisionsAllDevices' "$PROFILE_PLIST" 2>/dev/null || true)"
+          case "$(printf '%s' "$PROFILE_PROVISIONS_ALL_DEVICES" | tr '[:upper:]' '[:lower:]')" in
+            true|1)
+              echo 'App Store profile must not use enterprise all-device distribution'
+              exit 1
+              ;;
+          esac
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")"
+          BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")"
+          RESERVED_BUILD_NUMBER="$(cat "$CM_BUILD_DIR/reserved-build-number.txt")"
+          test "$BUNDLE_ID" = "com.rmcclassics.app"
+          test "$VERSION" = "$IOS_MARKETING_VERSION" || {
+            echo 'Final IPA marketing version does not match the reviewed release version'
+            exit 1
+          }
+          test "$PROFILE_TOP_LEVEL_TEAM_IDENTIFIER" = "$PROFILE_TEAM_IDENTIFIER" || {
+            echo 'Provisioning profile team identifiers do not agree'
+            exit 1
+          }
+          test "$PROFILE_APPLICATION_IDENTIFIER" = "$PROFILE_TEAM_IDENTIFIER.$BUNDLE_ID" || {
+            echo 'Provisioning profile does not authorize the IPA bundle identifier'
+            exit 1
+          }
+          test "$SIGNED_APPLICATION_IDENTIFIER" = "$PROFILE_APPLICATION_IDENTIFIER" || {
+            echo 'Signed app identifier does not match its provisioning profile'
+            exit 1
+          }
+          test "$SIGNED_TEAM_IDENTIFIER" = "$PROFILE_TEAM_IDENTIFIER" || {
+            echo 'Signed team identifier does not match its provisioning profile'
+            exit 1
+          }
+          test "$SIGNED_GET_TASK_ALLOW" = "false" || {
+            echo 'Signed App Store IPA must disable get-task-allow'
+            exit 1
+          }
+          test "$PROFILE_GET_TASK_ALLOW" = "false" || {
+            echo 'App Store profile must disable get-task-allow'
+            exit 1
+          }
+          ruby -rtime -e '
+            expiration = Time.parse(ARGV.fetch(0))
+            abort("Provisioning profile is expired") unless expiration > Time.now
+          ' "$PROFILE_EXPIRATION"
+          test -n "$VERSION"
+          case "$BUILD_NUMBER" in ''|*[!0-9]*) echo 'IPA build number must be numeric'; exit 1;; esac
+          test "$BUILD_NUMBER" = "$RESERVED_BUILD_NUMBER" || {
+            echo 'Final IPA build number does not match the reserved App Store build number'
+            exit 1
+          }
+          {
+            echo "repository=ldavis2700/rmc-classics"
+            echo "commit=$(git rev-parse --verify 'HEAD^{commit}')"
+            echo "app_store_apple_id=$APP_STORE_APPLE_ID"
+            echo "bundle_id=$BUNDLE_ID"
+            echo "version=$VERSION"
+            echo "reviewed_marketing_version=$IOS_MARKETING_VERSION"
+            echo "build_number=$BUILD_NUMBER"
+            echo "reserved_build_number=$RESERVED_BUILD_NUMBER"
+            echo "profile_application_identifier=$PROFILE_APPLICATION_IDENTIFIER"
+            echo "profile_top_level_team_identifier=$PROFILE_TOP_LEVEL_TEAM_IDENTIFIER"
+            echo "signed_application_identifier=$SIGNED_APPLICATION_IDENTIFIER"
+            echo "signed_team_identifier=$SIGNED_TEAM_IDENTIFIER"
+            echo "signing_authority=$SIGNING_AUTHORITY"
+            echo "signing_certificate_not_after=$SIGNING_CERTIFICATE_NOT_AFTER"
+            echo "profile_certificate_sha256=$(cat "$PROFILE_CERTIFICATE_DIGEST")"
+            echo "profile_uuid=$PROFILE_UUID"
+            echo "profile_name=$PROFILE_NAME"
+            echo "signed_get_task_allow=$SIGNED_GET_TASK_ALLOW"
+            echo "profile_get_task_allow=$PROFILE_GET_TASK_ALLOW"
+            echo "profile_expiration=$PROFILE_EXPIRATION"
+            shasum -a 256 "$IPA_PATH"
+          } > "$CM_BUILD_DIR/release-ipa-metadata.txt"
+
     artifacts:
       - $CM_BUILD_DIR/release-source.txt
+      - $CM_BUILD_DIR/release-ipa-metadata.txt
       - frontend/ios/App/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - frontend/ios/App/App.xcarchive
@@ -165,19 +314,19 @@ workflows:
         XCODE_WORKSPACE: "frontend/ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
       node: 20
-      xcode: latest
+      xcode: 26.5
       cocoapods: default
 
     scripts:
       - name: Install frontend deps
         script: |
           cd frontend
-          yarn install --frozen-lockfile
+          npm ci
 
       - name: Build web bundle
         script: |
           cd frontend
-          CI=false yarn build
+          CI=false npm run build
 
       - name: Sync Capacitor iOS
         script: |
