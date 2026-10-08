@@ -31,6 +31,10 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
         for step in ("Install frontend deps", "Build the web bundle", "Build .ipa"):
             self.assertLess(signed.index(GATE), signed.index("      - name: " + step))
 
+    def test_ios_workflows_pin_the_reviewed_xcode_toolchain(self):
+        self.assertNotIn("xcode: latest", CONFIG)
+        self.assertEqual(CONFIG.count("xcode: 26.5"), 2)
+
     def test_signed_ipa_is_verified_before_publishing(self):
         signed = CONFIG.split("  ios-unsigned:", 1)[0]
         build = signed.index("      - name: Build .ipa")

@@ -39,7 +39,8 @@ workflows:
         # Never commit store IDs as placeholders or any RevenueCat private/server key.
         REACT_APP_BACKEND_URL: "https://rmcclassics.com"
       node: 20
-      xcode: latest
+      # Keep the reviewed toolchain stable between QA and the signed binary.
+      xcode: 26.5
       cocoapods: default
     integrations:
       app_store_connect: RMC ASC Key
@@ -313,7 +314,7 @@ workflows:
         XCODE_WORKSPACE: "frontend/ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
       node: 20
-      xcode: latest
+      xcode: 26.5
       cocoapods: default
 
     scripts:
