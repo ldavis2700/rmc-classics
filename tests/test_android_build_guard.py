@@ -23,11 +23,13 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertIn("run: npm run build", WORKFLOW)
         self.assertIn("npx cap add android", WORKFLOW)
         self.assertIn("npx cap sync android", WORKFLOW)
-        self.assertIn("./gradlew --no-daemon bundleDebug", WORKFLOW)
+        self.assertIn("./gradlew --no-daemon bundleRelease", WORKFLOW)
         self.assertIn(
             'applicationId "com.rmcclassics.app"', WORKFLOW)
         self.assertIn(
-            "app/build/outputs/bundle/debug/app-debug.aab", WORKFLOW)
+            "app/build/outputs/bundle/release/app-release.aab", WORKFLOW)
+        self.assertNotIn("bundleDebug", WORKFLOW)
+        self.assertNotIn("/bundle/debug/", WORKFLOW)
 
     def test_bundle_receipt_is_hashed_and_retained(self):
         compile_step = WORKFLOW.index(
