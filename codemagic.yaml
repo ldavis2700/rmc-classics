@@ -142,7 +142,8 @@ workflows:
 
       - name: Verify signed IPA identity and record provenance
         script: |
-          set -eu
+          set -euo pipefail
+          umask 077
           IPA_DIR="$CM_BUILD_DIR/frontend/ios/App/build/ios/ipa"
           IPA_COUNT="$(find "$IPA_DIR" -maxdepth 1 -type f -name '*.ipa' | wc -l | tr -d '[:space:]')"
           test "$IPA_COUNT" = "1" || {
@@ -150,8 +151,8 @@ workflows:
             exit 1
           }
           IPA_PATH="$(find "$IPA_DIR" -maxdepth 1 -type f -name '*.ipa' -print -quit)"
-          VERIFY_DIR="$CM_BUILD_DIR/ipa-verify"
-          mkdir -p "$VERIFY_DIR"
+          VERIFY_DIR="$(mktemp -d "$CM_BUILD_DIR/ipa-verify.XXXXXX")"
+          trap 'rm -rf "$VERIFY_DIR"' EXIT
           unzip -q "$IPA_PATH" -d "$VERIFY_DIR"
           APP_PATH="$(find "$VERIFY_DIR/Payload" -maxdepth 1 -type d -name '*.app' -print -quit)"
           test -n "$APP_PATH" || {
