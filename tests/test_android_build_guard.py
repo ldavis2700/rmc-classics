@@ -31,6 +31,22 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertNotIn("bundleDebug", WORKFLOW)
         self.assertNotIn("/bundle/debug/", WORKFLOW)
 
+    def test_release_bundle_is_validated_and_must_remain_unsigned(self):
+        self.assertIn('unzip -t "$AAB"', WORKFLOW)
+        self.assertIn(
+            "base/manifest/AndroidManifest.xml", WORKFLOW)
+        self.assertIn(
+            "^META-INF/[^/]+\\.(RSA|DSA|EC)$", WORKFLOW)
+        self.assertIn(
+            "Refusing signed artifact in non-publishing readiness workflow.",
+            WORKFLOW,
+        )
+        validate_step = WORKFLOW.index('unzip -t "$AAB"')
+        unsigned_step = WORKFLOW.index('test -z "$SIGNATURES"')
+        hash_step = WORKFLOW.index('shasum -a 256 "$AAB"')
+        self.assertLess(validate_step, unsigned_step)
+        self.assertLess(unsigned_step, hash_step)
+
     def test_bundle_receipt_is_hashed_and_retained(self):
         compile_step = WORKFLOW.index(
             "      - name: Compile non-publishing Android App Bundle")
