@@ -26,6 +26,22 @@ CLEANUP_SCRIPT = step_script("Remove temporary signing material")
 
 
 class GitHubReleaseGuardTests(unittest.TestCase):
+    def test_fastlane_release_receipt_is_self_verified_before_upload(self):
+        for guard in (
+            '"artifact=#{ipa_path}"',
+            "required_receipt_keys.each do |key|",
+            "Release receipt must contain exactly one",
+            "Release receipt commit binding mismatch",
+            "Release receipt IPA digest is invalid",
+            "Release receipt IPA digest mismatch",
+            "Digest::SHA256.file(ipa_path).hexdigest",
+        ):
+            self.assertIn(guard, FASTFILE)
+        verify = FASTFILE.index(
+            "required_receipt_keys.each do |key|")
+        upload = FASTFILE.index("upload_to_testflight(")
+        self.assertLess(verify, upload)
+
     def test_codemagic_final_ipa_matches_reserved_build_number(self):
         self.assertIn(
             'printf \'%s\\n\' "$NEXT_BUILD_NUMBER" > '
