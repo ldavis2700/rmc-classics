@@ -47,6 +47,26 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertLess(validate_step, unsigned_step)
         self.assertLess(unsigned_step, hash_step)
 
+    def test_bundle_receipt_binds_hash_to_exact_source_and_unsigned_state(self):
+        for field in (
+            "repository=${GITHUB_REPOSITORY}",
+            "commit=$(git rev-parse --verify 'HEAD^{commit}')",
+            "bundle_id=com.rmcclassics.app",
+            "artifact=$AAB",
+            "sha256=$BUNDLE_SHA256",
+            "signing_state=unsigned-readiness-only",
+        ):
+            self.assertIn(field, WORKFLOW)
+        self.assertIn(
+            "frontend/android/android-readiness-metadata.txt",
+            WORKFLOW,
+        )
+        receipt = WORKFLOW.index(
+            '} > android-readiness-metadata.txt')
+        retain = WORKFLOW.index(
+            "      - name: Retain Android readiness evidence")
+        self.assertLess(receipt, retain)
+
     def test_bundle_receipt_is_hashed_and_retained(self):
         compile_step = WORKFLOW.index(
             "      - name: Compile non-publishing Android App Bundle")
