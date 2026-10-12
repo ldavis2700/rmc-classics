@@ -101,6 +101,15 @@ jobs:
         working-directory: frontend/android
         run: |
           set -euo pipefail
+          AAB='app/build/outputs/bundle/release/app-release.aab'
+          test -s "$AAB"
+          unzip -t "$AAB"
+          unzip -Z1 "$AAB" | grep -qx 'base/manifest/AndroidManifest.xml'
+          RETAINED_SIGNATURES="$(unzip -Z1 "$AAB" | grep -E '^META-INF/[^/]+\.(RSA|DSA|EC)$' || true)"
+          test -z "$RETAINED_SIGNATURES" || {
+            echo "Refusing signed artifact at evidence retention boundary."
+            exit 1
+          }
           sha256sum --check --strict app-release.aab.sha256
           METADATA=android-readiness-metadata.txt
           test "$(grep -c '^repository=' "$METADATA")" -eq 1
