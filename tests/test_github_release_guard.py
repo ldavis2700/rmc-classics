@@ -81,6 +81,7 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         checkout = WORKFLOW.split("- uses: actions/checkout@v5", 1)[1]
         checkout = checkout.split("- name:", 1)[0]
         self.assertIn("ref: ${{ env.SOURCE_COMMIT }}", checkout)
+        self.assertIn("persist-credentials: false", checkout)
         self.assertIn('"$current_commit" != "$SOURCE_COMMIT"', SOURCE_SCRIPT)
 
     def test_revenuecat_key_is_injected_into_web_build(self):
