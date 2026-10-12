@@ -72,6 +72,27 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             verify,
         )
 
+    def test_codemagic_signed_ipa_receipt_is_self_verified(self):
+        verify = CODEMAGIC.split(
+            "      - name: Verify signed IPA identity and record provenance\n",
+            1,
+        )[1].split("\n    artifacts:", 1)[0]
+        self.assertIn('echo "artifact=$IPA_PATH"', verify)
+        self.assertIn('echo "ipa_sha256=$IPA_SHA256"', verify)
+        self.assertIn(
+            'test "$(grep -c "^$key=" "$RECEIPT")" -eq 1',
+            verify,
+        )
+        self.assertIn(
+            'grep -Fqx "commit=$ACTUAL_COMMIT" "$RECEIPT"',
+            verify,
+        )
+        self.assertIn(
+            "grep -Eq '^ipa_sha256=[0-9a-f]{64}$' \"$RECEIPT\"",
+            verify,
+        )
+        self.assertIn('RECORDED_IPA_SHA256="$(sed -n', verify)
+
     def test_guards_precede_setup_install_build_and_signing(self):
         source = WORKFLOW.index("      - name: Verify release source is current main")
         config = WORKFLOW.index("      - name: Validate release configuration")
