@@ -31,7 +31,7 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             '"artifact=#{ipa_path}"',
             "required_receipt_keys.each do |key|",
             "Release receipt must contain exactly one",
-            "Release receipt commit binding mismatch",
+            "Release receipt #{key} binding mismatch",
             "Release receipt IPA digest is invalid",
             "Release receipt IPA digest mismatch",
             "Digest::SHA256.file(ipa_path).hexdigest",
