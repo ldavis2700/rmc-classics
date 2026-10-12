@@ -115,6 +115,25 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             'test "$PROFILE_GET_TASK_ALLOW" = "false"',
             verification,
         )
+        self.assertIn(
+            "Print :Entitlements:beta-reports-active", verification)
+        self.assertIn(
+            'test "$PROFILE_BETA_REPORTS_ACTIVE" = "true"',
+            verification,
+        )
+        self.assertIn(
+            "App Store profile must enable beta-reports-active",
+            verification,
+        )
+        self.assertIn(
+            'echo "profile_beta_reports_active='
+            '$PROFILE_BETA_REPORTS_ACTIVE"',
+            verification,
+        )
+        self.assertIn(
+            'grep -Fqx "profile_beta_reports_active=true"',
+            verification,
+        )
         self.assertIn("Print :ProvisionedDevices", verification)
         self.assertIn(
             "App Store profile must not target provisioned devices",
