@@ -176,9 +176,15 @@ platform :ios do
       "build/ios/ipa/release-ipa-metadata.txt", Dir.pwd
     )
     repository = ENV.fetch("GITHUB_REPOSITORY", "ldavis2700/rmc-classics")
-    commit = ENV.fetch("GITHUB_SHA") {
-      sh("git rev-parse --verify 'HEAD^{commit}'").strip
+    expected_commit = ENV.fetch("SOURCE_COMMIT") {
+      ENV.fetch("GITHUB_SHA") {
+        sh("git rev-parse --verify 'HEAD^{commit}'").strip
+      }
     }
+    commit = sh("git rev-parse --verify 'HEAD^{commit}'").strip
+    UI.user_error!("TestFlight checkout does not match the pinned source commit") unless (
+      expected_commit.match?(/\A[0-9a-f]{40}\z/) && commit == expected_commit
+    )
     app_store_apple_id = ENV.fetch("APP_STORE_APPLE_ID")
     UI.user_error!("App Store Apple ID must be numeric") unless app_store_apple_id.match?(/\A[1-9][0-9]+\z/)
     File.write(receipt_path, [
