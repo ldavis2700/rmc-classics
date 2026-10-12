@@ -55,6 +55,23 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             CODEMAGIC,
         )
 
+    def test_codemagic_ipa_verification_workspace_is_private_and_removed(self):
+        verify = CODEMAGIC.split(
+            "      - name: Verify signed IPA identity and record provenance\n",
+            1,
+        )[1].split("\n    artifacts:", 1)[0]
+        self.assertIn("umask 077", verify)
+        self.assertIn(
+            'VERIFY_DIR="$(mktemp -d "$CM_BUILD_DIR/ipa-verify.XXXXXX")"',
+            verify,
+        )
+        self.assertIn("trap 'rm -rf \"$VERIFY_DIR\"' EXIT", verify)
+        self.assertNotIn(
+            'VERIFY_DIR="$CM_BUILD_DIR/ipa-verify"\n'
+            '          mkdir -p "$VERIFY_DIR"',
+            verify,
+        )
+
     def test_guards_precede_setup_install_build_and_signing(self):
         source = WORKFLOW.index("      - name: Verify release source is current main")
         config = WORKFLOW.index("      - name: Validate release configuration")
