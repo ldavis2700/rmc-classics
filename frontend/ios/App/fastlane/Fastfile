@@ -214,8 +214,41 @@ platform :ios do
       "profile_get_task_allow=#{profile_get_task_allow}",
       "profile_beta_reports_active=#{profile_beta_reports_active}",
       "profile_expiration=#{profile_expiration_time.utc.iso8601}",
+      "artifact=#{ipa_path}",
       "sha256=#{Digest::SHA256.file(ipa_path).hexdigest}",
     ].join("\n") + "\n")
+
+    receipt_lines = File.readlines(receipt_path, chomp: true)
+    required_receipt_keys = %w[
+      repository commit app_store_apple_id bundle_id version
+      reviewed_marketing_version build_number reserved_build_number
+      profile_application_identifier profile_top_level_team_identifier
+      signed_application_identifier signed_team_identifier signing_authority
+      signing_certificate_not_after profile_certificate_sha256 profile_uuid
+      profile_name signed_get_task_allow profile_get_task_allow
+      profile_beta_reports_active profile_expiration artifact sha256
+    ]
+    required_receipt_keys.each do |key|
+      count = receipt_lines.count { |line| line.start_with?("#{key}=") }
+      UI.user_error!("Release receipt must contain exactly one #{key} field") unless count == 1
+    end
+    {
+      "repository" => repository,
+      "commit" => commit,
+      "app_store_apple_id" => app_store_apple_id,
+      "bundle_id" => bundle_id,
+      "version" => verified_version.to_s,
+      "reviewed_marketing_version" => app_version.to_s,
+      "build_number" => verified_build.to_s,
+      "reserved_build_number" => expected_build_number.to_s,
+      "profile_beta_reports_active" => profile_beta_reports_active.to_s,
+      "artifact" => ipa_path,
+    }.each do |key, value|
+      UI.user_error!("Release receipt #{key} binding mismatch") unless receipt_lines.include?("#{key}=#{value}")
+    end
+    recorded_ipa_sha256 = receipt_lines.find { |line| line.start_with?("sha256=") }&.split("=", 2)&.last
+    UI.user_error!("Release receipt IPA digest is invalid") unless recorded_ipa_sha256&.match?(/\A[0-9a-f]{64}\z/)
+    UI.user_error!("Release receipt IPA digest mismatch") unless recorded_ipa_sha256 == Digest::SHA256.file(ipa_path).hexdigest
 
     upload_to_testflight(
       api_key: api_key,
