@@ -114,6 +114,19 @@ class AndroidBuildGuardTests(unittest.TestCase):
             "signing_state=unsigned-readiness-only",
         ):
             self.assertIn(field, verification)
+        self.assertIn('unzip -t "$AAB"', verification)
+        self.assertIn(
+            "base/manifest/AndroidManifest.xml", verification)
+        self.assertIn(
+            "^META-INF/[^/]+\\.(RSA|DSA|EC)$", verification)
+        self.assertIn(
+            "Refusing signed artifact at evidence retention boundary.",
+            verification,
+        )
+        retained_validation = verification.index('unzip -t "$AAB"')
+        retained_hash = verification.index(
+            "sha256sum --check --strict app-release.aab.sha256")
+        self.assertLess(retained_validation, retained_hash)
         self.assertIn('test "$RECORDED_SHA" = "$ACTUAL_SHA"', verification)
 
     def test_bundle_receipt_is_hashed_and_retained(self):
