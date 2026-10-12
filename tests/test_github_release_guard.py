@@ -77,6 +77,11 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         self.assertIn("group: rmc-classics-testflight-upload", WORKFLOW)
         self.assertIn("cancel-in-progress: false", WORKFLOW)
         self.assertIn("environment: app-store-production", WORKFLOW)
+        self.assertIn("SOURCE_COMMIT: ${{ github.sha }}", WORKFLOW)
+        checkout = WORKFLOW.split("- uses: actions/checkout@v5", 1)[1]
+        checkout = checkout.split("- name:", 1)[0]
+        self.assertIn("ref: ${{ env.SOURCE_COMMIT }}", checkout)
+        self.assertIn('"$current_commit" != "$SOURCE_COMMIT"', SOURCE_SCRIPT)
 
     def test_revenuecat_key_is_injected_into_web_build(self):
         build = WORKFLOW.split("      - name: Build web bundle\n", 1)[1]
@@ -160,6 +165,15 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         self.assertIn(
             '"app_store_apple_id=#{app_store_apple_id}"',
             FASTFILE,
+        )
+        self.assertIn('ENV.fetch("SOURCE_COMMIT")', FASTFILE)
+        self.assertIn(
+            "TestFlight checkout does not match the pinned source commit",
+            FASTFILE,
+        )
+        self.assertLess(
+            FASTFILE.index("TestFlight checkout does not match"),
+            upload,
         )
         upload_block = FASTFILE.split("upload_to_testflight(", 1)[1]
         self.assertIn("app_identifier: bundle_id", upload_block)
@@ -287,7 +301,8 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             self.git(checkout, "fetch", "--depth=1", "origin", "tag", "v1.0.0")
             self.git(checkout, "checkout", "--detach", "FETCH_HEAD")
             env = {**os.environ, "GITHUB_WORKSPACE": str(checkout),
-                   "GITHUB_REPOSITORY": "ldavis2700/rmc-classics"}
+                   "GITHUB_REPOSITORY": "ldavis2700/rmc-classics",
+                   "SOURCE_COMMIT": first}
             current = subprocess.run(["bash", "-c", SOURCE_SCRIPT], cwd=checkout,
                                      env=env, text=True, capture_output=True)
             self.assertEqual(current.returncode, 0, current.stdout + current.stderr)
