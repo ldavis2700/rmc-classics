@@ -183,6 +183,16 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             "App Store profile must disable get-task-allow",
             FASTFILE,
         )
+        self.assertIn(
+            'key: "Entitlements:beta-reports-active"', FASTFILE)
+        self.assertIn(
+            "App Store profile must enable beta-reports-active",
+            FASTFILE,
+        )
+        self.assertIn(
+            '"profile_beta_reports_active=#{profile_beta_reports_active}"',
+            FASTFILE,
+        )
         self.assertIn("Print :ProvisionedDevices", FASTFILE)
         self.assertIn(
             "App Store profile must not target provisioned devices",
