@@ -205,6 +205,7 @@ workflows:
           SIGNED_TEAM_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.team-identifier' "$SIGNED_ENTITLEMENTS")"
           SIGNED_GET_TASK_ALLOW="$(/usr/libexec/PlistBuddy -c 'Print :get-task-allow' "$SIGNED_ENTITLEMENTS")"
           PROFILE_GET_TASK_ALLOW="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:get-task-allow' "$PROFILE_PLIST")"
+          PROFILE_BETA_REPORTS_ACTIVE="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:beta-reports-active' "$PROFILE_PLIST")"
           PROFILE_EXPIRATION="$(/usr/libexec/PlistBuddy -c 'Print :ExpirationDate' "$PROFILE_PLIST")"
           PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$PROFILE_PLIST")"
           PROFILE_NAME="$(/usr/libexec/PlistBuddy -c 'Print :Name' "$PROFILE_PLIST")"
@@ -254,6 +255,10 @@ workflows:
             echo 'App Store profile must disable get-task-allow'
             exit 1
           }
+          test "$PROFILE_BETA_REPORTS_ACTIVE" = "true" || {
+            echo 'App Store profile must enable beta-reports-active'
+            exit 1
+          }
           ruby -rtime -e '
             expiration = Time.parse(ARGV.fetch(0))
             abort("Provisioning profile is expired") unless expiration > Time.now
@@ -288,6 +293,7 @@ workflows:
             echo "profile_name=$PROFILE_NAME"
             echo "signed_get_task_allow=$SIGNED_GET_TASK_ALLOW"
             echo "profile_get_task_allow=$PROFILE_GET_TASK_ALLOW"
+            echo "profile_beta_reports_active=$PROFILE_BETA_REPORTS_ACTIVE"
             echo "profile_expiration=$PROFILE_EXPIRATION"
             echo "artifact=$IPA_PATH"
             echo "ipa_sha256=$IPA_SHA256"
@@ -298,8 +304,9 @@ workflows:
               signed_application_identifier signed_team_identifier \
               signing_authority signing_certificate_not_after \
               profile_certificate_sha256 profile_uuid profile_name \
-              signed_get_task_allow profile_get_task_allow profile_expiration \
-              artifact ipa_sha256; do
+              signed_get_task_allow profile_get_task_allow \
+              profile_beta_reports_active profile_expiration artifact \
+              ipa_sha256; do
             test "$(grep -c "^$key=" "$RECEIPT")" -eq 1
           done
           grep -Fqx "repository=ldavis2700/rmc-classics" "$RECEIPT"
@@ -308,6 +315,7 @@ workflows:
           grep -Fqx "bundle_id=com.rmcclassics.app" "$RECEIPT"
           grep -Fqx "version=$IOS_MARKETING_VERSION" "$RECEIPT"
           grep -Fqx "build_number=$RESERVED_BUILD_NUMBER" "$RECEIPT"
+          grep -Fqx "profile_beta_reports_active=true" "$RECEIPT"
           grep -Fqx "artifact=$IPA_PATH" "$RECEIPT"
           grep -Eq '^profile_certificate_sha256=[0-9a-f]{64}$' "$RECEIPT"
           grep -Eq '^ipa_sha256=[0-9a-f]{64}$' "$RECEIPT"
