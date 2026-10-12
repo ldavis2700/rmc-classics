@@ -84,7 +84,7 @@ jobs:
             echo "Refusing signed artifact in non-publishing readiness workflow."
             exit 1
           }
-          BUNDLE_SHA256="$(shasum -a 256 "$AAB" | awk '{print $1}')"
+          BUNDLE_SHA256="$(sha256sum "$AAB" | awk '{print $1}')"
           test -n "$BUNDLE_SHA256"
           printf '%s  %s\n' "$BUNDLE_SHA256" "$AAB" > app-release.aab.sha256
           {
@@ -96,6 +96,27 @@ jobs:
             echo "signing_state=unsigned-readiness-only"
           } > android-readiness-metadata.txt
 
+      - name: Verify Android evidence set
+        working-directory: frontend/android
+        run: |
+          set -euo pipefail
+          sha256sum --check --strict app-release.aab.sha256
+          METADATA=android-readiness-metadata.txt
+          test "$(grep -c '^repository=' "$METADATA")" -eq 1
+          test "$(grep -c '^commit=' "$METADATA")" -eq 1
+          test "$(grep -c '^bundle_id=' "$METADATA")" -eq 1
+          test "$(grep -c '^artifact=' "$METADATA")" -eq 1
+          test "$(grep -c '^sha256=' "$METADATA")" -eq 1
+          test "$(grep -c '^signing_state=' "$METADATA")" -eq 1
+          grep -Fqx "repository=$GITHUB_REPOSITORY" "$METADATA"
+          grep -Fqx "commit=$SOURCE_COMMIT" "$METADATA"
+          grep -Fqx "bundle_id=com.rmcclassics.app" "$METADATA"
+          grep -Fqx "artifact=app/build/outputs/bundle/release/app-release.aab" "$METADATA"
+          grep -Fqx "signing_state=unsigned-readiness-only" "$METADATA"
+          RECORDED_SHA="$(sed -n 's/^sha256=//p' "$METADATA")"
+          ACTUAL_SHA="$(sha256sum app/build/outputs/bundle/release/app-release.aab | awk '{print $1}')"
+          test "$RECORDED_SHA" = "$ACTUAL_SHA"
+
       - name: Retain Android readiness evidence
         uses: actions/upload-artifact@v4
         with:
@@ -105,4 +126,4 @@ jobs:
             frontend/android/app-release.aab.sha256
             frontend/android/android-readiness-metadata.txt
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30
