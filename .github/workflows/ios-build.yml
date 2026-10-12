@@ -136,12 +136,16 @@ jobs:
           IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
           IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
         run: |
+          set -euo pipefail
+          umask 077
           CERTIFICATE_PATH="$RUNNER_TEMP/distribution.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/rmc-build.keychain-db"
           KEYCHAIN_PASSWORD="$(openssl rand -hex 32)"
           test "${#KEYCHAIN_PASSWORD}" -eq 64
 
           echo "$IOS_DISTRIBUTION_CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+          chmod 600 "$CERTIFICATE_PATH"
+          test "$(stat -f '%Lp' "$CERTIFICATE_PATH")" = "600"
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
@@ -155,8 +159,15 @@ jobs:
         env:
           IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
         run: |
-          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/RMC_Classics_App_Store_2026.mobileprovision"
+          set -euo pipefail
+          umask 077
+          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          PROFILE_PATH="$PROFILE_DIR/RMC_Classics_App_Store_2026.mobileprovision"
+          mkdir -p "$PROFILE_DIR"
+          chmod 700 "$PROFILE_DIR"
+          echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+          chmod 600 "$PROFILE_PATH"
+          test "$(stat -f '%Lp' "$PROFILE_PATH")" = "600"
 
       - name: Build & upload via fastlane
         working-directory: frontend/ios/App
