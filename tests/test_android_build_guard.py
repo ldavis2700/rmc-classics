@@ -67,7 +67,7 @@ class AndroidBuildGuardTests(unittest.TestCase):
         )
         validate_step = WORKFLOW.index('unzip -t "$AAB"')
         unsigned_step = WORKFLOW.index('test -z "$SIGNATURES"')
-        hash_step = WORKFLOW.index('shasum -a 256 "$AAB"')
+        hash_step = WORKFLOW.index('sha256sum "$AAB"')
         self.assertLess(validate_step, unsigned_step)
         self.assertLess(unsigned_step, hash_step)
 
@@ -91,16 +91,37 @@ class AndroidBuildGuardTests(unittest.TestCase):
             "      - name: Retain Android readiness evidence")
         self.assertLess(receipt, retain)
 
+    def test_retained_evidence_set_is_verified_before_upload(self):
+        verify_step = WORKFLOW.index(
+            "      - name: Verify Android evidence set")
+        retain_step = WORKFLOW.index(
+            "      - name: Retain Android readiness evidence")
+        self.assertLess(verify_step, retain_step)
+        verification = WORKFLOW[verify_step:retain_step]
+        self.assertIn(
+            "sha256sum --check --strict app-release.aab.sha256",
+            verification,
+        )
+        for field in (
+            "repository=$GITHUB_REPOSITORY",
+            "commit=$SOURCE_COMMIT",
+            "bundle_id=com.rmcclassics.app",
+            "artifact=app/build/outputs/bundle/release/app-release.aab",
+            "signing_state=unsigned-readiness-only",
+        ):
+            self.assertIn(field, verification)
+        self.assertIn('test "$RECORDED_SHA" = "$ACTUAL_SHA"', verification)
+
     def test_bundle_receipt_is_hashed_and_retained(self):
         compile_step = WORKFLOW.index(
             "      - name: Compile non-publishing Android App Bundle")
-        hash_step = WORKFLOW.index('shasum -a 256 "$AAB"')
+        hash_step = WORKFLOW.index('sha256sum "$AAB"')
         retain_step = WORKFLOW.index(
             "      - name: Retain Android readiness evidence")
         self.assertLess(compile_step, hash_step)
         self.assertLess(hash_step, retain_step)
         self.assertIn("if-no-files-found: error", WORKFLOW)
-        self.assertIn("retention-days: 7", WORKFLOW)
+        self.assertIn("retention-days: 30", WORKFLOW)
 
 
 if __name__ == "__main__":
