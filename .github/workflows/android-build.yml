@@ -79,6 +79,7 @@ jobs:
           path: |
             frontend/android/app/build/outputs/bundle/release/app-release.aab
             frontend/android/app-release.aab.sha256
+            frontend/android/android-readiness-metadata.txt
           if-no-files-found: error
           retention-days: 7
  || true)"
@@ -86,7 +87,17 @@ jobs:
             echo "Refusing signed artifact in non-publishing readiness workflow."
             exit 1
           }
-          shasum -a 256 "$AAB" > app-release.aab.sha256
+          BUNDLE_SHA256="$(shasum -a 256 "$AAB" | awk '{print $1}')"
+          test -n "$BUNDLE_SHA256"
+          printf '%s  %s\n' "$BUNDLE_SHA256" "$AAB" > app-release.aab.sha256
+          {
+            echo "repository=${GITHUB_REPOSITORY}"
+            echo "commit=$(git rev-parse --verify 'HEAD^{commit}')"
+            echo "bundle_id=com.rmcclassics.app"
+            echo "artifact=$AAB"
+            echo "sha256=$BUNDLE_SHA256"
+            echo "signing_state=unsigned-readiness-only"
+          } > android-readiness-metadata.txt
 
       - name: Retain Android readiness evidence
         uses: actions/upload-artifact@v4
