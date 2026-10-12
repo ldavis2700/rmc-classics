@@ -118,6 +118,9 @@ platform :ios do
     profile_get_task_allow = get_info_plist_value(
       path: profile_plist, key: "Entitlements:get-task-allow"
     )
+    profile_beta_reports_active = get_info_plist_value(
+      path: profile_plist, key: "Entitlements:beta-reports-active"
+    )
     profile_team_identifier = get_info_plist_value(
       path: profile_plist,
       key: "Entitlements:com.apple.developer.team-identifier"
@@ -163,6 +166,8 @@ platform :ios do
     debuggable_values = [true, 1, "true", "1"]
     UI.user_error!("Signed App Store IPA must disable get-task-allow") if debuggable_values.include?(signed_get_task_allow)
     UI.user_error!("App Store profile must disable get-task-allow") if debuggable_values.include?(profile_get_task_allow)
+    app_store_distribution_values = [true, 1, "true", "1"]
+    UI.user_error!("App Store profile must enable beta-reports-active") unless app_store_distribution_values.include?(profile_beta_reports_active)
     begin
       profile_expiration_time = Time.parse(profile_expiration.to_s)
     rescue ArgumentError
@@ -207,6 +212,7 @@ platform :ios do
       "profile_name=#{profile_name}",
       "signed_get_task_allow=#{signed_get_task_allow}",
       "profile_get_task_allow=#{profile_get_task_allow}",
+      "profile_beta_reports_active=#{profile_beta_reports_active}",
       "profile_expiration=#{profile_expiration_time.utc.iso8601}",
       "sha256=#{Digest::SHA256.file(ipa_path).hexdigest}",
     ].join("\n") + "\n")
