@@ -18,6 +18,30 @@ class AndroidBuildGuardTests(unittest.TestCase):
             "publish", WORKFLOW.lower().replace("non-publishing", ""))
         self.assertNotIn("secrets.", WORKFLOW)
 
+    def test_pull_request_build_is_bound_to_exact_head(self):
+        source = (
+            "${{ github.event.pull_request.head.sha || github.sha }}"
+        )
+        self.assertIn(f"SOURCE_COMMIT: {source}", WORKFLOW)
+        self.assertIn("ref: ${{ env.SOURCE_COMMIT }}", WORKFLOW)
+        self.assertIn(
+            'test "$(git rev-parse --verify \'HEAD^{{commit}}\')" '
+            '= "$SOURCE_COMMIT"',
+            WORKFLOW,
+        )
+        self.assertIn(
+            "name: rmc-classics-android-readiness-"
+            "${{ env.SOURCE_COMMIT }}",
+            WORKFLOW,
+        )
+        checkout = WORKFLOW.index("ref: ${{ env.SOURCE_COMMIT }}")
+        verify = WORKFLOW.index(
+            'test "$(git rev-parse --verify \'HEAD^{{commit}}\')"'
+        )
+        build = WORKFLOW.index("./gradlew --no-daemon bundleRelease")
+        self.assertLess(checkout, verify)
+        self.assertLess(verify, build)
+
     def test_android_shell_and_bundle_are_built_from_locked_frontend(self):
         self.assertIn("run: npm ci", WORKFLOW)
         self.assertIn("run: npm run build", WORKFLOW)
