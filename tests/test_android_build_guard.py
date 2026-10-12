@@ -24,6 +24,10 @@ class AndroidBuildGuardTests(unittest.TestCase):
         )
         self.assertIn(f"SOURCE_COMMIT: {source}", WORKFLOW)
         self.assertIn("ref: ${{ env.SOURCE_COMMIT }}", WORKFLOW)
+        checkout_block = WORKFLOW.split(
+            "- uses: actions/checkout@v5", 1)[1].split(
+                "- name:", 1)[0]
+        self.assertIn("persist-credentials: false", checkout_block)
         self.assertIn(
             'test "$(git rev-parse --verify \'HEAD^{commit}\')" '
             '= "$SOURCE_COMMIT"',
