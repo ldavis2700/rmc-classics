@@ -69,6 +69,23 @@ jobs:
           ./gradlew --no-daemon bundleRelease
           AAB='app/build/outputs/bundle/release/app-release.aab'
           test -s "$AAB"
+          unzip -t "$AAB"
+          unzip -Z1 "$AAB" | grep -qx 'base/manifest/AndroidManifest.xml'
+          SIGNATURES="$(unzip -Z1 "$AAB" | grep -E '^META-INF/[^/]+\.(RSA|DSA|EC)
+      - name: Retain Android readiness evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rmc-classics-android-readiness-${{ github.sha }}
+          path: |
+            frontend/android/app/build/outputs/bundle/release/app-release.aab
+            frontend/android/app-release.aab.sha256
+          if-no-files-found: error
+          retention-days: 7
+ || true)"
+          test -z "$SIGNATURES" || {
+            echo "Refusing signed artifact in non-publishing readiness workflow."
+            exit 1
+          }
           shasum -a 256 "$AAB" > app-release.aab.sha256
 
       - name: Retain Android readiness evidence
