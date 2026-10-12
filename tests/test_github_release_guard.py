@@ -215,6 +215,19 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             signing.index("security create-keychain"),
         )
 
+    def test_temporary_signing_files_have_restrictive_permissions(self):
+        signing = WORKFLOW.split(
+            "      - name: Install Apple Distribution certificate\n", 1)[1]
+        signing = signing.split("      - name:", 1)[0]
+        profile = WORKFLOW.split(
+            "      - name: Install provisioning profile\n", 1)[1]
+        profile = profile.split("      - name:", 1)[0]
+        for block in (signing, profile):
+            self.assertIn("umask 077", block)
+            self.assertIn("chmod 600", block)
+            self.assertIn("stat -f '%Lp'", block)
+        self.assertIn('chmod 700 "$PROFILE_DIR"', profile)
+
     def test_signing_material_cleanup_is_explicit_and_always_runs(self):
         cleanup = WORKFLOW.split(
             "      - name: Remove temporary signing material\n", 1)[1]
