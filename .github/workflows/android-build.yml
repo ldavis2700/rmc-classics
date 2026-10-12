@@ -66,17 +66,17 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon bundleDebug
-          AAB='app/build/outputs/bundle/debug/app-debug.aab'
+          ./gradlew --no-daemon bundleRelease
+          AAB='app/build/outputs/bundle/release/app-release.aab'
           test -s "$AAB"
-          shasum -a 256 "$AAB" > app-debug.aab.sha256
+          shasum -a 256 "$AAB" > app-release.aab.sha256
 
       - name: Retain Android readiness evidence
         uses: actions/upload-artifact@v4
         with:
           name: rmc-classics-android-readiness-${{ github.sha }}
           path: |
-            frontend/android/app/build/outputs/bundle/debug/app-debug.aab
-            frontend/android/app-debug.aab.sha256
+            frontend/android/app/build/outputs/bundle/release/app-release.aab
+            frontend/android/app-release.aab.sha256
           if-no-files-found: error
           retention-days: 7
