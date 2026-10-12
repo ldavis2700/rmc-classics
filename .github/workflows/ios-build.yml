@@ -138,7 +138,8 @@ jobs:
         run: |
           CERTIFICATE_PATH="$RUNNER_TEMP/distribution.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/rmc-build.keychain-db"
-          KEYCHAIN_PASSWORD="rmc-ci-keychain"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 32)"
+          test "${#KEYCHAIN_PASSWORD}" -eq 64
 
           echo "$IOS_DISTRIBUTION_CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
