@@ -25,7 +25,7 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertIn(f"SOURCE_COMMIT: {source}", WORKFLOW)
         self.assertIn("ref: ${{ env.SOURCE_COMMIT }}", WORKFLOW)
         self.assertIn(
-            'test "$(git rev-parse --verify \'HEAD^{{commit}}\')" '
+            'test "$(git rev-parse --verify \'HEAD^{commit}\')" '
             '= "$SOURCE_COMMIT"',
             WORKFLOW,
         )
@@ -36,7 +36,7 @@ class AndroidBuildGuardTests(unittest.TestCase):
         )
         checkout = WORKFLOW.index("ref: ${{ env.SOURCE_COMMIT }}")
         verify = WORKFLOW.index(
-            'test "$(git rev-parse --verify \'HEAD^{{commit}}\')"'
+            'test "$(git rev-parse --verify \'HEAD^{commit}\')"'
         )
         build = WORKFLOW.index("./gradlew --no-daemon bundleRelease")
         self.assertLess(checkout, verify)
