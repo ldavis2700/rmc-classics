@@ -202,6 +202,19 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         )
         self.assertIn("if-no-files-found: ignore", receipt)
 
+    def test_ephemeral_signing_keychain_uses_fresh_password(self):
+        signing = WORKFLOW.split(
+            "      - name: Install Apple Distribution certificate\n", 1)[1]
+        signing = signing.split("      - name:", 1)[0]
+        self.assertIn(
+            'KEYCHAIN_PASSWORD="$(openssl rand -hex 32)"', signing)
+        self.assertIn('test "${#KEYCHAIN_PASSWORD}" -eq 64', signing)
+        self.assertNotIn("rmc-ci-keychain", signing)
+        self.assertLess(
+            signing.index("openssl rand -hex 32"),
+            signing.index("security create-keychain"),
+        )
+
     def test_signing_material_cleanup_is_explicit_and_always_runs(self):
         cleanup = WORKFLOW.split(
             "      - name: Remove temporary signing material\n", 1)[1]
