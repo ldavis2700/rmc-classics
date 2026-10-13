@@ -137,6 +137,28 @@ class AndroidBuildGuardTests(unittest.TestCase):
             "      - name: Retain Android readiness evidence")
         self.assertLess(compile_step, hash_step)
         self.assertLess(hash_step, retain_step)
+        self.assertIn(
+            "sha256sum android-readiness-metadata.txt > \\",
+            WORKFLOW,
+        )
+        self.assertIn(
+            "sha256sum --check --strict "
+            "android-readiness-metadata.txt.sha256",
+            WORKFLOW,
+        )
+        self.assertIn(
+            "frontend/android/android-readiness-metadata.txt.sha256",
+            WORKFLOW,
+        )
+        receipt_hash = WORKFLOW.index(
+            "sha256sum android-readiness-metadata.txt > \\"
+        )
+        verify_receipt = WORKFLOW.index(
+            "sha256sum --check --strict "
+            "android-readiness-metadata.txt.sha256"
+        )
+        self.assertLess(receipt_hash, verify_receipt)
+        self.assertLess(verify_receipt, retain_step)
         self.assertIn("if-no-files-found: error", WORKFLOW)
         self.assertIn("retention-days: 30", WORKFLOW)
 
