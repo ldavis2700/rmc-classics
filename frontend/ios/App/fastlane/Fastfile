@@ -166,6 +166,7 @@ platform :ios do
       path: info_plist, key: "CFBundleShortVersionString"
     )
     verified_build = get_info_plist_value(path: info_plist, key: "CFBundleVersion")
+    UI.user_error!("IPA build number must be numeric") unless verified_build.to_s.match?(/\A[0-9]+\z/)
     UI.user_error!("Unexpected IPA bundle identifier") unless bundle_id == "com.rmcclassics.app"
     UI.user_error!("Provisioning profile team identifiers do not agree") unless profile_top_level_team_identifier == profile_team_identifier
     expected_application_identifier = "#{profile_team_identifier}.#{bundle_id}"
