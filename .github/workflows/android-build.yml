@@ -78,6 +78,12 @@ jobs:
           ./gradlew --no-daemon bundleRelease
           AAB='app/build/outputs/bundle/release/app-release.aab'
           test -s "$AAB"
+          test "$(grep -Ec '^[[:space:]]*versionCode[[:space:]]+[0-9]+' app/build.gradle)" -eq 1
+          test "$(grep -Ec '^[[:space:]]*versionName[[:space:]]+"[^"]+"' app/build.gradle)" -eq 1
+          VERSION_CODE="$(sed -nE 's/^[[:space:]]*versionCode[[:space:]]+([0-9]+).*/\1/p' app/build.gradle)"
+          VERSION_NAME="$(sed -nE 's/^[[:space:]]*versionName[[:space:]]+"([^"]+)".*/\1/p' app/build.gradle)"
+          test "$VERSION_CODE" -gt 0
+          test -n "$VERSION_NAME"
           unzip -t "$AAB"
           unzip -Z1 "$AAB" | grep -qx 'base/manifest/AndroidManifest.xml'
           SIGNATURES="$(unzip -Z1 "$AAB" | grep -E '^META-INF/[^/]+\.(RSA|DSA|EC)$' || true)"
@@ -92,6 +98,8 @@ jobs:
             echo "repository=${GITHUB_REPOSITORY}"
             echo "commit=$(git rev-parse --verify 'HEAD^{commit}')"
             echo "bundle_id=com.rmcclassics.app"
+            echo "version_code=$VERSION_CODE"
+            echo "version_name=$VERSION_NAME"
             echo "artifact=$AAB"
             echo "sha256=$BUNDLE_SHA256"
             echo "signing_state=unsigned-readiness-only"
@@ -118,12 +126,18 @@ jobs:
           test "$(grep -c '^repository=' "$METADATA")" -eq 1
           test "$(grep -c '^commit=' "$METADATA")" -eq 1
           test "$(grep -c '^bundle_id=' "$METADATA")" -eq 1
+          test "$(grep -c '^version_code=' "$METADATA")" -eq 1
+          test "$(grep -c '^version_name=' "$METADATA")" -eq 1
           test "$(grep -c '^artifact=' "$METADATA")" -eq 1
           test "$(grep -c '^sha256=' "$METADATA")" -eq 1
           test "$(grep -c '^signing_state=' "$METADATA")" -eq 1
           grep -Fqx "repository=$GITHUB_REPOSITORY" "$METADATA"
           grep -Fqx "commit=$SOURCE_COMMIT" "$METADATA"
           grep -Fqx "bundle_id=com.rmcclassics.app" "$METADATA"
+          EXPECTED_VERSION_CODE="$(sed -nE 's/^[[:space:]]*versionCode[[:space:]]+([0-9]+).*/\1/p' app/build.gradle)"
+          EXPECTED_VERSION_NAME="$(sed -nE 's/^[[:space:]]*versionName[[:space:]]+"([^"]+)".*/\1/p' app/build.gradle)"
+          grep -Fqx "version_code=$EXPECTED_VERSION_CODE" "$METADATA"
+          grep -Fqx "version_name=$EXPECTED_VERSION_NAME" "$METADATA"
           grep -Fqx "artifact=app/build/outputs/bundle/release/app-release.aab" "$METADATA"
           grep -Fqx "signing_state=unsigned-readiness-only" "$METADATA"
           RECORDED_SHA="$(sed -n 's/^sha256=//p' "$METADATA")"
