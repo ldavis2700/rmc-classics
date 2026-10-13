@@ -96,6 +96,8 @@ jobs:
             echo "sha256=$BUNDLE_SHA256"
             echo "signing_state=unsigned-readiness-only"
           } > android-readiness-metadata.txt
+          sha256sum android-readiness-metadata.txt > \
+            android-readiness-metadata.txt.sha256
 
       - name: Verify Android evidence set
         working-directory: frontend/android
@@ -111,6 +113,7 @@ jobs:
             exit 1
           }
           sha256sum --check --strict app-release.aab.sha256
+          sha256sum --check --strict android-readiness-metadata.txt.sha256
           METADATA=android-readiness-metadata.txt
           test "$(grep -c '^repository=' "$METADATA")" -eq 1
           test "$(grep -c '^commit=' "$METADATA")" -eq 1
@@ -135,5 +138,6 @@ jobs:
             frontend/android/app/build/outputs/bundle/release/app-release.aab
             frontend/android/app-release.aab.sha256
             frontend/android/android-readiness-metadata.txt
+            frontend/android/android-readiness-metadata.txt.sha256
           if-no-files-found: error
           retention-days: 30
