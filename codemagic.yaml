@@ -262,10 +262,14 @@ workflows:
             echo 'App Store profile must enable beta-reports-active'
             exit 1
           }
+          PROFILE_MINIMUM_VALIDITY_DAYS=30
           ruby -rtime -e '
             expiration = Time.parse(ARGV.fetch(0))
-            abort("Provisioning profile is expired") unless expiration > Time.now
-          ' "$PROFILE_EXPIRATION"
+            minimum_days = Integer(ARGV.fetch(1), 10)
+            abort("Provisioning profile must remain valid for at least #{minimum_days} days") unless (
+              expiration > Time.now + (minimum_days * 86_400)
+            )
+          ' "$PROFILE_EXPIRATION" "$PROFILE_MINIMUM_VALIDITY_DAYS"
           test -n "$VERSION"
           case "$BUILD_NUMBER" in ''|*[!0-9]*) echo 'IPA build number must be numeric'; exit 1;; esac
           test "$BUILD_NUMBER" = "$RESERVED_BUILD_NUMBER" || {
@@ -299,6 +303,7 @@ workflows:
             echo "profile_get_task_allow=$PROFILE_GET_TASK_ALLOW"
             echo "profile_beta_reports_active=$PROFILE_BETA_REPORTS_ACTIVE"
             echo "profile_expiration=$PROFILE_EXPIRATION"
+            echo "profile_minimum_validity_days=$PROFILE_MINIMUM_VALIDITY_DAYS"
             echo "artifact=$IPA_PATH"
             echo "ipa_sha256=$IPA_SHA256"
           } > "$RECEIPT"
@@ -310,8 +315,8 @@ workflows:
               certificate_minimum_validity_days profile_certificate_sha256 \
               profile_uuid profile_name \
               signed_get_task_allow profile_get_task_allow \
-              profile_beta_reports_active profile_expiration artifact \
-              ipa_sha256; do
+              profile_beta_reports_active profile_expiration \
+              profile_minimum_validity_days artifact ipa_sha256; do
             test "$(grep -c "^$key=" "$RECEIPT")" -eq 1
           done
           grep -Fqx "repository=ldavis2700/rmc-classics" "$RECEIPT"
@@ -322,6 +327,7 @@ workflows:
           grep -Fqx "build_number=$RESERVED_BUILD_NUMBER" "$RECEIPT"
           grep -Fqx "certificate_minimum_validity_days=$CERTIFICATE_MINIMUM_VALIDITY_DAYS" "$RECEIPT"
           grep -Fqx "profile_beta_reports_active=true" "$RECEIPT"
+          grep -Fqx "profile_minimum_validity_days=$PROFILE_MINIMUM_VALIDITY_DAYS" "$RECEIPT"
           grep -Fqx "artifact=$IPA_PATH" "$RECEIPT"
           grep -Eq '^profile_certificate_sha256=[0-9a-f]{64}$' "$RECEIPT"
           grep -Eq '^ipa_sha256=[0-9a-f]{64}$' "$RECEIPT"
