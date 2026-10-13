@@ -177,6 +177,10 @@ class AndroidBuildGuardTests(unittest.TestCase):
             "grep -Eq '^sha256=[0-9a-f]{64}$' \"$METADATA\"",
             verification,
         )
+        self.assertIn(
+            "grep -Eq '^commit=[0-9a-f]{40}$' \"$METADATA\"",
+            verification,
+        )
         self.assertIn('test "$RECORDED_SHA" = "$ACTUAL_SHA"', verification)
 
     def test_bundle_receipt_is_hashed_and_retained(self):
