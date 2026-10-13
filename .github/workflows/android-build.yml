@@ -111,6 +111,10 @@ jobs:
         working-directory: frontend/android
         run: |
           set -euo pipefail
+          test "$(git rev-parse --verify 'HEAD^{commit}')" = "$SOURCE_COMMIT" || {
+            echo "Retained Android evidence does not match the requested source commit."
+            exit 1
+          }
           AAB='app/build/outputs/bundle/release/app-release.aab'
           test -s "$AAB"
           unzip -t "$AAB"
