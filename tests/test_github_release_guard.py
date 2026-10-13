@@ -40,6 +40,7 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             '"certificate_minimum_validity_days" => certificate_minimum_validity_days.to_s',
             '"signed_application_identifier" => signed_application_identifier',
             '"profile_expiration" => profile_expiration_time.utc.iso8601',
+            '"profile_minimum_validity_days" => profile_minimum_validity_days.to_s',
             "Release receipt profile certificate digest is invalid",
             "Release receipt IPA digest is invalid",
             "Release receipt IPA digest mismatch",
@@ -125,6 +126,8 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         self.assertIn(
             'grep -Fqx "certificate_minimum_validity_days='
             '$CERTIFICATE_MINIMUM_VALIDITY_DAYS" "$RECEIPT"',
+            'grep -Fqx "profile_minimum_validity_days='
+            '$PROFILE_MINIMUM_VALIDITY_DAYS" "$RECEIPT"',
             verify,
         )
 
@@ -167,7 +170,8 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             'profile_path = File.join(app_path, "embedded.mobileprovision")')
         identity = FASTFILE.index(
             "Provisioning profile does not authorize the IPA bundle identifier")
-        expiry = FASTFILE.index("Provisioning profile is expired")
+        expiry = FASTFILE.index(
+            "Provisioning profile must remain valid for at least")
         upload = FASTFILE.index("upload_to_testflight(")
         self.assertLess(profile, identity)
         self.assertLess(identity, upload)
@@ -187,7 +191,10 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         self.assertIn("Provisioning profile name is missing", FASTFILE)
         self.assertIn(
             'key: "Entitlements:application-identifier"', FASTFILE)
-        self.assertIn("profile_expiration_time > Time.now", FASTFILE)
+        self.assertIn("profile_minimum_validity_days = 30", FASTFILE)
+        self.assertIn(
+            "profile_expiration_time > Time.now + "
+            "(profile_minimum_validity_days * 86_400)", FASTFILE)
         self.assertIn("codesign -d --entitlements :-", FASTFILE)
         self.assertIn(
             "signed_application_identifier == profile_application_identifier",
