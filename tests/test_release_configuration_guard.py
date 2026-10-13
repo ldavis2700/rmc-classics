@@ -63,8 +63,9 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             'codesign -d --extract-certificates "$CERTIFICATE_PREFIX"',
             verification,
         )
+        self.assertIn("CERTIFICATE_MINIMUM_VALIDITY_DAYS=30", verification)
         self.assertIn(
-            'openssl x509 -inform DER -checkend 0 -noout',
+            '-checkend "$((CERTIFICATE_MINIMUM_VALIDITY_DAYS * 86400))"',
             verification,
         )
         self.assertIn(
