@@ -135,6 +135,18 @@ class AndroidBuildGuardTests(unittest.TestCase):
         retained_hash = verification.index(
             "sha256sum --check --strict app-release.aab.sha256")
         self.assertLess(retained_validation, retained_hash)
+        self.assertIn(
+            "grep -Eq '^version_code=[1-9][0-9]*$' \"$METADATA\"",
+            verification,
+        )
+        self.assertIn(
+            "grep -Eq '^version_name=.+$' \"$METADATA\"",
+            verification,
+        )
+        self.assertIn(
+            "grep -Eq '^sha256=[0-9a-f]{64}$' \"$METADATA\"",
+            verification,
+        )
         self.assertIn('test "$RECORDED_SHA" = "$ACTUAL_SHA"', verification)
 
     def test_bundle_receipt_is_hashed_and_retained(self):
