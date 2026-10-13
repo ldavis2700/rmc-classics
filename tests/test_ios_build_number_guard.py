@@ -19,7 +19,8 @@ class IOSBuildNumberGuardTests(unittest.TestCase):
 
     def test_fastlane_increments_latest_testflight_build(self):
         self.assertIn("latest_testflight_build_number(", FASTFILE)
-        self.assertIn("build_number: latest_build + 1", FASTFILE)
+        self.assertIn("expected_build_number = latest_build + 1", FASTFILE)
+        self.assertIn("build_number: expected_build_number", FASTFILE)
 
     def test_fastlane_verifies_signed_ipa_before_upload(self):
         build = FASTFILE.index("    build_app(")
