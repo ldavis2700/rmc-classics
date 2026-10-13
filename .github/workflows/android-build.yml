@@ -142,6 +142,7 @@ jobs:
           test "$(grep -c '^signing_state=' "$METADATA")" -eq 1
           grep -Fqx "repository=$GITHUB_REPOSITORY" "$METADATA"
           grep -Fqx "commit=$SOURCE_COMMIT" "$METADATA"
+          grep -Eq '^commit=[0-9a-f]{40}$' "$METADATA"
           grep -Fqx "bundle_id=com.rmcclassics.app" "$METADATA"
           EXPECTED_VERSION_CODE="$(sed -nE 's/^[[:space:]]*versionCode[[:space:]]+([0-9]+).*/\1/p' app/build.gradle)"
           EXPECTED_VERSION_NAME="$(sed -nE 's/^[[:space:]]*versionName[[:space:]]+"([^"]+)".*/\1/p' app/build.gradle)"
