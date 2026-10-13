@@ -120,6 +120,12 @@ jobs:
             echo "Refusing signed artifact at evidence retention boundary."
             exit 1
           }
+          test "$(wc -l < app-release.aab.sha256)" -eq 1
+          grep -Eq '^[0-9a-f]{64}  app/build/outputs/bundle/release/app-release\.aab$' \
+            app-release.aab.sha256
+          test "$(wc -l < android-readiness-metadata.txt.sha256)" -eq 1
+          grep -Eq '^[0-9a-f]{64}  android-readiness-metadata\.txt$' \
+            android-readiness-metadata.txt.sha256
           sha256sum --check --strict app-release.aab.sha256
           sha256sum --check --strict android-readiness-metadata.txt.sha256
           METADATA=android-readiness-metadata.txt
