@@ -280,7 +280,7 @@ platform :ios do
       api_key: api_key,
       app_identifier: bundle_id,
       apple_id: app_store_apple_id,
-      ipa: "build/ios/ipa/App.ipa",
+      ipa: ipa_path,
       skip_waiting_for_build_processing: true
     )
   end
