@@ -37,6 +37,7 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             "App Store Connect key ID is invalid",
             "App Store Connect issuer ID is invalid",
             '"profile_certificate_sha256" => profile_certificate_digest',
+            '"certificate_minimum_validity_days" => certificate_minimum_validity_days.to_s',
             '"signed_application_identifier" => signed_application_identifier',
             '"profile_expiration" => profile_expiration_time.utc.iso8601',
             "Release receipt profile certificate digest is invalid",
@@ -116,6 +117,16 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             verify,
         )
         self.assertIn('RECORDED_IPA_SHA256="$(sed -n', verify)
+        self.assertIn("CERTIFICATE_MINIMUM_VALIDITY_DAYS=30", verify)
+        self.assertIn(
+            '-checkend "$((CERTIFICATE_MINIMUM_VALIDITY_DAYS * 86400))"',
+            verify,
+        )
+        self.assertIn(
+            'grep -Fqx "certificate_minimum_validity_days='
+            '$CERTIFICATE_MINIMUM_VALIDITY_DAYS" "$RECEIPT"',
+            verify,
+        )
 
     def test_guards_precede_setup_install_build_and_signing(self):
         source = WORKFLOW.index("      - name: Verify release source is current main")
@@ -162,6 +173,11 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         self.assertLess(identity, upload)
         self.assertLess(expiry, upload)
         self.assertIn("security cms -D -i", FASTFILE)
+        self.assertIn("certificate_minimum_validity_days = 30", FASTFILE)
+        self.assertIn(
+            "-checkend #{certificate_minimum_validity_days * 86_400}",
+            FASTFILE,
+        )
         self.assertIn("verify_ios_profile_certificate.py", FASTFILE)
         self.assertIn("--certificate", FASTFILE)
         self.assertIn("profile_certificate_sha256=", FASTFILE)
