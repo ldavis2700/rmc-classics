@@ -71,9 +71,11 @@ platform :ios do
     )
     leaf_certificate = "#{certificate_prefix}0"
     UI.user_error!("Signed IPA leaf certificate was not extracted") unless File.file?(leaf_certificate) && File.size?(leaf_certificate)
+    certificate_minimum_validity_days = 30
     sh(
-      "openssl x509 -inform DER -checkend 0 -noout -in " \
-      "#{Shellwords.escape(leaf_certificate)}"
+      "openssl x509 -inform DER " \
+      "-checkend #{certificate_minimum_validity_days * 86_400} " \
+      "-noout -in #{Shellwords.escape(leaf_certificate)}"
     )
     certificate_not_after = sh(
       "openssl x509 -inform DER -enddate -noout -in " \
@@ -216,6 +218,7 @@ platform :ios do
       "signed_team_identifier=#{signed_team_identifier}",
       "signing_authority=#{signing_authority}",
       "signing_certificate_not_after=#{certificate_not_after}",
+      "certificate_minimum_validity_days=#{certificate_minimum_validity_days}",
       "profile_certificate_sha256=#{profile_certificate_digest}",
       "profile_uuid=#{profile_uuid}",
       "profile_name=#{profile_name}",
@@ -234,7 +237,8 @@ platform :ios do
       reviewed_marketing_version build_number reserved_build_number
       profile_application_identifier profile_top_level_team_identifier
       signed_application_identifier signed_team_identifier signing_authority
-      signing_certificate_not_after profile_certificate_sha256 profile_uuid
+      signing_certificate_not_after certificate_minimum_validity_days
+      profile_certificate_sha256 profile_uuid
       profile_name signed_get_task_allow profile_get_task_allow
       profile_beta_reports_active profile_expiration artifact sha256
     ]
@@ -259,6 +263,7 @@ platform :ios do
       "signed_team_identifier" => signed_team_identifier,
       "signing_authority" => signing_authority,
       "signing_certificate_not_after" => certificate_not_after,
+      "certificate_minimum_validity_days" => certificate_minimum_validity_days.to_s,
       "profile_certificate_sha256" => profile_certificate_digest,
       "profile_uuid" => profile_uuid,
       "profile_name" => profile_name,
