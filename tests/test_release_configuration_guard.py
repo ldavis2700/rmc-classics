@@ -145,7 +145,11 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             "App Store profile must not use enterprise all-device distribution",
             verification,
         )
-        self.assertIn("Provisioning profile is expired", verification)
+        self.assertIn("PROFILE_MINIMUM_VALIDITY_DAYS=30", verification)
+        self.assertIn(
+            "Provisioning profile must remain valid for at least",
+            verification,
+        )
         self.assertIn("IPA build number must be numeric", verification)
         self.assertIn('shasum -a 256 "$IPA_PATH"', verification)
         self.assertIn(
