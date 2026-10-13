@@ -109,6 +109,16 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertLess(verify_step, retain_step)
         verification = WORKFLOW[verify_step:retain_step]
         self.assertIn(
+            'test "$(git rev-parse --verify \'HEAD^{commit}\')" '
+            '= "$SOURCE_COMMIT"',
+            verification,
+        )
+        self.assertIn(
+            "Retained Android evidence does not match the requested "
+            "source commit.",
+            verification,
+        )
+        self.assertIn(
             'test "$(wc -l < app-release.aab.sha256)" -eq 1',
             verification,
         )
