@@ -56,6 +56,10 @@ class AndroidBuildGuardTests(unittest.TestCase):
             'applicationId "com.rmcclassics.app"', WORKFLOW)
         self.assertIn(
             "app/build/outputs/bundle/release/app-release.aab", WORKFLOW)
+        self.assertIn("VERSION_CODE=\"$(sed -nE", WORKFLOW)
+        self.assertIn("VERSION_NAME=\"$(sed -nE", WORKFLOW)
+        self.assertIn('test "$VERSION_CODE" -gt 0', WORKFLOW)
+        self.assertIn('test -n "$VERSION_NAME"', WORKFLOW)
         self.assertNotIn("bundleDebug", WORKFLOW)
         self.assertNotIn("/bundle/debug/", WORKFLOW)
 
@@ -80,6 +84,8 @@ class AndroidBuildGuardTests(unittest.TestCase):
             "repository=${GITHUB_REPOSITORY}",
             "commit=$(git rev-parse --verify 'HEAD^{commit}')",
             "bundle_id=com.rmcclassics.app",
+            "version_code=$VERSION_CODE",
+            "version_name=$VERSION_NAME",
             "artifact=$AAB",
             "sha256=$BUNDLE_SHA256",
             "signing_state=unsigned-readiness-only",
@@ -110,6 +116,8 @@ class AndroidBuildGuardTests(unittest.TestCase):
             "repository=$GITHUB_REPOSITORY",
             "commit=$SOURCE_COMMIT",
             "bundle_id=com.rmcclassics.app",
+            "version_code=$EXPECTED_VERSION_CODE",
+            "version_name=$EXPECTED_VERSION_NAME",
             "artifact=app/build/outputs/bundle/release/app-release.aab",
             "signing_state=unsigned-readiness-only",
         ):
