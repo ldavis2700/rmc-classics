@@ -47,6 +47,8 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertLess(verify, build)
 
     def test_android_shell_and_bundle_are_built_from_locked_frontend(self):
+        self.assertIn("uses: actions/setup-java@v5", WORKFLOW)
+        self.assertNotIn("cache: gradle", WORKFLOW)
         self.assertIn("run: npm ci", WORKFLOW)
         self.assertIn("run: npm run build", WORKFLOW)
         self.assertIn("npx cap add android", WORKFLOW)
