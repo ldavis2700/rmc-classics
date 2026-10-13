@@ -251,6 +251,8 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         upload_block = FASTFILE.split("upload_to_testflight(", 1)[1]
         self.assertIn("app_identifier: bundle_id", upload_block)
         self.assertIn("apple_id: app_store_apple_id", upload_block)
+        self.assertIn("ipa: ipa_path", upload_block)
+        self.assertNotIn('ipa: "build/ios/ipa/App.ipa"', upload_block)
         self.assertIn(
             'APP_STORE_APPLE_ID: ${{ secrets.APP_STORE_APPLE_ID }}',
             WORKFLOW,
