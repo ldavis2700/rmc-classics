@@ -126,6 +126,9 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         self.assertIn(
             'grep -Fqx "certificate_minimum_validity_days='
             '$CERTIFICATE_MINIMUM_VALIDITY_DAYS" "$RECEIPT"',
+            verify,
+        )
+        self.assertIn(
             'grep -Fqx "profile_minimum_validity_days='
             '$PROFILE_MINIMUM_VALIDITY_DAYS" "$RECEIPT"',
             verify,
