@@ -109,6 +109,24 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertLess(verify_step, retain_step)
         verification = WORKFLOW[verify_step:retain_step]
         self.assertIn(
+            'test "$(wc -l < app-release.aab.sha256)" -eq 1',
+            verification,
+        )
+        self.assertIn(
+            "grep -Eq '^[0-9a-f]{64}  "
+            "app/build/outputs/bundle/release/app-release\\.aab$'",
+            verification,
+        )
+        self.assertIn(
+            'test "$(wc -l < android-readiness-metadata.txt.sha256)" -eq 1',
+            verification,
+        )
+        self.assertIn(
+            "grep -Eq '^[0-9a-f]{64}  "
+            "android-readiness-metadata\\.txt$'",
+            verification,
+        )
+        self.assertIn(
             "sha256sum --check --strict app-release.aab.sha256",
             verification,
         )
