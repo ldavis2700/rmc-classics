@@ -133,6 +133,15 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             '$PROFILE_MINIMUM_VALIDITY_DAYS" "$RECEIPT"',
             verify,
         )
+        self.assertIn(
+            'grep -Fqx "signing_certificate_not_after='
+            '$SIGNING_CERTIFICATE_NOT_AFTER" "$RECEIPT"',
+            verify,
+        )
+        self.assertIn(
+            'grep -Fqx "profile_expiration=$PROFILE_EXPIRATION" "$RECEIPT"',
+            verify,
+        )
 
     def test_guards_precede_setup_install_build_and_signing(self):
         source = WORKFLOW.index("      - name: Verify release source is current main")
