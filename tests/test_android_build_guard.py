@@ -78,8 +78,8 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertLess(pin_npm, install_dependencies)
         self.assertIn("run: npm ci", WORKFLOW)
         self.assertIn("run: npm run build", WORKFLOW)
-        self.assertIn("npx cap add android", WORKFLOW)
-        self.assertIn("npx cap sync android", WORKFLOW)
+        self.assertIn("./node_modules/.bin/cap add android", WORKFLOW)
+        self.assertIn("./node_modules/.bin/cap sync android", WORKFLOW)
         self.assertIn("./gradlew --no-daemon bundleRelease", WORKFLOW)
         self.assertIn(
             'applicationId "com.rmcclassics.app"', WORKFLOW)
