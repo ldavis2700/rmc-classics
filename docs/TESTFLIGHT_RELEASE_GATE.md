@@ -36,10 +36,19 @@ workflow run and verify the receipt itself:
 shasum -a 256 -c release-ipa-metadata.txt.sha256
 ```
 
-Proceed only when the command prints `release-ipa-metadata.txt: OK`; then match
-the receipt's repository, commit, bundle ID, marketing version, reserved build
-number, and IPA SHA-256 to the exact release candidate. A missing or mismatched
-sidecar invalidates the receipt.
+Proceed only when the command prints `release-ipa-metadata.txt: OK`; then bind
+every critical field to the exact candidate and App Store record: `repository`,
+`commit`, `app_store_apple_id`, `bundle_id`, `version`,
+`reviewed_marketing_version`, `build_number`, `reserved_build_number`,
+`profile_application_identifier`, `profile_top_level_team_identifier`,
+`signed_application_identifier`, `signed_team_identifier`, `signing_authority`,
+`signing_certificate_not_after`, `certificate_minimum_validity_days`,
+`profile_certificate_sha256`, `profile_uuid`, `profile_name`,
+`signed_get_task_allow`, `profile_get_task_allow`,
+`profile_beta_reports_active`, `profile_expiration`,
+`profile_minimum_validity_days`, `artifact`, and the lane-specific `sha256` or
+`ipa_sha256`. A missing, mismatched, expired, or unexpected value—or a missing
+or mismatched sidecar—invalidates the candidate.
 
 ## Required release checks
 
