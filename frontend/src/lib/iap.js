@@ -14,7 +14,10 @@
  */
 import api from "@/lib/api";
 
-const REVENUECAT_KEY = process.env.REACT_APP_REVENUECAT_IOS_KEY || "";
+const REVENUECAT_KEYS = {
+  ios: process.env.REACT_APP_REVENUECAT_IOS_KEY || "",
+  android: process.env.REACT_APP_REVENUECAT_ANDROID_KEY || "",
+};
 
 export const IAP_PRODUCTS = {
   FREEZE_PACK_5: {
@@ -28,12 +31,23 @@ export const IAP_PRODUCTS = {
 let configured = false;
 let cachedPurchases = null;
 
-function isNative() {
+function nativePlatform() {
   try {
-    return typeof window !== "undefined" && !!window.Capacitor?.isNativePlatform?.();
+    if (typeof window === "undefined" || !window.Capacitor?.isNativePlatform?.()) {
+      return "";
+    }
+    return window.Capacitor.getPlatform?.() || "";
   } catch {
-    return false;
+    return "";
   }
+}
+
+function isNative() {
+  return nativePlatform() === "ios" || nativePlatform() === "android";
+}
+
+export function revenueCatKeyForPlatform(platform = nativePlatform()) {
+  return REVENUECAT_KEYS[platform] || "";
 }
 
 async function getPurchases() {
@@ -49,11 +63,12 @@ async function getPurchases() {
 
 /** Configure RevenueCat with the logged-in user's stable ID. Call from AuthContext once user is known. */
 export async function configureIAP(userId) {
-  if (!isNative() || configured || !userId || !REVENUECAT_KEY) return false;
+  const revenueCatKey = revenueCatKeyForPlatform();
+  if (!isNative() || configured || !userId || !revenueCatKey) return false;
   const Purchases = await getPurchases();
   if (!Purchases) return false;
   try {
-    await Purchases.configure({ apiKey: REVENUECAT_KEY, appUserID: userId });
+    await Purchases.configure({ apiKey: revenueCatKey, appUserID: userId });
     configured = true;
     return true;
   } catch (err) {
@@ -65,9 +80,9 @@ export async function configureIAP(userId) {
 /** Buy the 5-pack. Returns { ok, freezes_available? } or { ok: false, error }. */
 export async function purchaseFreezePack() {
   if (!isNative()) {
-    return { ok: false, error: "In-app purchases are only available in the iOS app." };
+    return { ok: false, error: "In-app purchases are only available in the mobile app." };
   }
-  if (!REVENUECAT_KEY) {
+  if (!revenueCatKeyForPlatform()) {
     return { ok: false, error: "Purchases are temporarily unavailable." };
   }
   const Purchases = await getPurchases();
