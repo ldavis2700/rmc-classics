@@ -127,7 +127,7 @@ jobs:
 
       - name: Sync Capacitor iOS
         working-directory: frontend
-        run: npx cap sync ios
+        run: ./node_modules/.bin/cap sync ios
 
       - name: Install CocoaPods
         working-directory: frontend/ios/App
