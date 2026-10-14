@@ -18,7 +18,7 @@ class DependencyLockGuardTests(unittest.TestCase):
 
     def test_lockfile_and_package_manager_are_explicit(self):
         self.assertEqual(self.lock["lockfileVersion"], 3)
-        self.assertTrue(self.package["packageManager"].startswith("npm@10."))
+        self.assertEqual(self.package["packageManager"], "npm@10.9.4")
 
     def test_build_paths_use_clean_locked_installs(self):
         paths = {
@@ -30,6 +30,22 @@ class DependencyLockGuardTests(unittest.TestCase):
             with self.subTest(path=path.name):
                 contents = path.read_text()
                 self.assertEqual(contents.count("npm ci"), expected)
+                self.assertEqual(
+                    contents.count("npm install --global npm@10.9.4"),
+                    expected,
+                )
+                self.assertEqual(
+                    contents.count(
+                        'test "$(npm --version)" = "10.9.4"'),
+                    expected,
+                )
+                cursor = 0
+                for _ in range(expected):
+                    pin = contents.index(
+                        "npm install --global npm@10.9.4", cursor)
+                    install = contents.index("npm ci", pin)
+                    self.assertLess(pin, install)
+                    cursor = install + len("npm ci")
                 self.assertNotIn("yarn install", contents)
                 self.assertNotIn("yarn build", contents)
 
