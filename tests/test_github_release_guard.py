@@ -332,8 +332,25 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             "`release-ipa-metadata.txt.sha256` from the same",
             RELEASE_GATE,
         )
-        self.assertIn("A missing or mismatched\nsidecar invalidates the receipt.",
-                      RELEASE_GATE)
+        for field in (
+            "repository", "commit", "app_store_apple_id", "bundle_id",
+            "version", "reviewed_marketing_version", "build_number",
+            "reserved_build_number", "profile_application_identifier",
+            "profile_top_level_team_identifier",
+            "signed_application_identifier", "signed_team_identifier",
+            "signing_authority", "signing_certificate_not_after",
+            "certificate_minimum_validity_days",
+            "profile_certificate_sha256", "profile_uuid", "profile_name",
+            "signed_get_task_allow", "profile_get_task_allow",
+            "profile_beta_reports_active", "profile_expiration",
+            "profile_minimum_validity_days", "artifact", "sha256",
+            "ipa_sha256",
+        ):
+            self.assertIn(f"`{field}`", RELEASE_GATE)
+        self.assertIn(
+            "or mismatched sidecar—invalidates the candidate",
+            RELEASE_GATE,
+        )
 
     def test_ephemeral_signing_keychain_uses_fresh_password(self):
         signing = WORKFLOW.split(
