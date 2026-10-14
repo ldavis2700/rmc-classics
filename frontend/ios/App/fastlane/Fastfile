@@ -288,6 +288,19 @@ platform :ios do
     UI.user_error!("Release receipt IPA digest is invalid") unless recorded_ipa_sha256&.match?(/\A[0-9a-f]{64}\z/)
     UI.user_error!("Release receipt IPA digest mismatch") unless recorded_ipa_sha256 == Digest::SHA256.file(ipa_path).hexdigest
 
+    receipt_checksum_path = "#{receipt_path}.sha256"
+    receipt_checksum = Digest::SHA256.file(receipt_path).hexdigest
+    File.write(
+      receipt_checksum_path,
+      "#{receipt_checksum}  #{File.basename(receipt_path)}\n"
+    )
+    recorded_receipt_sha256, recorded_receipt_name = File.read(
+      receipt_checksum_path
+    ).strip.split(/\s+/, 2)
+    UI.user_error!("Release receipt checksum is invalid") unless recorded_receipt_sha256&.match?(/\A[0-9a-f]{64}\z/)
+    UI.user_error!("Release receipt checksum path is invalid") unless recorded_receipt_name == File.basename(receipt_path)
+    UI.user_error!("Release receipt checksum mismatch") unless recorded_receipt_sha256 == Digest::SHA256.file(receipt_path).hexdigest
+
     upload_to_testflight(
       api_key: api_key,
       app_identifier: bundle_id,
