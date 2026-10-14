@@ -67,7 +67,10 @@ jobs:
           test "$(grep -Ec '^[[:space:]]*targetSdkVersion[[:space:]]*=[[:space:]]*[0-9]+' android/variables.gradle)" -eq 1
           sed -i -E 's/^([[:space:]]*)compileSdkVersion[[:space:]]*=.*/\1compileSdkVersion = 36/' android/variables.gradle
           sed -i -E 's/^([[:space:]]*)targetSdkVersion[[:space:]]*=.*/\1targetSdkVersion = 36/' android/variables.gradle
-          grep -Eq '^[[:space:]]*compileSdkVersion[[:space:]]*=[[:space:]]*36
+          grep -Eq '^[[:space:]]*compileSdkVersion[[:space:]]*=[[:space:]]*36$' android/variables.gradle
+          grep -Eq '^[[:space:]]*targetSdkVersion[[:space:]]*=[[:space:]]*36$' android/variables.gradle
+          grep -q 'applicationId "com.rmcclassics.app"' android/app/build.gradle
+
       - name: Compile non-publishing Android App Bundle
         working-directory: frontend/android
         run: |
