@@ -337,10 +337,20 @@ workflows:
           test "$RECORDED_IPA_SHA256" = "$(
             shasum -a 256 "$IPA_PATH" | awk '{print $1}'
           )"
+          (
+            cd "$(dirname "$RECEIPT")"
+            receipt_name="$(basename "$RECEIPT")"
+            shasum -a 256 "$receipt_name" > "$receipt_name.sha256"
+            test "$(wc -l < "$receipt_name.sha256" | tr -d ' ')" -eq 1
+            grep -Eq '^[0-9a-f]{64}  release-ipa-metadata\.txt$' \
+              "$receipt_name.sha256"
+            shasum -a 256 -c "$receipt_name.sha256"
+          )
 
     artifacts:
       - $CM_BUILD_DIR/release-source.txt
       - $CM_BUILD_DIR/release-ipa-metadata.txt
+      - $CM_BUILD_DIR/release-ipa-metadata.txt.sha256
       - frontend/ios/App/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - frontend/ios/App/App.xcarchive
