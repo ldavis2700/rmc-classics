@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = (ROOT / ".github/workflows/ios-build.yml").read_text()
 FASTFILE = (ROOT / "frontend/ios/App/fastlane/Fastfile").read_text()
 CODEMAGIC = (ROOT / "codemagic.yaml").read_text()
+RELEASE_GATE = (ROOT / "docs/TESTFLIGHT_RELEASE_GATE.md").read_text()
 
 
 def step_script(name):
@@ -319,6 +320,20 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             receipt,
         )
         self.assertIn("if-no-files-found: ignore", receipt)
+
+    def test_release_runbook_verifies_receipt_checksum(self):
+        self.assertIn(
+            "shasum -a 256 -c release-ipa-metadata.txt.sha256",
+            RELEASE_GATE,
+        )
+        self.assertIn("release-ipa-metadata.txt: OK", RELEASE_GATE)
+        self.assertIn(
+            "`release-ipa-metadata.txt` and "
+            "`release-ipa-metadata.txt.sha256` from the same",
+            RELEASE_GATE,
+        )
+        self.assertIn("A missing or mismatched\nsidecar invalidates the receipt.",
+                      RELEASE_GATE)
 
     def test_ephemeral_signing_keychain_uses_fresh_password(self):
         signing = WORKFLOW.split(
