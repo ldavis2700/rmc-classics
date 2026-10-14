@@ -7,6 +7,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = (ROOT / ".github/workflows/android-build.yml").read_text()
 RUNBOOK = (ROOT / "docs/GOOGLE_PLAY_RELEASE_GATE.md").read_text()
+IAP = (ROOT / "frontend/src/lib/iap.js").read_text()
 
 
 class AndroidBuildGuardTests(unittest.TestCase):
@@ -34,6 +35,15 @@ class AndroidBuildGuardTests(unittest.TestCase):
                     line,
                     r"uses: actions/[a-z-]+@[0-9a-f]{40} # v[0-9]+$",
                 )
+
+    def test_android_iap_uses_its_own_public_revenuecat_key(self):
+        self.assertIn("REACT_APP_REVENUECAT_IOS_KEY", IAP)
+        self.assertIn("REACT_APP_REVENUECAT_ANDROID_KEY", IAP)
+        self.assertIn("window.Capacitor.getPlatform", IAP)
+        self.assertIn("revenueCatKeyForPlatform", IAP)
+        self.assertIn("apiKey: revenueCatKey", IAP)
+        self.assertNotIn("const REVENUECAT_KEY =", IAP)
+        self.assertNotIn("only available in the iOS app", IAP)
 
     def test_google_play_runbook_keeps_signing_and_upload_owner_gated(self):
         for required in (
