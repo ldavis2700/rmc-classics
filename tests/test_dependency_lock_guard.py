@@ -14,6 +14,7 @@ class DependencyLockGuardTests(unittest.TestCase):
     def setUpClass(cls):
         cls.package = json.loads((FRONTEND / "package.json").read_text())
         cls.lock = json.loads((FRONTEND / "package-lock.json").read_text())
+        cls.capacitor_config = (FRONTEND / "capacitor.config.ts").read_text()
 
     def test_lockfile_and_package_manager_are_explicit(self):
         self.assertEqual(self.lock["lockfileVersion"], 3)
@@ -31,6 +32,11 @@ class DependencyLockGuardTests(unittest.TestCase):
                 self.assertEqual(contents.count("npm ci"), expected)
                 self.assertNotIn("yarn install", contents)
                 self.assertNotIn("yarn build", contents)
+
+    def test_native_release_instructions_use_locked_npm(self):
+        self.assertIn("npm ci", self.capacitor_config)
+        self.assertIn("npm run build", self.capacitor_config)
+        self.assertNotIn("yarn", self.capacitor_config.lower())
 
     def test_native_and_calendar_peers_are_supported(self):
         dependencies = self.package["dependencies"]
