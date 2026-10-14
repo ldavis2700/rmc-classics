@@ -104,7 +104,7 @@ workflows:
       - name: Sync Capacitor iOS
         script: |
           cd frontend
-          npx cap sync ios
+          ./node_modules/.bin/cap sync ios
 
       - name: Install CocoaPods
         script: |
@@ -402,7 +402,7 @@ workflows:
       - name: Sync Capacitor iOS
         script: |
           cd frontend
-          npx cap sync ios
+          ./node_modules/.bin/cap sync ios
 
       - name: Install CocoaPods
         script: |
