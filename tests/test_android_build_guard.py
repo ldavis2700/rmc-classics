@@ -19,6 +19,22 @@ class AndroidBuildGuardTests(unittest.TestCase):
             "publish", WORKFLOW.lower().replace("non-publishing", ""))
         self.assertNotIn("secrets.", WORKFLOW)
 
+    def test_third_party_actions_are_pinned_to_reviewed_commits(self):
+        expected = (
+            "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5",
+            "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4",
+            "actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5",
+            "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4",
+        )
+        for action in expected:
+            self.assertIn(f"uses: {action}", WORKFLOW)
+        for line in WORKFLOW.splitlines():
+            if "uses: actions/" in line:
+                self.assertRegex(
+                    line,
+                    r"uses: actions/[a-z-]+@[0-9a-f]{40} # v[0-9]+$",
+                )
+
     def test_google_play_runbook_keeps_signing_and_upload_owner_gated(self):
         for required in (
             "unsigned, non-publishing readiness AAB",
@@ -46,7 +62,7 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertIn(f"SOURCE_COMMIT: {source}", WORKFLOW)
         self.assertIn("ref: ${{ env.SOURCE_COMMIT }}", WORKFLOW)
         checkout_block = WORKFLOW.split(
-            "- uses: actions/checkout@v5", 1)[1].split(
+            "- uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5", 1)[1].split(
                 "- name:", 1)[0]
         self.assertIn("persist-credentials: false", checkout_block)
         self.assertIn(
@@ -68,7 +84,7 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertLess(verify, build)
 
     def test_android_shell_and_bundle_are_built_from_locked_frontend(self):
-        self.assertIn("uses: actions/setup-java@v5", WORKFLOW)
+        self.assertIn("uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5", WORKFLOW)
         self.assertNotIn("cache: gradle", WORKFLOW)
         self.assertIn("npm install --global npm@10.9.4", WORKFLOW)
         self.assertIn(
