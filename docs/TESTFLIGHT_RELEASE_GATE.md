@@ -28,6 +28,19 @@ signed-IPA verification receipt uses an `always()` upload guard so
 certificate, profile, version, and checksum evidence survives a later
 TestFlight upload failure.
 
+Before treating that receipt as evidence, download
+`release-ipa-metadata.txt` and `release-ipa-metadata.txt.sha256` from the same
+workflow run and verify the receipt itself:
+
+```sh
+shasum -a 256 -c release-ipa-metadata.txt.sha256
+```
+
+Proceed only when the command prints `release-ipa-metadata.txt: OK`; then match
+the receipt's repository, commit, bundle ID, marketing version, reserved build
+number, and IPA SHA-256 to the exact release candidate. A missing or mismatched
+sidecar invalidates the receipt.
+
 ## Required release checks
 
 Before a signed build can continue, the workflow verifies:
@@ -49,7 +62,8 @@ If configuration validation fails, open the RMC Classics app's Codemagic environ
 3. Manually select current `main` in Codemagic and start `ios-testflight`; repository pushes and tags are intentionally ignored for this signed workflow.
 4. Confirm **Verify release source is current main** succeeds.
 5. Confirm the remaining Codemagic steps succeed and the build appears in TestFlight.
-6. Retain the generated `release-source.txt` artifact as commit evidence.
-7. Smoke-test that exact TestFlight build before App Store submission.
+6. Retain the generated `release-source.txt`, `release-ipa-metadata.txt`, and `release-ipa-metadata.txt.sha256` artifacts from the same run.
+7. Verify the receipt sidecar with the exact command above and bind every recorded identity field to the release candidate.
+8. Smoke-test that exact TestFlight build before App Store submission.
 
 A stale manual selection must be replaced with current `main`; it must not be forced past the gate.
