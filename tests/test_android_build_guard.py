@@ -62,6 +62,12 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertIn("VERSION_NAME=\"$(sed -nE", WORKFLOW)
         self.assertIn('test "$VERSION_CODE" -gt 0', WORKFLOW)
         self.assertIn('test -n "$VERSION_NAME"', WORKFLOW)
+        self.assertIn("compileSdkVersion = 36", WORKFLOW)
+        self.assertIn("targetSdkVersion = 36", WORKFLOW)
+        self.assertIn('COMPILE_SDK="$(sed -nE', WORKFLOW)
+        self.assertIn('TARGET_SDK="$(sed -nE', WORKFLOW)
+        self.assertIn('test "$COMPILE_SDK" -ge 36', WORKFLOW)
+        self.assertIn('test "$TARGET_SDK" -ge 36', WORKFLOW)
         self.assertNotIn("bundleDebug", WORKFLOW)
         self.assertNotIn("/bundle/debug/", WORKFLOW)
 
@@ -88,6 +94,8 @@ class AndroidBuildGuardTests(unittest.TestCase):
             "bundle_id=com.rmcclassics.app",
             "version_code=$VERSION_CODE",
             "version_name=$VERSION_NAME",
+            "compile_sdk=$COMPILE_SDK",
+            "target_sdk=$TARGET_SDK",
             "artifact=$AAB",
             "sha256=$BUNDLE_SHA256",
             "signing_state=unsigned-readiness-only",
@@ -148,6 +156,8 @@ class AndroidBuildGuardTests(unittest.TestCase):
             "bundle_id=com.rmcclassics.app",
             "version_code=$EXPECTED_VERSION_CODE",
             "version_name=$EXPECTED_VERSION_NAME",
+            "compile_sdk=36",
+            "target_sdk=36",
             "artifact=app/build/outputs/bundle/release/app-release.aab",
             "signing_state=unsigned-readiness-only",
         ):
@@ -174,7 +184,143 @@ class AndroidBuildGuardTests(unittest.TestCase):
             verification,
         )
         self.assertIn(
-            "grep -Eq '^sha256=[0-9a-f]{64}$' \"$METADATA\"",
+            "grep -Eq '^compile_sdk=([3-9][6-9]|[4-9][0-9]|"
+            "[1-9][0-9]{2,})        self.assertIn(
+            "grep -Eq '^commit=[0-9a-f]{40}$' \"$METADATA\"",
+            verification,
+        )
+        self.assertIn('test "$RECORDED_SHA" = "$ACTUAL_SHA"', verification)
+
+    def test_bundle_receipt_is_hashed_and_retained(self):
+        compile_step = WORKFLOW.index(
+            "      - name: Compile non-publishing Android App Bundle")
+        hash_step = WORKFLOW.index('sha256sum "$AAB"')
+        retain_step = WORKFLOW.index(
+            "      - name: Retain Android readiness evidence")
+        self.assertLess(compile_step, hash_step)
+        self.assertLess(hash_step, retain_step)
+        self.assertIn(
+            "sha256sum android-readiness-metadata.txt > \\",
+            WORKFLOW,
+        )
+        self.assertIn(
+            "sha256sum --check --strict "
+            "android-readiness-metadata.txt.sha256",
+            WORKFLOW,
+        )
+        self.assertIn(
+            "frontend/android/android-readiness-metadata.txt.sha256",
+            WORKFLOW,
+        )
+        receipt_hash = WORKFLOW.index(
+            "sha256sum android-readiness-metadata.txt > \\"
+        )
+        verify_receipt = WORKFLOW.index(
+            "sha256sum --check --strict "
+            "android-readiness-metadata.txt.sha256"
+        )
+        self.assertLess(receipt_hash, verify_receipt)
+        self.assertLess(verify_receipt, retain_step)
+        self.assertIn("if-no-files-found: error", WORKFLOW)
+        self.assertIn("retention-days: 30", WORKFLOW)
+
+
+if __name__ == "__main__":
+    unittest.main()
+ \"$METADATA\"",
+            verification,
+        )
+        self.assertIn(
+            "grep -Eq '^target_sdk=([3-9][6-9]|[4-9][0-9]|"
+            "[1-9][0-9]{2,})        self.assertIn(
+            "grep -Eq '^commit=[0-9a-f]{40}$' \"$METADATA\"",
+            verification,
+        )
+        self.assertIn('test "$RECORDED_SHA" = "$ACTUAL_SHA"', verification)
+
+    def test_bundle_receipt_is_hashed_and_retained(self):
+        compile_step = WORKFLOW.index(
+            "      - name: Compile non-publishing Android App Bundle")
+        hash_step = WORKFLOW.index('sha256sum "$AAB"')
+        retain_step = WORKFLOW.index(
+            "      - name: Retain Android readiness evidence")
+        self.assertLess(compile_step, hash_step)
+        self.assertLess(hash_step, retain_step)
+        self.assertIn(
+            "sha256sum android-readiness-metadata.txt > \\",
+            WORKFLOW,
+        )
+        self.assertIn(
+            "sha256sum --check --strict "
+            "android-readiness-metadata.txt.sha256",
+            WORKFLOW,
+        )
+        self.assertIn(
+            "frontend/android/android-readiness-metadata.txt.sha256",
+            WORKFLOW,
+        )
+        receipt_hash = WORKFLOW.index(
+            "sha256sum android-readiness-metadata.txt > \\"
+        )
+        verify_receipt = WORKFLOW.index(
+            "sha256sum --check --strict "
+            "android-readiness-metadata.txt.sha256"
+        )
+        self.assertLess(receipt_hash, verify_receipt)
+        self.assertLess(verify_receipt, retain_step)
+        self.assertIn("if-no-files-found: error", WORKFLOW)
+        self.assertIn("retention-days: 30", WORKFLOW)
+
+
+if __name__ == "__main__":
+    unittest.main()
+ \"$METADATA\"",
+            verification,
+        )
+        self.assertIn(
+            "grep -Eq '^sha256=[0-9a-f]{64}        self.assertIn(
+            "grep -Eq '^commit=[0-9a-f]{40}$' \"$METADATA\"",
+            verification,
+        )
+        self.assertIn('test "$RECORDED_SHA" = "$ACTUAL_SHA"', verification)
+
+    def test_bundle_receipt_is_hashed_and_retained(self):
+        compile_step = WORKFLOW.index(
+            "      - name: Compile non-publishing Android App Bundle")
+        hash_step = WORKFLOW.index('sha256sum "$AAB"')
+        retain_step = WORKFLOW.index(
+            "      - name: Retain Android readiness evidence")
+        self.assertLess(compile_step, hash_step)
+        self.assertLess(hash_step, retain_step)
+        self.assertIn(
+            "sha256sum android-readiness-metadata.txt > \\",
+            WORKFLOW,
+        )
+        self.assertIn(
+            "sha256sum --check --strict "
+            "android-readiness-metadata.txt.sha256",
+            WORKFLOW,
+        )
+        self.assertIn(
+            "frontend/android/android-readiness-metadata.txt.sha256",
+            WORKFLOW,
+        )
+        receipt_hash = WORKFLOW.index(
+            "sha256sum android-readiness-metadata.txt > \\"
+        )
+        verify_receipt = WORKFLOW.index(
+            "sha256sum --check --strict "
+            "android-readiness-metadata.txt.sha256"
+        )
+        self.assertLess(receipt_hash, verify_receipt)
+        self.assertLess(verify_receipt, retain_step)
+        self.assertIn("if-no-files-found: error", WORKFLOW)
+        self.assertIn("retention-days: 30", WORKFLOW)
+
+
+if __name__ == "__main__":
+    unittest.main()
+ \"$METADATA\"",
             verification,
         )
         self.assertIn(
