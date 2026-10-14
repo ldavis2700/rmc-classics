@@ -54,6 +54,20 @@ class DependencyLockGuardTests(unittest.TestCase):
         self.assertIn("npm run build", self.capacitor_config)
         self.assertNotIn("yarn", self.capacitor_config.lower())
 
+    def test_native_builds_use_the_lockfile_installed_capacitor_cli(self):
+        paths = {
+            ROOT / ".github/workflows/android-build.yml": 3,
+            ROOT / ".github/workflows/ios-build.yml": 1,
+            ROOT / "codemagic.yaml": 2,
+            FRONTEND / "capacitor.config.ts": 6,
+        }
+        for path, expected in paths.items():
+            with self.subTest(path=path.name):
+                contents = path.read_text()
+                self.assertNotIn("npx cap ", contents)
+                self.assertEqual(
+                    contents.count("./node_modules/.bin/cap "), expected)
+
     def test_native_and_calendar_peers_are_supported(self):
         dependencies = self.package["dependencies"]
         self.assertEqual(dependencies["@revenuecat/purchases-capacitor"], "11.3.0")
