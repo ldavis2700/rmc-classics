@@ -45,6 +45,10 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             "Release receipt IPA digest is invalid",
             "Release receipt IPA digest mismatch",
             "Digest::SHA256.file(ipa_path).hexdigest",
+            'receipt_checksum_path = "#{receipt_path}.sha256"',
+            "Release receipt checksum is invalid",
+            "Release receipt checksum path is invalid",
+            "Release receipt checksum mismatch",
         ):
             self.assertIn(guard, FASTFILE)
         verify = FASTFILE.index(
@@ -305,8 +309,13 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             "      - name: Upload release-source receipt\n", 1)[0]
         self.assertIn("if: ${{ always() }}", receipt)
         self.assertIn(
-            "path: frontend/ios/App/build/ios/ipa/"
+            "frontend/ios/App/build/ios/ipa/"
             "release-ipa-metadata.txt",
+            receipt,
+        )
+        self.assertIn(
+            "frontend/ios/App/build/ios/ipa/"
+            "release-ipa-metadata.txt.sha256",
             receipt,
         )
         self.assertIn("if-no-files-found: ignore", receipt)
