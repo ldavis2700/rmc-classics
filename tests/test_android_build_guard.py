@@ -6,6 +6,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = (ROOT / ".github/workflows/android-build.yml").read_text()
+RUNBOOK = (ROOT / "docs/GOOGLE_PLAY_RELEASE_GATE.md").read_text()
 
 
 class AndroidBuildGuardTests(unittest.TestCase):
@@ -17,6 +18,26 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertNotIn(
             "publish", WORKFLOW.lower().replace("non-publishing", ""))
         self.assertNotIn("secrets.", WORKFLOW)
+
+    def test_google_play_runbook_keeps_signing_and_upload_owner_gated(self):
+        for required in (
+            "unsigned, non-publishing readiness AAB",
+            "Never upload that readiness artifact to Google Play.",
+            "com.rmcclassics.app",
+            "compile_sdk=36",
+            "target_sdk=36",
+            "version_code",
+            "sha256sum --check --strict app-release.aab.sha256",
+            "jarsigner -verify -verbose -certs app-release.aab",
+            "owner-approved consequential actions",
+            "Do not paste keystores, passwords, service-account keys",
+        ):
+            self.assertIn(required, RUNBOOK)
+        self.assertIn(
+            "Google Play requires new apps and updates to target "
+            "Android 16 / API level 36 from August 31, 2026",
+            RUNBOOK,
+        )
 
     def test_pull_request_build_is_bound_to_exact_head(self):
         source = (
