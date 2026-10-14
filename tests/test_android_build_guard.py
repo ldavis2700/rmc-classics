@@ -70,6 +70,12 @@ class AndroidBuildGuardTests(unittest.TestCase):
     def test_android_shell_and_bundle_are_built_from_locked_frontend(self):
         self.assertIn("uses: actions/setup-java@v5", WORKFLOW)
         self.assertNotIn("cache: gradle", WORKFLOW)
+        self.assertIn("npm install --global npm@10.9.4", WORKFLOW)
+        self.assertIn(
+            'test "$(npm --version)" = "10.9.4"', WORKFLOW)
+        pin_npm = WORKFLOW.index("npm install --global npm@10.9.4")
+        install_dependencies = WORKFLOW.index("run: npm ci")
+        self.assertLess(pin_npm, install_dependencies)
         self.assertIn("run: npm ci", WORKFLOW)
         self.assertIn("run: npm run build", WORKFLOW)
         self.assertIn("npx cap add android", WORKFLOW)
