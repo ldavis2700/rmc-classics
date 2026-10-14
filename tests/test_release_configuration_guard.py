@@ -154,6 +154,10 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
         self.assertIn('shasum -a 256 "$IPA_PATH"', verification)
         self.assertIn(
             "- $CM_BUILD_DIR/release-ipa-metadata.txt", signed)
+        self.assertIn(
+            'shasum -a 256 -c "$receipt_name.sha256"', verification)
+        self.assertIn(
+            "- $CM_BUILD_DIR/release-ipa-metadata.txt.sha256", signed)
 
     def test_both_missing_reports_all_required_names_without_unbound_error(self):
         result = self.run_gate()
