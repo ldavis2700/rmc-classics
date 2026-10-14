@@ -6,7 +6,8 @@ import type { CapacitorConfig } from "@capacitor/cli";
  *
  * Build steps (run on macOS with Xcode 15+ installed):
  *   cd frontend
- *   yarn build                # produces frontend/build
+ *   npm ci                    # install the pinned lockfile with npm 10
+ *   npm run build             # produces frontend/build
  *   npx cap add ios           # first time only
  *   npx cap sync ios
  *   npx cap open ios          # opens Xcode → Product > Archive → Distribute to App Store
