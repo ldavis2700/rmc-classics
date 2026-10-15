@@ -89,7 +89,7 @@ export async function configureIAP(userId) {
     configuredUserId = normalizedUserId;
     return true;
   } catch (err) {
-    console.warn("RevenueCat configure failed:", err);
+    console.warn("RevenueCat configure failed");
     return false;
   }
 }
@@ -118,7 +118,7 @@ export async function purchaseFreezePack() {
     // User-cancel is not an error to us.
     const msg = err?.message || String(err);
     if (msg.toLowerCase().includes("cancel")) return { ok: false, cancelled: true };
-    console.warn("purchaseFreezePack failed:", err);
+    console.warn("purchaseFreezePack failed");
     return {
       ok: false,
       error: "Purchase could not be completed. Try again.",
@@ -134,7 +134,7 @@ export async function purchaseFreezePack() {
   } catch (err) {
     // Do not report a paid transaction as a failed purchase. RevenueCat's webhook
     // can still deliver it, and Restore Purchases safely retries the account sync.
-    console.warn("Freeze pack purchased; credit sync pending:", err);
+    console.warn("Freeze pack purchased; credit sync pending");
     return {
       ok: true,
       pending: true,
@@ -157,7 +157,7 @@ export async function restorePurchases() {
     const { data } = await api.post("/iap/sync", { product_id: IAP_PRODUCTS.FREEZE_PACK_5.id });
     return { ok: true, freezes_available: data.freezes_available, credited: data.credited };
   } catch (err) {
-    console.warn("restorePurchases failed:", err);
+    console.warn("restorePurchases failed");
     return {
       ok: false,
       error: "Restore could not be completed. Try again.",
