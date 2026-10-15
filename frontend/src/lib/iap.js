@@ -131,9 +131,9 @@ export async function purchaseFreezePack() {
     // Purchase. Once this resolves, payment is confirmed by the store.
     await Purchases.purchaseStoreProduct({ product });
   } catch (err) {
-    // User-cancel is not an error to us.
-    const msg = err?.message || String(err);
-    if (msg.toLowerCase().includes("cancel")) return { ok: false, cancelled: true };
+    // Trust the SDK's explicit cancellation flag. Message matching is both
+    // locale-dependent and can misclassify errors that merely mention cancellation.
+    if (err?.userCancelled === true) return { ok: false, cancelled: true };
     console.warn("purchaseFreezePack failed");
     return {
       ok: false,
