@@ -329,6 +329,23 @@ class AndroidBuildGuardTests(unittest.TestCase):
             purchase.index("Purchases.purchaseStoreProduct({ product })"),
         )
 
+    def test_iap_sync_accepts_only_nonnegative_integer_counters(self):
+        self.assertIn("function validatedSyncPayload(data)", IAP)
+        self.assertIn("Number.isInteger(freezesAvailable)", IAP)
+        self.assertIn("freezesAvailable < 0", IAP)
+        self.assertIn("Number.isInteger(credited)", IAP)
+        self.assertIn("credited < 0", IAP)
+        self.assertEqual(
+            IAP.count('throw new Error("invalid_iap_sync_response")'),
+            2,
+        )
+        self.assertEqual(IAP.count("return { ok: true, ...sync };"), 2)
+        self.assertNotIn(
+            "freezes_available: data.freezes_available",
+            IAP,
+        )
+        self.assertNotIn("credited: data.credited", IAP)
+
     def test_restore_fails_closed_before_loading_unconfigured_store(self):
         restore = IAP[IAP.index("export async function restorePurchases"):]
         key_gate = restore.index(
