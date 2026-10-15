@@ -9,6 +9,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = (ROOT / "codemagic.yaml").read_text()
+IAP = (ROOT / "frontend/src/lib/iap.js").read_text()
 GATE = "      - name: Validate monetization release configuration\n"
 BLOCK = CONFIG.split(GATE, 1)[1].split("      - name:", 1)[0]
 SCRIPT = textwrap.dedent(BLOCK.split("        script: |\n", 1)[1])
@@ -158,6 +159,11 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             'shasum -a 256 -c "$receipt_name.sha256"', verification)
         self.assertIn(
             "- $CM_BUILD_DIR/release-ipa-metadata.txt.sha256", signed)
+
+    def test_purchase_cancellation_uses_explicit_sdk_signal(self):
+        self.assertIn("err?.userCancelled === true", IAP)
+        self.assertNotIn('includes("cancel")', IAP)
+        self.assertNotIn("err?.message", IAP)
 
     def test_both_missing_reports_all_required_names_without_unbound_error(self):
         result = self.run_gate()
