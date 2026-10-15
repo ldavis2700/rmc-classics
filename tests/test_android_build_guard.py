@@ -287,6 +287,13 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertIn("retention-days: 30", WORKFLOW)
 
 
+    def test_restore_fails_closed_before_loading_unconfigured_store(self):
+        restore = IAP[IAP.index("export async function restorePurchases"):]
+        key_gate = restore.index("if (!revenueCatKeyForPlatform())")
+        store_load = restore.index("const Purchases = await getPurchases()")
+        self.assertLess(key_gate, store_load)
+        self.assertIn("Purchases are temporarily unavailable.", restore)
+
     def test_google_play_runbook_binds_signed_build_to_android_revenuecat_key(self):
         self.assertIn("REACT_APP_REVENUECAT_ANDROID_KEY", RUNBOOK)
         self.assertIn("goog_", RUNBOOK)
