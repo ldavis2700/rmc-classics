@@ -282,5 +282,14 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertIn("retention-days: 30", WORKFLOW)
 
 
+    def test_google_play_runbook_binds_signed_build_to_android_revenuecat_key(self):
+        self.assertIn("REACT_APP_REVENUECAT_ANDROID_KEY", RUNBOOK)
+        self.assertIn("goog_", RUNBOOK)
+        self.assertIn("REACT_APP_REVENUECAT_IOS_KEY", RUNBOOK)
+        self.assertIn("appl_", RUNBOOK)
+        self.assertIn("must fail closed", RUNBOOK)
+        self.assertIn("without recording the full key", RUNBOOK)
+
+
 if __name__ == "__main__":
     unittest.main()
