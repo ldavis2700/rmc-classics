@@ -109,7 +109,9 @@ export async function purchaseFreezePack() {
     const { products } = await Purchases.getProducts({
       productIdentifiers: [IAP_PRODUCTS.FREEZE_PACK_5.id],
     });
-    const product = products?.[0];
+    const product = products?.find(
+      (candidate) => candidate?.identifier === IAP_PRODUCTS.FREEZE_PACK_5.id,
+    );
     if (!product) return { ok: false, error: "Product not found. Try again shortly." };
 
     // Purchase. Once this resolves, payment is confirmed by the store.
