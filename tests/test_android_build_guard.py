@@ -306,6 +306,34 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertLess(key_gate, store_load)
         self.assertIn("Purchases are temporarily unavailable.", restore)
 
+    def test_iap_requires_configured_stable_user_before_store_calls(self):
+        configure = IAP[
+            IAP.index("export async function configureIAP"):
+            IAP.index("/** Buy the 5-pack")
+        ]
+        self.assertIn(
+            'typeof userId === "string" ? userId.trim() : ""',
+            configure,
+        )
+        self.assertIn("!normalizedUserId", configure)
+        self.assertIn("appUserID: normalizedUserId", configure)
+
+        purchase = IAP[
+            IAP.index("export async function purchaseFreezePack"):
+            IAP.index("/** Restore purchases")
+        ]
+        restore = IAP[IAP.index("export async function restorePurchases"):]
+        for flow in (purchase, restore):
+            identity_gate = flow.index(
+                "if (!revenueCatKeyForPlatform() || !configured)"
+            )
+            store_load = flow.index("const Purchases = await getPurchases()")
+            self.assertLess(identity_gate, store_load)
+            self.assertIn(
+                "Purchases are temporarily unavailable.",
+                flow[:store_load],
+            )
+
     def test_google_play_runbook_binds_signed_build_to_android_revenuecat_key(self):
         self.assertIn("REACT_APP_REVENUECAT_ANDROID_KEY", RUNBOOK)
         self.assertIn("goog_", RUNBOOK)
