@@ -29,6 +29,7 @@ export const IAP_PRODUCTS = {
 };
 
 let configured = false;
+let configuredUserId = "";
 let cachedPurchases = null;
 
 function nativePlatform() {
@@ -71,12 +72,21 @@ async function getPurchases() {
 export async function configureIAP(userId) {
   const normalizedUserId = typeof userId === "string" ? userId.trim() : "";
   const revenueCatKey = revenueCatKeyForPlatform();
-  if (!isNative() || configured || !normalizedUserId || !revenueCatKey) return false;
+  if (!isNative() || !normalizedUserId || !revenueCatKey) return false;
+  if (configured) {
+    if (configuredUserId === normalizedUserId) return true;
+    // Never leave paid actions enabled for a provider session bound to a
+    // different local account. A fresh native session must reconfigure it.
+    configured = false;
+    configuredUserId = "";
+    return false;
+  }
   const Purchases = await getPurchases();
   if (!Purchases) return false;
   try {
     await Purchases.configure({ apiKey: revenueCatKey, appUserID: normalizedUserId });
     configured = true;
+    configuredUserId = normalizedUserId;
     return true;
   } catch (err) {
     console.warn("RevenueCat configure failed:", err);
@@ -89,7 +99,7 @@ export async function purchaseFreezePack() {
   if (!isNative()) {
     return { ok: false, error: "In-app purchases are only available in the mobile app." };
   }
-  if (!revenueCatKeyForPlatform() || !configured) {
+  if (!revenueCatKeyForPlatform() || !configured || !configuredUserId) {
     return { ok: false, error: "Purchases are temporarily unavailable." };
   }
   const Purchases = await getPurchases();
@@ -137,7 +147,7 @@ export async function purchaseFreezePack() {
 /** Restore purchases button - required by Apple for consumables tied to a user account. */
 export async function restorePurchases() {
   if (!isNative()) return { ok: false, error: "Only available in the mobile app." };
-  if (!revenueCatKeyForPlatform() || !configured) {
+  if (!revenueCatKeyForPlatform() || !configured || !configuredUserId) {
     return { ok: false, error: "Purchases are temporarily unavailable." };
   }
   const Purchases = await getPurchases();
