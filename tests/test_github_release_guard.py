@@ -10,6 +10,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = (ROOT / ".github/workflows/ios-build.yml").read_text()
+PR_WORKFLOW = (ROOT / ".github/workflows/pr-validation.yml").read_text()
+ANDROID_WORKFLOW = (ROOT / ".github/workflows/android-build.yml").read_text()
 FASTFILE = (ROOT / "frontend/ios/App/fastlane/Fastfile").read_text()
 CODEMAGIC = (ROOT / "codemagic.yaml").read_text()
 RELEASE_GATE = (ROOT / "docs/TESTFLIGHT_RELEASE_GATE.md").read_text()
@@ -27,6 +29,40 @@ CLEANUP_SCRIPT = step_script("Remove temporary signing material")
 
 
 class GitHubReleaseGuardTests(unittest.TestCase):
+    def test_github_release_actions_are_immutable_commit_pins(self):
+        expected = {
+            "actions/checkout": {
+                "08c6903cd8c0fde910a37f88322edcfb5dd907a8",
+                "11bd71901bbe5b1630ceea73d27597364c9af683",
+                "fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
+            },
+            "actions/setup-node": {
+                "49933ea5288caeca8642d1e84afbd3f7d6820020",
+            },
+            "actions/setup-java": {
+                "b6effb05e454b25005698d916606bdc6ffcbf961",
+            },
+            "actions/setup-python": {
+                "a26af69be951a213d495a4c3e4e4022e16d87065",
+            },
+            "actions/upload-artifact": {
+                "ea165f8d65b6e75b540449e92b4886f43607fa02",
+            },
+        }
+        uses = [
+            line.strip().split()[2]
+            for workflow in (WORKFLOW, PR_WORKFLOW, ANDROID_WORKFLOW)
+            for line in workflow.splitlines()
+            if line.strip().startswith(("- uses:", "uses:"))
+        ]
+        self.assertTrue(uses)
+        for use in uses:
+            action, ref = use.split("@", 1)
+            ref = ref.split("#", 1)[0].strip()
+            self.assertIn(action, expected)
+            self.assertIn(ref, expected[action])
+            self.assertRegex(ref, r"^[0-9a-f]{40}$")
+
     def test_fastlane_release_receipt_is_self_verified_before_upload(self):
         for guard in (
             '"artifact=#{ipa_path}"',
@@ -171,7 +207,10 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         self.assertIn("cancel-in-progress: false", WORKFLOW)
         self.assertIn("environment: app-store-production", WORKFLOW)
         self.assertIn("SOURCE_COMMIT: ${{ github.sha }}", WORKFLOW)
-        checkout = WORKFLOW.split("- uses: actions/checkout@v5", 1)[1]
+        checkout = WORKFLOW.split(
+            "- uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8",
+            1,
+        )[1]
         checkout = checkout.split("- name:", 1)[0]
         self.assertIn("ref: ${{ env.SOURCE_COMMIT }}", checkout)
         self.assertIn("persist-credentials: false", checkout)
