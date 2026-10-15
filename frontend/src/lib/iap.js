@@ -108,7 +108,10 @@ export async function purchaseFreezePack() {
     const msg = err?.message || String(err);
     if (msg.toLowerCase().includes("cancel")) return { ok: false, cancelled: true };
     console.warn("purchaseFreezePack failed:", err);
-    return { ok: false, error: msg };
+    return {
+      ok: false,
+      error: "Purchase could not be completed. Try again.",
+    };
   }
 
   try {
@@ -143,6 +146,10 @@ export async function restorePurchases() {
     const { data } = await api.post("/iap/sync", { product_id: IAP_PRODUCTS.FREEZE_PACK_5.id });
     return { ok: true, freezes_available: data.freezes_available, credited: data.credited };
   } catch (err) {
-    return { ok: false, error: err?.message || "Restore failed" };
+    console.warn("restorePurchases failed:", err);
+    return {
+      ok: false,
+      error: "Restore could not be completed. Try again.",
+    };
   }
 }
