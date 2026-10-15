@@ -57,6 +57,20 @@ export function revenueCatKeyForPlatform(platform = nativePlatform()) {
   return requiredPrefix && key.startsWith(requiredPrefix) ? key : "";
 }
 
+function validatedSyncPayload(data) {
+  const freezesAvailable = data?.freezes_available;
+  const credited = data?.credited;
+  if (
+    !Number.isInteger(freezesAvailable)
+    || freezesAvailable < 0
+    || !Number.isInteger(credited)
+    || credited < 0
+  ) {
+    return null;
+  }
+  return { freezes_available: freezesAvailable, credited };
+}
+
 async function getPurchases() {
   if (cachedPurchases) return cachedPurchases;
   try {
@@ -132,7 +146,9 @@ export async function purchaseFreezePack() {
     const { data } = await api.post("/iap/sync", {
       product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
     });
-    return { ok: true, freezes_available: data.freezes_available, credited: data.credited };
+    const sync = validatedSyncPayload(data);
+    if (!sync) throw new Error("invalid_iap_sync_response");
+    return { ok: true, ...sync };
   } catch (err) {
     // Do not report a paid transaction as a failed purchase. RevenueCat's webhook
     // can still deliver it, and Restore Purchases safely retries the account sync.
@@ -157,7 +173,9 @@ export async function restorePurchases() {
   try {
     await Purchases.restorePurchases();
     const { data } = await api.post("/iap/sync", { product_id: IAP_PRODUCTS.FREEZE_PACK_5.id });
-    return { ok: true, freezes_available: data.freezes_available, credited: data.credited };
+    const sync = validatedSyncPayload(data);
+    if (!sync) throw new Error("invalid_iap_sync_response");
+    return { ok: true, ...sync };
   } catch (err) {
     console.warn("restorePurchases failed");
     return {
