@@ -29,6 +29,19 @@ CLEANUP_SCRIPT = step_script("Remove temporary signing material")
 
 
 class GitHubReleaseGuardTests(unittest.TestCase):
+    def test_cocoapods_toolchain_is_exactly_pinned(self):
+        self.assertIn("COCOAPODS_VERSION: 1.16.2", WORKFLOW)
+        self.assertIn(
+            'gem install cocoapods --no-document --version "$COCOAPODS_VERSION"',
+            WORKFLOW,
+        )
+        self.assertIn(
+            'test "$(pod --version)" = "$COCOAPODS_VERSION"',
+            WORKFLOW,
+        )
+        self.assertEqual(CODEMAGIC.count('cocoapods: "1.16.2"'), 2)
+        self.assertNotIn("cocoapods: default", CODEMAGIC)
+
     def test_github_release_actions_are_immutable_commit_pins(self):
         expected = {
             "actions/checkout": {
