@@ -301,7 +301,7 @@ class AndroidBuildGuardTests(unittest.TestCase):
 
     def test_restore_fails_closed_before_loading_unconfigured_store(self):
         restore = IAP[IAP.index("export async function restorePurchases"):]
-        key_gate = restore.index("if (!revenueCatKeyForPlatform())")
+        key_gate = restore.index(\n            "if (!revenueCatKeyForPlatform() || !configured)"\n        )
         store_load = restore.index("const Purchases = await getPurchases()")
         self.assertLess(key_gate, store_load)
         self.assertIn("Purchases are temporarily unavailable.", restore)
