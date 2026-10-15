@@ -63,6 +63,16 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             self.assertIn(ref, expected[action])
             self.assertRegex(ref, r"^[0-9a-f]{40}$")
 
+    def test_pr_validation_pins_pytest_runtime(self):
+        self.assertIn(
+            "python -m pip install --disable-pip-version-check pytest==8.3.5",
+            PR_WORKFLOW,
+        )
+        self.assertNotIn(
+            "python -m pip install --disable-pip-version-check pytest\n",
+            PR_WORKFLOW,
+        )
+
     def test_fastlane_release_receipt_is_self_verified_before_upload(self):
         for guard in (
             '"artifact=#{ipa_path}"',
