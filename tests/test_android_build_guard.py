@@ -42,6 +42,11 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertIn("window.Capacitor.getPlatform", IAP)
         self.assertIn("revenueCatKeyForPlatform", IAP)
         self.assertIn("apiKey: revenueCatKey", IAP)
+        self.assertIn('platform === "ios"', IAP)
+        self.assertIn('platform === "android"', IAP)
+        self.assertIn('"appl_"', IAP)
+        self.assertIn('"goog_"', IAP)
+        self.assertIn("key.startsWith(requiredPrefix)", IAP)
         self.assertNotIn("const REVENUECAT_KEY =", IAP)
         self.assertNotIn("only available in the iOS app", IAP)
 
