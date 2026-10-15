@@ -298,6 +298,20 @@ class AndroidBuildGuardTests(unittest.TestCase):
         )
         self.assertNotIn("return { ok: false, error: msg }", IAP)
         self.assertNotIn('err?.message || "Restore failed"', IAP)
+        for raw_log in (
+            'console.warn("RevenueCat configure failed:", err)',
+            'console.warn("purchaseFreezePack failed:", err)',
+            'console.warn("Freeze pack purchased; credit sync pending:", err)',
+            'console.warn("restorePurchases failed:", err)',
+        ):
+            self.assertNotIn(raw_log, IAP)
+        for safe_log in (
+            'console.warn("RevenueCat configure failed")',
+            'console.warn("purchaseFreezePack failed")',
+            'console.warn("Freeze pack purchased; credit sync pending")',
+            'console.warn("restorePurchases failed")',
+        ):
+            self.assertIn(safe_log, IAP)
 
     def test_restore_fails_closed_before_loading_unconfigured_store(self):
         restore = IAP[IAP.index("export async function restorePurchases"):]
