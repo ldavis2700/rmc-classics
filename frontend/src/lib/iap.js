@@ -133,6 +133,9 @@ export async function purchaseFreezePack() {
 /** Restore purchases button - required by Apple for consumables tied to a user account. */
 export async function restorePurchases() {
   if (!isNative()) return { ok: false, error: "Only available in the mobile app." };
+  if (!revenueCatKeyForPlatform()) {
+    return { ok: false, error: "Purchases are temporarily unavailable." };
+  }
   const Purchases = await getPurchases();
   if (!Purchases) return { ok: false, error: "Store unavailable" };
   try {
