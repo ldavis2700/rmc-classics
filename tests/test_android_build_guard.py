@@ -331,9 +331,9 @@ class AndroidBuildGuardTests(unittest.TestCase):
 
     def test_iap_sync_accepts_only_nonnegative_integer_counters(self):
         self.assertIn("function validatedSyncPayload(data)", IAP)
-        self.assertIn("Number.isInteger(freezesAvailable)", IAP)
+        self.assertIn("Number.isSafeInteger(freezesAvailable)", IAP)
         self.assertIn("freezesAvailable < 0", IAP)
-        self.assertIn("Number.isInteger(credited)", IAP)
+        self.assertIn("Number.isSafeInteger(credited)", IAP)
         self.assertIn("credited < 0", IAP)
         self.assertEqual(
             IAP.count('throw new Error("invalid_iap_sync_response")'),
