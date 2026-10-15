@@ -302,7 +302,7 @@ class AndroidBuildGuardTests(unittest.TestCase):
     def test_restore_fails_closed_before_loading_unconfigured_store(self):
         restore = IAP[IAP.index("export async function restorePurchases"):]
         key_gate = restore.index(
-            "if (!revenueCatKeyForPlatform() || !configured)"
+            "if (!revenueCatKeyForPlatform() || !configured || !configuredUserId)"
         )
         store_load = restore.index("const Purchases = await getPurchases()")
         self.assertLess(key_gate, store_load)
@@ -319,6 +319,14 @@ class AndroidBuildGuardTests(unittest.TestCase):
         )
         self.assertIn("!normalizedUserId", configure)
         self.assertIn("appUserID: normalizedUserId", configure)
+        self.assertIn('let configuredUserId = "";', IAP)
+        self.assertIn("configuredUserId === normalizedUserId", configure)
+        self.assertIn('configuredUserId = "";', configure)
+        self.assertIn("configuredUserId = normalizedUserId", configure)
+        self.assertLess(
+            configure.index("configured = false;"),
+            configure.index('configuredUserId = "";'),
+        )
 
         purchase = IAP[
             IAP.index("export async function purchaseFreezePack"):
@@ -327,7 +335,7 @@ class AndroidBuildGuardTests(unittest.TestCase):
         restore = IAP[IAP.index("export async function restorePurchases"):]
         for flow in (purchase, restore):
             identity_gate = flow.index(
-                "if (!revenueCatKeyForPlatform() || !configured)"
+                "if (!revenueCatKeyForPlatform() || !configured || !configuredUserId)"
             )
             store_load = flow.index("const Purchases = await getPurchases()")
             self.assertLess(identity_gate, store_load)
