@@ -69,12 +69,13 @@ async function getPurchases() {
 
 /** Configure RevenueCat with the logged-in user's stable ID. Call from AuthContext once user is known. */
 export async function configureIAP(userId) {
+  const normalizedUserId = typeof userId === "string" ? userId.trim() : "";
   const revenueCatKey = revenueCatKeyForPlatform();
-  if (!isNative() || configured || !userId || !revenueCatKey) return false;
+  if (!isNative() || configured || !normalizedUserId || !revenueCatKey) return false;
   const Purchases = await getPurchases();
   if (!Purchases) return false;
   try {
-    await Purchases.configure({ apiKey: revenueCatKey, appUserID: userId });
+    await Purchases.configure({ apiKey: revenueCatKey, appUserID: normalizedUserId });
     configured = true;
     return true;
   } catch (err) {
@@ -88,7 +89,7 @@ export async function purchaseFreezePack() {
   if (!isNative()) {
     return { ok: false, error: "In-app purchases are only available in the mobile app." };
   }
-  if (!revenueCatKeyForPlatform()) {
+  if (!revenueCatKeyForPlatform() || !configured) {
     return { ok: false, error: "Purchases are temporarily unavailable." };
   }
   const Purchases = await getPurchases();
@@ -136,7 +137,7 @@ export async function purchaseFreezePack() {
 /** Restore purchases button - required by Apple for consumables tied to a user account. */
 export async function restorePurchases() {
   if (!isNative()) return { ok: false, error: "Only available in the mobile app." };
-  if (!revenueCatKeyForPlatform()) {
+  if (!revenueCatKeyForPlatform() || !configured) {
     return { ok: false, error: "Purchases are temporarily unavailable." };
   }
   const Purchases = await getPurchases();
