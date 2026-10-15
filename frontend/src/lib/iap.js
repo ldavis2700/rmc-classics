@@ -61,9 +61,9 @@ function validatedSyncPayload(data) {
   const freezesAvailable = data?.freezes_available;
   const credited = data?.credited;
   if (
-    !Number.isInteger(freezesAvailable)
+    !Number.isSafeInteger(freezesAvailable)
     || freezesAvailable < 0
-    || !Number.isInteger(credited)
+    || !Number.isSafeInteger(credited)
     || credited < 0
   ) {
     return null;
