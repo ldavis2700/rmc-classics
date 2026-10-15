@@ -31,6 +31,7 @@ export const IAP_PRODUCTS = {
 let configured = false;
 let configuredUserId = "";
 let cachedPurchases = null;
+let cachedProductCategory = null;
 
 function nativePlatform() {
   try {
@@ -76,6 +77,7 @@ async function getPurchases() {
   try {
     const mod = await import("@revenuecat/purchases-capacitor");
     cachedPurchases = mod.Purchases;
+    cachedProductCategory = mod.PRODUCT_CATEGORY;
     return cachedPurchases;
   } catch {
     return null;
@@ -117,11 +119,15 @@ export async function purchaseFreezePack() {
     return { ok: false, error: "Purchases are temporarily unavailable." };
   }
   const Purchases = await getPurchases();
-  if (!Purchases) return { ok: false, error: "Store unavailable" };
+  if (!Purchases || cachedProductCategory?.NON_SUBSCRIPTION == null) {
+    return { ok: false, error: "Store unavailable" };
+  }
   try {
-    // Fetch product from the store
+    // This SKU is a consumable. RevenueCat defaults Android lookups to
+    // subscriptions unless the non-subscription category is explicit.
     const { products } = await Purchases.getProducts({
       productIdentifiers: [IAP_PRODUCTS.FREEZE_PACK_5.id],
+      type: cachedProductCategory.NON_SUBSCRIPTION,
     });
     const product = products?.find(
       (candidate) => candidate?.identifier === IAP_PRODUCTS.FREEZE_PACK_5.id,
