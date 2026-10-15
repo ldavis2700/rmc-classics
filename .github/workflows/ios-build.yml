@@ -38,6 +38,7 @@ jobs:
     environment: app-store-production
     env:
       SOURCE_COMMIT: ${{ github.sha }}
+      COCOAPODS_VERSION: 1.16.2
 
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -131,7 +132,10 @@ jobs:
 
       - name: Install CocoaPods
         working-directory: frontend/ios/App
-        run: pod install --repo-update
+        run: |
+          gem install cocoapods --no-document --version "$COCOAPODS_VERSION"
+          test "$(pod --version)" = "$COCOAPODS_VERSION"
+          pod install --repo-update
 
       - name: Install fastlane
         run: gem install fastlane -N -v 2.222
