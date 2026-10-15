@@ -313,6 +313,22 @@ class AndroidBuildGuardTests(unittest.TestCase):
         ):
             self.assertIn(safe_log, IAP)
 
+    def test_purchase_binds_selected_product_to_requested_identifier(self):
+        purchase = IAP[
+            IAP.index("export async function purchaseFreezePack"):
+            IAP.index("/** Restore purchases")
+        ]
+        self.assertIn("products?.find(", purchase)
+        self.assertIn(
+            "candidate?.identifier === IAP_PRODUCTS.FREEZE_PACK_5.id",
+            purchase,
+        )
+        self.assertNotIn("products?.[0]", purchase)
+        self.assertLess(
+            purchase.index("products?.find("),
+            purchase.index("Purchases.purchaseStoreProduct({ product })"),
+        )
+
     def test_restore_fails_closed_before_loading_unconfigured_store(self):
         restore = IAP[IAP.index("export async function restorePurchases"):]
         key_gate = restore.index(
