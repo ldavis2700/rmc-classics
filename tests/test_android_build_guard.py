@@ -287,6 +287,18 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertIn("retention-days: 30", WORKFLOW)
 
 
+    def test_iap_provider_errors_are_not_exposed_to_users(self):
+        self.assertIn(
+            'error: "Purchase could not be completed. Try again."',
+            IAP,
+        )
+        self.assertIn(
+            'error: "Restore could not be completed. Try again."',
+            IAP,
+        )
+        self.assertNotIn("return { ok: false, error: msg }", IAP)
+        self.assertNotIn('err?.message || "Restore failed"', IAP)
+
     def test_restore_fails_closed_before_loading_unconfigured_store(self):
         restore = IAP[IAP.index("export async function restorePurchases"):]
         key_gate = restore.index("if (!revenueCatKeyForPlatform())")
