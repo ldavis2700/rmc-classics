@@ -20,6 +20,7 @@ Before a signed candidate is built, the owner must verify in Google Play Console
 4. The payments profile and merchant details are complete if monetization requires them.
 5. The privacy-policy, support, Data safety, content-rating, target-audience, ads, and app-access declarations are accurate for the exact candidate.
 6. Any required closed-testing or production-access requirement shown by Play Console is complete.
+7. The signed Android build is configured with a RevenueCat **public Android SDK key** via `REACT_APP_REVENUECAT_ANDROID_KEY`; it must use the `goog_` key for this RMC CLASSICS app and must never reuse an iOS `appl_` key.
 
 Do not paste keystores, passwords, service-account keys, or recovery material into GitHub issues, pull requests, logs, or this repository.
 
@@ -53,9 +54,9 @@ The readiness result proves source/build viability only. It is not the signed ca
 
 ## Signed candidate gate
 
-Build the signed release AAB from the already-validated exact commit using the owner-controlled upload key. Then:
+Build the signed release AAB from the already-validated exact commit using the owner-controlled upload key. The build must fail closed if purchases/restores are enabled and `REACT_APP_REVENUECAT_ANDROID_KEY` is absent or does not begin with `goog_`. Never substitute `REACT_APP_REVENUECAT_IOS_KEY` or an `appl_` key. Then:
 
-1. Record the signed AAB SHA-256.
+1. Record the signed AAB SHA-256 and the RevenueCat key identifier or fingerprint without recording the full key.
 2. Verify the archive:
    ```bash
    unzip -t app-release.aab
