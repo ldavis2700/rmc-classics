@@ -47,7 +47,13 @@ function isNative() {
 }
 
 export function revenueCatKeyForPlatform(platform = nativePlatform()) {
-  return REVENUECAT_KEYS[platform] || "";
+  const key = REVENUECAT_KEYS[platform] || "";
+  const requiredPrefix = platform === "ios"
+    ? "appl_"
+    : platform === "android"
+      ? "goog_"
+      : "";
+  return requiredPrefix && key.startsWith(requiredPrefix) ? key : "";
 }
 
 async function getPurchases() {
@@ -126,7 +132,7 @@ export async function purchaseFreezePack() {
 
 /** Restore purchases button - required by Apple for consumables tied to a user account. */
 export async function restorePurchases() {
-  if (!isNative()) return { ok: false, error: "Only available in the iOS app." };
+  if (!isNative()) return { ok: false, error: "Only available in the mobile app." };
   const Purchases = await getPurchases();
   if (!Purchases) return { ok: false, error: "Store unavailable" };
   try {
