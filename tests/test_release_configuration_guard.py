@@ -165,6 +165,11 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
         self.assertNotIn('includes("cancel")', IAP)
         self.assertNotIn("err?.message", IAP)
 
+    def test_consumable_lookup_uses_non_subscription_category(self):
+        self.assertIn("cachedProductCategory = mod.PRODUCT_CATEGORY", IAP)
+        self.assertIn("cachedProductCategory?.NON_SUBSCRIPTION == null", IAP)
+        self.assertIn("type: cachedProductCategory.NON_SUBSCRIPTION", IAP)
+
     def test_both_missing_reports_all_required_names_without_unbound_error(self):
         result = self.run_gate()
         self.assertNotEqual(result.returncode, 0)
