@@ -41,7 +41,7 @@ workflows:
       node: 20
       # Keep the reviewed toolchain stable between QA and the signed binary.
       xcode: 26.5
-      cocoapods: default
+      cocoapods: "1.16.2"
     integrations:
       app_store_connect: RMC ASC Key
 
@@ -381,7 +381,7 @@ workflows:
         XCODE_SCHEME: "App"
       node: 20
       xcode: 26.5
-      cocoapods: default
+      cocoapods: "1.16.2"
 
     scripts:
       - name: Pin npm toolchain
