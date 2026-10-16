@@ -174,7 +174,7 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             'import { configureIAP, suspendIAP } from "@/lib/iap";',
             AUTH,
         )
-        self.assertEqual(AUTH.count("suspendIAP();"), 2)
+        self.assertEqual(AUTH.count("suspendIAP();"), 4)
         self.assertIn("export function suspendIAP()", IAP)
         self.assertIn('configuredUserId = "";', IAP)
         switch_failure = IAP.split(
