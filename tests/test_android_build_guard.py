@@ -328,17 +328,18 @@ class AndroidBuildGuardTests(unittest.TestCase):
             switch,
         )
         self.assertIn("configuredUserId = normalizedUserId", switch)
-        self.assertIn("configured = false", switch)
+        self.assertNotIn("configured = false", switch)
         self.assertIn('configuredUserId = ""', switch)
         self.assertIn('console.warn("RevenueCat user switch failed")', switch)
         self.assertLess(
             switch.index("await Purchases.logIn"),
             switch.index("configuredUserId = normalizedUserId"),
         )
-        self.assertLess(
-            switch.index("configured = false"),
-            switch.index("return false"),
-        )
+        switch_failure = switch.split(
+            'console.warn("RevenueCat user switch failed")', 1
+        )[0].rsplit("} catch {", 1)[1]
+        self.assertIn('configuredUserId = "";', switch_failure)
+        self.assertNotIn("configured = false", switch_failure)
 
     def test_purchase_binds_selected_product_to_requested_identifier(self):
         purchase = IAP[
@@ -397,10 +398,17 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertIn("configuredUserId === normalizedUserId", configure)
         self.assertIn('configuredUserId = "";', configure)
         self.assertIn("configuredUserId = normalizedUserId", configure)
-        self.assertLess(
-            configure.index("configured = false;"),
-            configure.index('configuredUserId = "";'),
+        missing_identity_gate = configure.index(
+            "if (!normalizedUserId || !revenueCatKey) {"
         )
+        clear_identity = configure.index(
+            'configuredUserId = "";', missing_identity_gate
+        )
+        reject_configuration = configure.index(
+            "return false;", clear_identity
+        )
+        self.assertLess(missing_identity_gate, clear_identity)
+        self.assertLess(clear_identity, reject_configuration)
 
         purchase = IAP[
             IAP.index("export async function purchaseFreezePack"):
@@ -428,19 +436,20 @@ class AndroidBuildGuardTests(unittest.TestCase):
         for flow in (login, register):
             self.assertIn('localStorage.setItem("rmc_token", data.token)', flow)
             self.assertIn("setUser(data.user)", flow)
-            self.assertIn("void configureIAP(data.user?.id)", flow)
+            self.assertIn("await configureIAP(data.user?.id)", flow)
             self.assertLess(
                 flow.index("setUser(data.user)"),
-                flow.index("void configureIAP(data.user?.id)"),
+                flow.index("await configureIAP(data.user?.id)"),
             )
             self.assertLess(
-                flow.index("void configureIAP(data.user?.id)"),
+                flow.index("await configureIAP(data.user?.id)"),
                 flow.index("return { ok: true }"),
             )
         self.assertEqual(
-            AUTH_CONTEXT.count("void configureIAP(data.user?.id)"),
-            2,
+            AUTH_CONTEXT.count("await configureIAP(data.user?.id)"),
+            3,
         )
+        self.assertNotIn("void configureIAP(data.user?.id)", AUTH_CONTEXT)
 
     def test_google_play_runbook_binds_signed_build_to_android_revenuecat_key(self):
         self.assertIn("REACT_APP_REVENUECAT_ANDROID_KEY", RUNBOOK)
