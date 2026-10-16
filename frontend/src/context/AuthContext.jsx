@@ -19,7 +19,7 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await api.get("/auth/me");
       setUser(data.user);
-      configureIAP(data.user?.id);
+      await configureIAP(data.user?.id);
     } catch (e) {
       localStorage.removeItem("rmc_token");
       setUser(null);
@@ -42,9 +42,9 @@ export function AuthProvider({ children }) {
       });
       localStorage.setItem("rmc_token", data.token);
       setUser(data.user);
-      // Make purchases available immediately; do not require an app restart
-      // after a fresh login or registration.
-      void configureIAP(data.user?.id);
+      // Finish the fail-closed provider setup before reporting auth success so
+      // an immediate paid action cannot race an unconfigured IAP client.
+      await configureIAP(data.user?.id);
       return { ok: true };
     } catch (e) {
       return { ok: false, error: formatApiErrorDetail(e.response?.data?.detail) || e.message };
@@ -61,9 +61,9 @@ export function AuthProvider({ children }) {
       });
       localStorage.setItem("rmc_token", data.token);
       setUser(data.user);
-      // Make purchases available immediately; do not require an app restart
-      // after a fresh login or registration.
-      void configureIAP(data.user?.id);
+      // Finish the fail-closed provider setup before reporting auth success so
+      // an immediate paid action cannot race an unconfigured IAP client.
+      await configureIAP(data.user?.id);
       return { ok: true };
     } catch (e) {
       return { ok: false, error: formatApiErrorDetail(e.response?.data?.detail) || e.message };
