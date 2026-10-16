@@ -112,8 +112,11 @@ async function configureIAPRequest(userId, requestGeneration) {
   }
   try {
     await Purchases.configure({ apiKey: revenueCatKey, appUserID: normalizedUserId });
-    if (requestGeneration !== configurationGeneration) return false;
+    // The SDK is configured even if a newer queued identity superseded this
+    // request while configure was in flight. Preserve that provider state so
+    // the newer request switches with logIn instead of configuring twice.
     configured = true;
+    if (requestGeneration !== configurationGeneration) return false;
     configuredUserId = normalizedUserId;
     return true;
   } catch {
