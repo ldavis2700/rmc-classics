@@ -458,6 +458,8 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertIn("appl_", RUNBOOK)
         self.assertIn("must fail closed", RUNBOOK)
         self.assertIn("without recording the full key", RUNBOOK)
+        self.assertIn("verify_android_revenuecat_key.py", RUNBOOK)
+        self.assertIn("android_revenuecat_key_sha256=", RUNBOOK)
 
 
 if __name__ == "__main__":
