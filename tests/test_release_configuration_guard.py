@@ -216,6 +216,16 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
         self.assertIn("let configurationQueue = Promise.resolve();", IAP)
         self.assertIn("const requestGeneration = ++configurationGeneration;", IAP)
         self.assertIn("configurationQueue.then(request, request)", IAP)
+        wrapper = IAP.split(
+            "export async function configureIAP", 1
+        )[1].split("/** Disable paid actions", 1)[0]
+        self.assertIn(
+            "if (configuredUserId !== normalizedUserId)", wrapper
+        )
+        self.assertLess(
+            wrapper.index('configuredUserId = "";'),
+            wrapper.index("configurationQueue.then(request, request)"),
+        )
         self.assertEqual(
             IAP.count("requestGeneration !== configurationGeneration"),
             3,
