@@ -147,8 +147,13 @@ export function suspendIAP() {
   configuredUserId = "";
 }
 
-function iapSessionStillActive(userId) {
-  return Boolean(configured && userId && configuredUserId === userId);
+function iapSessionStillActive(userId, generation) {
+  return Boolean(
+    configured
+    && userId
+    && configuredUserId === userId
+    && generation === configurationGeneration
+  );
 }
 
 function pendingCreditSyncResult() {
@@ -169,6 +174,7 @@ export async function purchaseFreezePack() {
     return { ok: false, error: "Purchases are temporarily unavailable." };
   }
   const purchaseUserId = configuredUserId;
+  const purchaseGeneration = configurationGeneration;
   const Purchases = await getPurchases();
   if (!Purchases || cachedProductCategory?.NON_SUBSCRIPTION == null) {
     return { ok: false, error: "Store unavailable" };
@@ -184,7 +190,7 @@ export async function purchaseFreezePack() {
       (candidate) => candidate?.identifier === IAP_PRODUCTS.FREEZE_PACK_5.id,
     );
     if (!product) return { ok: false, error: "Product not found. Try again shortly." };
-    if (!iapSessionStillActive(purchaseUserId)) {
+    if (!iapSessionStillActive(purchaseUserId, purchaseGeneration)) {
       return { ok: false, error: "Your account changed. Start the purchase again." };
     }
 
@@ -201,7 +207,7 @@ export async function purchaseFreezePack() {
     };
   }
 
-  if (!iapSessionStillActive(purchaseUserId)) {
+  if (!iapSessionStillActive(purchaseUserId, purchaseGeneration)) {
     // Never sync a completed store transaction through a different local
     // account. The purchasing account can reconcile it through Restore.
     return pendingCreditSyncResult();
@@ -230,14 +236,15 @@ export async function restorePurchases() {
     return { ok: false, error: "Purchases are temporarily unavailable." };
   }
   const restoreUserId = configuredUserId;
+  const restoreGeneration = configurationGeneration;
   const Purchases = await getPurchases();
   if (!Purchases) return { ok: false, error: "Store unavailable" };
-  if (!iapSessionStillActive(restoreUserId)) {
+  if (!iapSessionStillActive(restoreUserId, restoreGeneration)) {
     return { ok: false, error: "Your account changed. Start restore again." };
   }
   try {
     await Purchases.restorePurchases();
-    if (!iapSessionStillActive(restoreUserId)) {
+    if (!iapSessionStillActive(restoreUserId, restoreGeneration)) {
       return { ok: false, error: "Your account changed. Sign in and restore again." };
     }
     const { data } = await api.post("/iap/sync", { product_id: IAP_PRODUCTS.FREEZE_PACK_5.id });
