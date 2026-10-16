@@ -54,7 +54,16 @@ The readiness result proves source/build viability only. It is not the signed ca
 
 ## Signed candidate gate
 
-Build the signed release AAB from the already-validated exact commit using the owner-controlled upload key. The build must fail closed if purchases/restores are enabled and `REACT_APP_REVENUECAT_ANDROID_KEY` is absent or does not begin with `goog_`. Never substitute `REACT_APP_REVENUECAT_IOS_KEY` or an `appl_` key. Then:
+Build the signed release AAB from the already-validated exact commit using the owner-controlled upload key. The build must fail closed if purchases/restores are enabled and `REACT_APP_REVENUECAT_ANDROID_KEY` is absent or does not begin with `goog_`. Never substitute `REACT_APP_REVENUECAT_IOS_KEY` or an `appl_` key. Run the repository gate in the same environment immediately before the frontend build:
+
+```bash
+python scripts/verify_android_revenuecat_key.py
+cd frontend
+npm ci
+npm run build
+```
+
+The gate emits only `android_revenuecat_key_sha256=<sha256>` for the release receipt; it never prints the key. Then:
 
 1. Record the signed AAB SHA-256 and the RevenueCat key identifier or fingerprint without recording the full key.
 2. Verify the archive:
