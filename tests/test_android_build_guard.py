@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = (ROOT / ".github/workflows/android-build.yml").read_text()
 RUNBOOK = (ROOT / "docs/GOOGLE_PLAY_RELEASE_GATE.md").read_text()
 IAP = (ROOT / "frontend/src/lib/iap.js").read_text()
+AUTH_CONTEXT = (ROOT / "frontend/src/context/AuthContext.jsx").read_text()
 
 
 class AndroidBuildGuardTests(unittest.TestCase):
@@ -390,6 +391,30 @@ class AndroidBuildGuardTests(unittest.TestCase):
                 "Purchases are temporarily unavailable.",
                 flow[:store_load],
             )
+
+    def test_fresh_authentication_configures_iap_without_restart(self):
+        login = AUTH_CONTEXT.split(
+            "  const login = async", 1
+        )[1].split("  const register = async", 1)[0]
+        register = AUTH_CONTEXT.split(
+            "  const register = async", 1
+        )[1].split("  const logout =", 1)[0]
+        for flow in (login, register):
+            self.assertIn('localStorage.setItem("rmc_token", data.token)', flow)
+            self.assertIn("setUser(data.user)", flow)
+            self.assertIn("void configureIAP(data.user?.id)", flow)
+            self.assertLess(
+                flow.index("setUser(data.user)"),
+                flow.index("void configureIAP(data.user?.id)"),
+            )
+            self.assertLess(
+                flow.index("void configureIAP(data.user?.id)"),
+                flow.index("return { ok: true }"),
+            )
+        self.assertEqual(
+            AUTH_CONTEXT.count("void configureIAP(data.user?.id)"),
+            2,
+        )
 
     def test_google_play_runbook_binds_signed_build_to_android_revenuecat_key(self):
         self.assertIn("REACT_APP_REVENUECAT_ANDROID_KEY", RUNBOOK)
