@@ -206,11 +206,28 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
 
     def test_missing_native_identity_or_key_disables_paid_actions(self):
         configure = IAP.split(
-            "export async function configureIAP", 1
-        )[1].split("/** Disable paid actions", 1)[0]
+            "async function configureIAPRequest", 1
+        )[1].split("/** Configure RevenueCat", 1)[0]
         self.assertIn("if (!isNative()) return false;", configure)
         self.assertIn("if (!normalizedUserId || !revenueCatKey) {", configure)
         self.assertIn('configuredUserId = "";', configure)
+
+    def test_iap_identity_configuration_is_serialized_and_stale_safe(self):
+        self.assertIn("let configurationQueue = Promise.resolve();", IAP)
+        self.assertIn("const requestGeneration = ++configurationGeneration;", IAP)
+        self.assertIn("configurationQueue.then(request, request)", IAP)
+        self.assertEqual(
+            IAP.count("requestGeneration !== configurationGeneration"),
+            3,
+        )
+        suspend = IAP.split("export function suspendIAP()", 1)[1].split(
+            "function iapSessionStillActive", 1
+        )[0]
+        self.assertIn("configurationGeneration += 1;", suspend)
+        self.assertLess(
+            suspend.index("configurationGeneration += 1;"),
+            suspend.index('configuredUserId = "";'),
+        )
 
     def test_purchase_cancellation_uses_explicit_sdk_signal(self):
         self.assertIn("err?.userCancelled === true", IAP)
