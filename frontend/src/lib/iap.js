@@ -218,6 +218,9 @@ export async function purchaseFreezePack() {
     const { data } = await api.post("/iap/sync", {
       product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
     });
+    if (!iapSessionStillActive(purchaseUserId, purchaseGeneration)) {
+      return pendingCreditSyncResult();
+    }
     const sync = validatedSyncPayload(data);
     if (!sync) throw new Error("invalid_iap_sync_response");
     return { ok: true, ...sync };
@@ -248,6 +251,9 @@ export async function restorePurchases() {
       return { ok: false, error: "Your account changed. Sign in and restore again." };
     }
     const { data } = await api.post("/iap/sync", { product_id: IAP_PRODUCTS.FREEZE_PACK_5.id });
+    if (!iapSessionStillActive(restoreUserId, restoreGeneration)) {
+      return { ok: false, error: "Your account changed. Sign in and restore again." };
+    }
     const sync = validatedSyncPayload(data);
     if (!sync) throw new Error("invalid_iap_sync_response");
     return { ok: true, ...sync };
