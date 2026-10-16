@@ -128,8 +128,14 @@ async function configureIAPRequest(userId, requestGeneration) {
 
 /** Configure RevenueCat with the logged-in user's stable ID. */
 export async function configureIAP(userId) {
+  const normalizedUserId = typeof userId === "string" ? userId.trim() : "";
   const requestGeneration = ++configurationGeneration;
-  const request = () => configureIAPRequest(userId, requestGeneration);
+  if (configuredUserId !== normalizedUserId) {
+    // Disable paid actions immediately while a different account identity is
+    // waiting behind any in-flight provider operation.
+    configuredUserId = "";
+  }
+  const request = () => configureIAPRequest(normalizedUserId, requestGeneration);
   const result = configurationQueue.then(request, request);
   configurationQueue = result.then(() => undefined, () => undefined);
   return result;
