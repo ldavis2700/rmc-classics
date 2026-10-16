@@ -343,7 +343,9 @@ workflows:
           grep -Fqx "profile_minimum_validity_days=$PROFILE_MINIMUM_VALIDITY_DAYS" "$RECEIPT"
           grep -Fqx "artifact=$IPA_PATH" "$RECEIPT"
           grep -Eq '^profile_certificate_sha256=[0-9a-f]{64}$' "$RECEIPT"
-          grep -Eq '^ipa_sha256=[0-9a-f]{64}          RECORDED_IPA_SHA256="$(sed -n 's/^ipa_sha256=//p' "$RECEIPT")"
+          grep -Eq '^ipa_sha256=[0-9a-f]{64}$' "$RECEIPT"
+          grep -Eq '^revenuecat_ios_key_sha256=[0-9a-f]{64}$' "$RECEIPT"
+          RECORDED_IPA_SHA256="$(sed -n 's/^ipa_sha256=//p' "$RECEIPT")"
           test "$RECORDED_IPA_SHA256" = "$(
             shasum -a 256 "$IPA_PATH" | awk '{print $1}'
           )"
