@@ -46,8 +46,9 @@ function canBuildFromRack(word, rack) {
 
 export default function Scrabble() {
   const { user, submitScore } = useAuth();
-  const [bag, setBag] = useState(() => drawBag());
-  const [rack, setRack] = useState([]);
+  const initialDeal = useMemo(() => drawTiles(drawBag(), 7), []);
+  const [bag, setBag] = useState(initialDeal.rest);
+  const [rack, setRack] = useState(initialDeal.drawn);
   const [placed, setPlaced] = useState([]); // ordered chosen tile positions (indices into rack)
   const [round, setRound] = useState(1);
   const [totalScore, setTotalScore] = useState(0);
@@ -63,10 +64,6 @@ export default function Scrabble() {
     setRack(drawn);
     setBag(rest);
     setPlaced([]);
-  }, []);
-
-  useEffect(() => {
-    dealRack(bag);
   }, []);
 
   const finalize = useCallback(
