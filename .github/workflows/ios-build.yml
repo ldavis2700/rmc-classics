@@ -39,6 +39,7 @@ jobs:
     env:
       SOURCE_COMMIT: ${{ github.sha }}
       COCOAPODS_VERSION: 1.16.2
+      FASTLANE_VERSION: 2.222.0
 
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -138,7 +139,9 @@ jobs:
           pod install --repo-update
 
       - name: Install fastlane
-        run: gem install fastlane -N -v 2.222
+        run: |
+          gem install fastlane --no-document --version "$FASTLANE_VERSION"
+          ruby -e 'require "fastlane"; abort "unexpected fastlane version" unless Fastlane::VERSION == ENV.fetch("FASTLANE_VERSION")'
 
       - name: Install Apple Distribution certificate
         env:
