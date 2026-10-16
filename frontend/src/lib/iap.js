@@ -88,7 +88,13 @@ async function getPurchases() {
 export async function configureIAP(userId) {
   const normalizedUserId = typeof userId === "string" ? userId.trim() : "";
   const revenueCatKey = revenueCatKeyForPlatform();
-  if (!isNative() || !normalizedUserId || !revenueCatKey) return false;
+  if (!isNative()) return false;
+  if (!normalizedUserId || !revenueCatKey) {
+    // A native session without a verified identity/key must not inherit paid
+    // readiness from the last authenticated account.
+    configuredUserId = "";
+    return false;
+  }
   const Purchases = await getPurchases();
   if (!Purchases) return false;
   if (configured) {
