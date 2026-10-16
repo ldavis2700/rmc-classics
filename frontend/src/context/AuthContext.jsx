@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import { signInGameCenter, submitLeaderboardScore } from "@/lib/gameCenter";
-import { configureIAP } from "@/lib/iap";
+import { configureIAP, suspendIAP } from "@/lib/iap";
 
 const AuthContext = createContext(null);
 
@@ -72,6 +72,7 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     localStorage.removeItem("rmc_token");
+    suspendIAP();
     setUser(null);
   };
 
@@ -79,6 +80,7 @@ export function AuthProvider({ children }) {
     try {
       await api.delete("/auth/account", { data: { password } });
       localStorage.removeItem("rmc_token");
+      suspendIAP();
       setUser(null);
       return { ok: true };
     } catch (e) {
