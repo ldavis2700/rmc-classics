@@ -17,6 +17,10 @@ SCRIPT = textwrap.dedent(BLOCK.split("        script: |\n", 1)[1])
 
 
 class ReleaseConfigurationGuardTests(unittest.TestCase):
+    def test_codemagic_workflow_keys_are_unique(self):
+        self.assertEqual(CONFIG.count("\n  ios-testflight:\n"), 1)
+        self.assertEqual(CONFIG.count("\n  ios-unsigned:\n"), 1)
+
     def run_gate(self, app_id=None, sdk_key=None):
         env = {k: v for k, v in os.environ.items() if k not in (
             "APP_STORE_APPLE_ID", "REACT_APP_REVENUECAT_IOS_KEY")}
