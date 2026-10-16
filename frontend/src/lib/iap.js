@@ -100,7 +100,9 @@ export async function configureIAP(userId) {
       configuredUserId = normalizedUserId;
       return true;
     } catch {
-      configured = false;
+      // The SDK remains configured even when identity switching fails. Clear
+      // local readiness so paid actions fail closed, but preserve the ability
+      // to retry logIn instead of incorrectly configuring the SDK again.
       configuredUserId = "";
       console.warn("RevenueCat user switch failed");
       return false;
@@ -115,6 +117,11 @@ export async function configureIAP(userId) {
     console.warn("RevenueCat configure failed");
     return false;
   }
+}
+
+/** Disable paid actions when the local authenticated session ends. */
+export function suspendIAP() {
+  configuredUserId = "";
 }
 
 /** Buy the 5-pack. Returns { ok, freezes_available? } or { ok: false, error }. */
