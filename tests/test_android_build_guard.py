@@ -314,6 +314,32 @@ class AndroidBuildGuardTests(unittest.TestCase):
         ):
             self.assertIn(safe_log, IAP)
 
+    def test_iap_switches_provider_identity_between_local_accounts(self):
+        configure = IAP[
+            IAP.index("export async function configureIAP"):
+            IAP.index("/** Buy the 5-pack")
+        ]
+        switch = configure[
+            configure.index("if (configured) {"):
+            configure.index("  try {\n    await Purchases.configure")
+        ]
+        self.assertIn(
+            "await Purchases.logIn({ appUserID: normalizedUserId })",
+            switch,
+        )
+        self.assertIn("configuredUserId = normalizedUserId", switch)
+        self.assertIn("configured = false", switch)
+        self.assertIn('configuredUserId = ""', switch)
+        self.assertIn('console.warn("RevenueCat user switch failed")', switch)
+        self.assertLess(
+            switch.index("await Purchases.logIn"),
+            switch.index("configuredUserId = normalizedUserId"),
+        )
+        self.assertLess(
+            switch.index("configured = false"),
+            switch.index("return false"),
+        )
+
     def test_purchase_binds_selected_product_to_requested_identifier(self):
         purchase = IAP[
             IAP.index("export async function purchaseFreezePack"):
