@@ -89,16 +89,23 @@ export async function configureIAP(userId) {
   const normalizedUserId = typeof userId === "string" ? userId.trim() : "";
   const revenueCatKey = revenueCatKeyForPlatform();
   if (!isNative() || !normalizedUserId || !revenueCatKey) return false;
-  if (configured) {
-    if (configuredUserId === normalizedUserId) return true;
-    // Never leave paid actions enabled for a provider session bound to a
-    // different local account. A fresh native session must reconfigure it.
-    configured = false;
-    configuredUserId = "";
-    return false;
-  }
   const Purchases = await getPurchases();
   if (!Purchases) return false;
+  if (configured) {
+    if (configuredUserId === normalizedUserId) return true;
+    try {
+      // RevenueCat supports switching directly between identified users.
+      // Keep paid actions disabled unless the provider confirms the switch.
+      await Purchases.logIn({ appUserID: normalizedUserId });
+      configuredUserId = normalizedUserId;
+      return true;
+    } catch {
+      configured = false;
+      configuredUserId = "";
+      console.warn("RevenueCat user switch failed");
+      return false;
+    }
+  }
   try {
     await Purchases.configure({ apiKey: revenueCatKey, appUserID: normalizedUserId });
     configured = true;
