@@ -183,6 +183,14 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
         self.assertNotIn("configured = false", switch_failure)
         self.assertIn('configuredUserId = "";', switch_failure)
 
+    def test_missing_native_identity_or_key_disables_paid_actions(self):
+        configure = IAP.split(
+            "export async function configureIAP", 1
+        )[1].split("/** Disable paid actions", 1)[0]
+        self.assertIn("if (!isNative()) return false;", configure)
+        self.assertIn("if (!normalizedUserId || !revenueCatKey) {", configure)
+        self.assertIn('configuredUserId = "";', configure)
+
     def test_purchase_cancellation_uses_explicit_sdk_signal(self):
         self.assertIn("err?.userCancelled === true", IAP)
         self.assertNotIn('includes("cancel")', IAP)
