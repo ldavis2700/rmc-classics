@@ -295,16 +295,25 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             "export async function purchaseFreezePack", 1
         )[1].split("/** Restore purchases", 1)[0]
         self.assertIn("const purchaseUserId = configuredUserId;", purchase)
+        self.assertIn(
+            "const purchaseGeneration = configurationGeneration;", purchase
+        )
         self.assertEqual(
-            purchase.count("iapSessionStillActive(purchaseUserId)"),
+            purchase.count(
+                "iapSessionStillActive(purchaseUserId, purchaseGeneration)"
+            ),
             2,
         )
         self.assertLess(
-            purchase.index("iapSessionStillActive(purchaseUserId)"),
+            purchase.index(
+                "iapSessionStillActive(purchaseUserId, purchaseGeneration)"
+            ),
             purchase.index("Purchases.purchaseStoreProduct"),
         )
         self.assertLess(
-            purchase.rindex("iapSessionStillActive(purchaseUserId)"),
+            purchase.rindex(
+                "iapSessionStillActive(purchaseUserId, purchaseGeneration)"
+            ),
             purchase.index('api.post("/iap/sync"'),
         )
         self.assertIn("return pendingCreditSyncResult();", purchase)
@@ -318,12 +327,19 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             "export async function restorePurchases", 1
         )[1]
         self.assertIn("const restoreUserId = configuredUserId;", restore)
+        self.assertIn(
+            "const restoreGeneration = configurationGeneration;", restore
+        )
         self.assertEqual(
-            restore.count("iapSessionStillActive(restoreUserId)"),
+            restore.count(
+                "iapSessionStillActive(restoreUserId, restoreGeneration)"
+            ),
             2,
         )
         self.assertLess(
-            restore.rindex("iapSessionStillActive(restoreUserId)"),
+            restore.rindex(
+                "iapSessionStillActive(restoreUserId, restoreGeneration)"
+            ),
             restore.index('api.post("/iap/sync"'),
         )
 
