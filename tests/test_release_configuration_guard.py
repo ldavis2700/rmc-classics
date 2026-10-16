@@ -302,7 +302,7 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             purchase.count(
                 "iapSessionStillActive(purchaseUserId, purchaseGeneration)"
             ),
-            2,
+            3,
         )
         self.assertLess(
             purchase.index(
@@ -310,11 +310,18 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             ),
             purchase.index("Purchases.purchaseStoreProduct"),
         )
+        sync_call = purchase.index('api.post("/iap/sync"')
+        session_checks = [
+            index for index in range(len(purchase))
+            if purchase.startswith(
+                "iapSessionStillActive(purchaseUserId, purchaseGeneration)",
+                index,
+            )
+        ]
+        self.assertLess(session_checks[1], sync_call)
+        self.assertGreater(session_checks[2], sync_call)
         self.assertLess(
-            purchase.rindex(
-                "iapSessionStillActive(purchaseUserId, purchaseGeneration)"
-            ),
-            purchase.index('api.post("/iap/sync"'),
+            session_checks[2], purchase.index("validatedSyncPayload(data)")
         )
         self.assertIn("return pendingCreditSyncResult();", purchase)
         self.assertIn(
@@ -334,13 +341,25 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             restore.count(
                 "iapSessionStillActive(restoreUserId, restoreGeneration)"
             ),
-            2,
+            3,
+        )
+        self.assertLess(
+            restore.index(
+                "iapSessionStillActive(restoreUserId, restoreGeneration)"
+            ),
+            restore.index('api.post("/iap/sync"'),
+        )
+        self.assertGreater(
+            restore.rindex(
+                "iapSessionStillActive(restoreUserId, restoreGeneration)"
+            ),
+            restore.index('api.post("/iap/sync"'),
         )
         self.assertLess(
             restore.rindex(
                 "iapSessionStillActive(restoreUserId, restoreGeneration)"
             ),
-            restore.index('api.post("/iap/sync"'),
+            restore.index("validatedSyncPayload(data)"),
         )
 
 
