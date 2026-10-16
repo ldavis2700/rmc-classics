@@ -254,5 +254,43 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
                 self.assertNotIn("1234567890", result.stdout + result.stderr)
 
 
+    def test_purchase_sync_stays_bound_to_the_purchasing_account(self):
+        purchase = IAP.split(
+            "export async function purchaseFreezePack", 1
+        )[1].split("/** Restore purchases", 1)[0]
+        self.assertIn("const purchaseUserId = configuredUserId;", purchase)
+        self.assertEqual(
+            purchase.count("iapSessionStillActive(purchaseUserId)"),
+            2,
+        )
+        self.assertLess(
+            purchase.index("iapSessionStillActive(purchaseUserId)"),
+            purchase.index("Purchases.purchaseStoreProduct"),
+        )
+        self.assertLess(
+            purchase.rindex("iapSessionStillActive(purchaseUserId)"),
+            purchase.index('api.post("/iap/sync"'),
+        )
+        self.assertIn("return pendingCreditSyncResult();", purchase)
+        self.assertIn(
+            "sign in to the purchasing account and tap Restore Purchases",
+            IAP,
+        )
+
+    def test_restore_sync_aborts_if_the_local_account_changes(self):
+        restore = IAP.split(
+            "export async function restorePurchases", 1
+        )[1]
+        self.assertIn("const restoreUserId = configuredUserId;", restore)
+        self.assertEqual(
+            restore.count("iapSessionStillActive(restoreUserId)"),
+            2,
+        )
+        self.assertLess(
+            restore.rindex("iapSessionStillActive(restoreUserId)"),
+            restore.index('api.post("/iap/sync"'),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
