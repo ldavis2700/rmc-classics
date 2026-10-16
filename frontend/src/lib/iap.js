@@ -32,6 +32,8 @@ let configured = false;
 let configuredUserId = "";
 let cachedPurchases = null;
 let cachedProductCategory = null;
+let configurationGeneration = 0;
+let configurationQueue = Promise.resolve();
 
 function nativePlatform() {
   try {
@@ -84,49 +86,55 @@ async function getPurchases() {
   }
 }
 
-/** Configure RevenueCat with the logged-in user's stable ID. Call from AuthContext once user is known. */
-export async function configureIAP(userId) {
+/** Configure one serialized RevenueCat identity request. */
+async function configureIAPRequest(userId, requestGeneration) {
   const normalizedUserId = typeof userId === "string" ? userId.trim() : "";
   const revenueCatKey = revenueCatKeyForPlatform();
   if (!isNative()) return false;
   if (!normalizedUserId || !revenueCatKey) {
-    // A native session without a verified identity/key must not inherit paid
-    // readiness from the last authenticated account.
-    configuredUserId = "";
+    if (requestGeneration === configurationGeneration) configuredUserId = "";
     return false;
   }
   const Purchases = await getPurchases();
-  if (!Purchases) return false;
+  if (!Purchases || requestGeneration !== configurationGeneration) return false;
   if (configured) {
     if (configuredUserId === normalizedUserId) return true;
     try {
-      // RevenueCat supports switching directly between identified users.
-      // Keep paid actions disabled unless the provider confirms the switch.
       await Purchases.logIn({ appUserID: normalizedUserId });
+      if (requestGeneration !== configurationGeneration) return false;
       configuredUserId = normalizedUserId;
       return true;
     } catch {
-      // The SDK remains configured even when identity switching fails. Clear
-      // local readiness so paid actions fail closed, but preserve the ability
-      // to retry logIn instead of incorrectly configuring the SDK again.
-      configuredUserId = "";
+      if (requestGeneration === configurationGeneration) configuredUserId = "";
       console.warn("RevenueCat user switch failed");
       return false;
     }
   }
   try {
     await Purchases.configure({ apiKey: revenueCatKey, appUserID: normalizedUserId });
+    if (requestGeneration !== configurationGeneration) return false;
     configured = true;
     configuredUserId = normalizedUserId;
     return true;
-  } catch (err) {
+  } catch {
+    if (requestGeneration === configurationGeneration) configuredUserId = "";
     console.warn("RevenueCat configure failed");
     return false;
   }
 }
 
+/** Configure RevenueCat with the logged-in user's stable ID. */
+export async function configureIAP(userId) {
+  const requestGeneration = ++configurationGeneration;
+  const request = () => configureIAPRequest(userId, requestGeneration);
+  const result = configurationQueue.then(request, request);
+  configurationQueue = result.then(() => undefined, () => undefined);
+  return result;
+}
+
 /** Disable paid actions when the local authenticated session ends. */
 export function suspendIAP() {
+  configurationGeneration += 1;
   configuredUserId = "";
 }
 
