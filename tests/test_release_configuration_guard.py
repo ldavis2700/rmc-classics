@@ -220,6 +220,15 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             IAP.count("requestGeneration !== configurationGeneration"),
             3,
         )
+        initial_configure = IAP.split(
+            "await Purchases.configure", 1
+        )[1].split("} catch {", 1)[0]
+        self.assertLess(
+            initial_configure.index("configured = true;"),
+            initial_configure.index(
+                "requestGeneration !== configurationGeneration"
+            ),
+        )
         suspend = IAP.split("export function suspendIAP()", 1)[1].split(
             "function iapSessionStillActive", 1
         )[0]
