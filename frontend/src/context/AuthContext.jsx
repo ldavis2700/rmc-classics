@@ -42,6 +42,9 @@ export function AuthProvider({ children }) {
       });
       localStorage.setItem("rmc_token", data.token);
       setUser(data.user);
+      // Make purchases available immediately; do not require an app restart
+      // after a fresh login or registration.
+      void configureIAP(data.user?.id);
       return { ok: true };
     } catch (e) {
       return { ok: false, error: formatApiErrorDetail(e.response?.data?.detail) || e.message };
@@ -58,6 +61,9 @@ export function AuthProvider({ children }) {
       });
       localStorage.setItem("rmc_token", data.token);
       setUser(data.user);
+      // Make purchases available immediately; do not require an app restart
+      // after a fresh login or registration.
+      void configureIAP(data.user?.id);
       return { ok: true };
     } catch (e) {
       return { ok: false, error: formatApiErrorDetail(e.response?.data?.detail) || e.message };
