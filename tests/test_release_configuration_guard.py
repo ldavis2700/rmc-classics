@@ -163,7 +163,10 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             verification,
         )
         self.assertIn(
-            "grep -Eq '^revenuecat_ios_key_sha256=[0-9a-f]{64}        self.assertIn(
+            "grep -Eq '^revenuecat_ios_key_sha256=[0-9a-f]{64}$'",
+            verification,
+        )
+        self.assertIn(
             "- $CM_BUILD_DIR/release-ipa-metadata.txt", signed)
         self.assertIn(
             'shasum -a 256 -c "$receipt_name.sha256"', verification)
