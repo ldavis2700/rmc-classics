@@ -12,6 +12,7 @@ export function AuthProvider({ children }) {
   const refresh = useCallback(async () => {
     const token = localStorage.getItem("rmc_token");
     if (!token) {
+      suspendIAP();
       setUser(null);
       setLoading(false);
       return;
@@ -22,6 +23,7 @@ export function AuthProvider({ children }) {
       await configureIAP(data.user?.id);
     } catch (e) {
       localStorage.removeItem("rmc_token");
+      suspendIAP();
       setUser(null);
     } finally {
       setLoading(false);
