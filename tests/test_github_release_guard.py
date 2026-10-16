@@ -42,6 +42,18 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         self.assertEqual(CODEMAGIC.count('cocoapods: "1.16.2"'), 2)
         self.assertNotIn("cocoapods: default", CODEMAGIC)
 
+    def test_fastlane_toolchain_is_exactly_pinned_and_verified(self):
+        self.assertIn("FASTLANE_VERSION: 2.222.0", WORKFLOW)
+        self.assertIn(
+            'gem install fastlane --no-document --version "$FASTLANE_VERSION"',
+            WORKFLOW,
+        )
+        self.assertIn(
+            'Fastlane::VERSION == ENV.fetch("FASTLANE_VERSION")',
+            WORKFLOW,
+        )
+        self.assertNotIn("gem install fastlane -N -v 2.222", WORKFLOW)
+
     def test_github_release_actions_are_immutable_commit_pins(self):
         expected = {
             "actions/checkout": {
