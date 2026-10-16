@@ -130,6 +130,19 @@ export function suspendIAP() {
   configuredUserId = "";
 }
 
+function iapSessionStillActive(userId) {
+  return Boolean(configured && userId && configuredUserId === userId);
+}
+
+function pendingCreditSyncResult() {
+  return {
+    ok: true,
+    pending: true,
+    credited: 0,
+    error: "Payment received. Your freezes are still syncing—sign in to the purchasing account and tap Restore Purchases shortly.",
+  };
+}
+
 /** Buy the 5-pack. Returns { ok, freezes_available? } or { ok: false, error }. */
 export async function purchaseFreezePack() {
   if (!isNative()) {
@@ -138,6 +151,7 @@ export async function purchaseFreezePack() {
   if (!revenueCatKeyForPlatform() || !configured || !configuredUserId) {
     return { ok: false, error: "Purchases are temporarily unavailable." };
   }
+  const purchaseUserId = configuredUserId;
   const Purchases = await getPurchases();
   if (!Purchases || cachedProductCategory?.NON_SUBSCRIPTION == null) {
     return { ok: false, error: "Store unavailable" };
@@ -153,6 +167,9 @@ export async function purchaseFreezePack() {
       (candidate) => candidate?.identifier === IAP_PRODUCTS.FREEZE_PACK_5.id,
     );
     if (!product) return { ok: false, error: "Product not found. Try again shortly." };
+    if (!iapSessionStillActive(purchaseUserId)) {
+      return { ok: false, error: "Your account changed. Start the purchase again." };
+    }
 
     // Purchase. Once this resolves, payment is confirmed by the store.
     await Purchases.purchaseStoreProduct({ product });
@@ -167,6 +184,12 @@ export async function purchaseFreezePack() {
     };
   }
 
+  if (!iapSessionStillActive(purchaseUserId)) {
+    // Never sync a completed store transaction through a different local
+    // account. The purchasing account can reconcile it through Restore.
+    return pendingCreditSyncResult();
+  }
+
   try {
     // Backend syncs with RevenueCat and credits freezes.
     const { data } = await api.post("/iap/sync", {
@@ -179,12 +202,7 @@ export async function purchaseFreezePack() {
     // Do not report a paid transaction as a failed purchase. RevenueCat's webhook
     // can still deliver it, and Restore Purchases safely retries the account sync.
     console.warn("Freeze pack purchased; credit sync pending");
-    return {
-      ok: true,
-      pending: true,
-      credited: 0,
-      error: "Payment received. Your freezes are still syncing—tap Restore Purchases shortly.",
-    };
+    return pendingCreditSyncResult();
   }
 }
 
@@ -194,10 +212,17 @@ export async function restorePurchases() {
   if (!revenueCatKeyForPlatform() || !configured || !configuredUserId) {
     return { ok: false, error: "Purchases are temporarily unavailable." };
   }
+  const restoreUserId = configuredUserId;
   const Purchases = await getPurchases();
   if (!Purchases) return { ok: false, error: "Store unavailable" };
+  if (!iapSessionStillActive(restoreUserId)) {
+    return { ok: false, error: "Your account changed. Start restore again." };
+  }
   try {
     await Purchases.restorePurchases();
+    if (!iapSessionStillActive(restoreUserId)) {
+      return { ok: false, error: "Your account changed. Sign in and restore again." };
+    }
     const { data } = await api.post("/iap/sync", { product_id: IAP_PRODUCTS.FREEZE_PACK_5.id });
     const sync = validatedSyncPayload(data);
     if (!sync) throw new Error("invalid_iap_sync_response");
