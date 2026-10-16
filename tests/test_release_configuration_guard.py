@@ -169,6 +169,20 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
         self.assertNotIn("void configureIAP(data.user?.id);", AUTH)
         self.assertNotIn("\n      configureIAP(data.user?.id);", AUTH)
 
+    def test_signed_out_sessions_disable_paid_actions_and_can_recover(self):
+        self.assertIn(
+            'import { configureIAP, suspendIAP } from "@/lib/iap";',
+            AUTH,
+        )
+        self.assertEqual(AUTH.count("suspendIAP();"), 2)
+        self.assertIn("export function suspendIAP()", IAP)
+        self.assertIn('configuredUserId = "";', IAP)
+        switch_failure = IAP.split(
+            'console.warn("RevenueCat user switch failed")', 1
+        )[0].rsplit("} catch {", 1)[1]
+        self.assertNotIn("configured = false", switch_failure)
+        self.assertIn('configuredUserId = "";', switch_failure)
+
     def test_purchase_cancellation_uses_explicit_sdk_signal(self):
         self.assertIn("err?.userCancelled === true", IAP)
         self.assertNotIn('includes("cancel")', IAP)
