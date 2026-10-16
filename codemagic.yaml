@@ -285,6 +285,10 @@ workflows:
           ACTUAL_COMMIT="$(git rev-parse --verify 'HEAD^{commit}')"
           IPA_SHA256="$(shasum -a 256 "$IPA_PATH" | awk '{print $1}')"
           test -n "$IPA_SHA256"
+          REVENUECAT_IOS_KEY_SHA256="$(
+            printf '%s' "$REACT_APP_REVENUECAT_IOS_KEY" | shasum -a 256 | awk '{print $1}'
+          )"
+          test -n "$REVENUECAT_IOS_KEY_SHA256"
           {
             echo "repository=ldavis2700/rmc-classics"
             echo "commit=$ACTUAL_COMMIT"
@@ -311,6 +315,7 @@ workflows:
             echo "profile_minimum_validity_days=$PROFILE_MINIMUM_VALIDITY_DAYS"
             echo "artifact=$IPA_PATH"
             echo "ipa_sha256=$IPA_SHA256"
+            echo "revenuecat_ios_key_sha256=$REVENUECAT_IOS_KEY_SHA256"
           } > "$RECEIPT"
           for key in repository commit app_store_apple_id bundle_id version \
               reviewed_marketing_version build_number reserved_build_number \
@@ -321,7 +326,8 @@ workflows:
               profile_uuid profile_name \
               signed_get_task_allow profile_get_task_allow \
               profile_beta_reports_active profile_expiration \
-              profile_minimum_validity_days artifact ipa_sha256; do
+              profile_minimum_validity_days artifact ipa_sha256 \
+              revenuecat_ios_key_sha256; do
             test "$(grep -c "^$key=" "$RECEIPT")" -eq 1
           done
           grep -Fqx "repository=ldavis2700/rmc-classics" "$RECEIPT"
@@ -337,7 +343,172 @@ workflows:
           grep -Fqx "profile_minimum_validity_days=$PROFILE_MINIMUM_VALIDITY_DAYS" "$RECEIPT"
           grep -Fqx "artifact=$IPA_PATH" "$RECEIPT"
           grep -Eq '^profile_certificate_sha256=[0-9a-f]{64}$' "$RECEIPT"
-          grep -Eq '^ipa_sha256=[0-9a-f]{64}$' "$RECEIPT"
+          grep -Eq '^ipa_sha256=[0-9a-f]{64}          RECORDED_IPA_SHA256="$(sed -n 's/^ipa_sha256=//p' "$RECEIPT")"
+          test "$RECORDED_IPA_SHA256" = "$(
+            shasum -a 256 "$IPA_PATH" | awk '{print $1}'
+          )"
+          (
+            cd "$(dirname "$RECEIPT")"
+            receipt_name="$(basename "$RECEIPT")"
+            shasum -a 256 "$receipt_name" > "$receipt_name.sha256"
+            test "$(wc -l < "$receipt_name.sha256" | tr -d ' ')" -eq 1
+            grep -Eq '^[0-9a-f]{64}  release-ipa-metadata\.txt$' \
+              "$receipt_name.sha256"
+            shasum -a 256 -c "$receipt_name.sha256"
+          )
+
+    artifacts:
+      - $CM_BUILD_DIR/release-source.txt
+      - $CM_BUILD_DIR/release-ipa-metadata.txt
+      - $CM_BUILD_DIR/release-ipa-metadata.txt.sha256
+      - frontend/ios/App/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - frontend/ios/App/App.xcarchive
+
+    publishing:
+      email:
+        recipients:
+          - hello@rmcclassics.com
+        notify:
+          success: true
+          failure: true
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups: []
+
+  ios-unsigned:
+    name: RMC Classics -> Unsigned IPA (inspection only)
+    max_build_duration: 60
+    environment:
+      vars:
+        XCODE_WORKSPACE: "frontend/ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
+      node: 20
+      xcode: 26.5
+      cocoapods: "1.16.2"
+
+    scripts:
+      - name: Pin npm toolchain
+        script: |
+          npm install --global npm@10.9.4
+          test "$(npm --version)" = "10.9.4"
+
+      - name: Install frontend deps
+        script: |
+          cd frontend
+          npm ci
+
+      - name: Build web bundle
+        script: |
+          cd frontend
+          CI=false npm run build
+
+      - name: Sync Capacitor iOS
+        script: |
+          cd frontend
+          ./node_modules/.bin/cap sync ios
+
+      - name: Install CocoaPods
+        script: |
+          cd frontend/ios/App
+          pod install --repo-update
+
+      - name: Build unsigned archive
+        script: |
+          cd frontend/ios/App
+          xcodebuild -workspace App.xcworkspace -scheme App \
+            -configuration Release \
+            -archivePath $CM_BUILD_DIR/App.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+
+    artifacts:
+      - $CM_BUILD_DIR/App.xcarchive
+ "$RECEIPT"
+          grep -Eq '^revenuecat_ios_key_sha256=[0-9a-f]{64}          RECORDED_IPA_SHA256="$(sed -n 's/^ipa_sha256=//p' "$RECEIPT")"
+          test "$RECORDED_IPA_SHA256" = "$(
+            shasum -a 256 "$IPA_PATH" | awk '{print $1}'
+          )"
+          (
+            cd "$(dirname "$RECEIPT")"
+            receipt_name="$(basename "$RECEIPT")"
+            shasum -a 256 "$receipt_name" > "$receipt_name.sha256"
+            test "$(wc -l < "$receipt_name.sha256" | tr -d ' ')" -eq 1
+            grep -Eq '^[0-9a-f]{64}  release-ipa-metadata\.txt$' \
+              "$receipt_name.sha256"
+            shasum -a 256 -c "$receipt_name.sha256"
+          )
+
+    artifacts:
+      - $CM_BUILD_DIR/release-source.txt
+      - $CM_BUILD_DIR/release-ipa-metadata.txt
+      - $CM_BUILD_DIR/release-ipa-metadata.txt.sha256
+      - frontend/ios/App/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - frontend/ios/App/App.xcarchive
+
+    publishing:
+      email:
+        recipients:
+          - hello@rmcclassics.com
+        notify:
+          success: true
+          failure: true
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups: []
+
+  ios-unsigned:
+    name: RMC Classics -> Unsigned IPA (inspection only)
+    max_build_duration: 60
+    environment:
+      vars:
+        XCODE_WORKSPACE: "frontend/ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
+      node: 20
+      xcode: 26.5
+      cocoapods: "1.16.2"
+
+    scripts:
+      - name: Pin npm toolchain
+        script: |
+          npm install --global npm@10.9.4
+          test "$(npm --version)" = "10.9.4"
+
+      - name: Install frontend deps
+        script: |
+          cd frontend
+          npm ci
+
+      - name: Build web bundle
+        script: |
+          cd frontend
+          CI=false npm run build
+
+      - name: Sync Capacitor iOS
+        script: |
+          cd frontend
+          ./node_modules/.bin/cap sync ios
+
+      - name: Install CocoaPods
+        script: |
+          cd frontend/ios/App
+          pod install --repo-update
+
+      - name: Build unsigned archive
+        script: |
+          cd frontend/ios/App
+          xcodebuild -workspace App.xcworkspace -scheme App \
+            -configuration Release \
+            -archivePath $CM_BUILD_DIR/App.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+
+    artifacts:
+      - $CM_BUILD_DIR/App.xcarchive
+ "$RECEIPT"
           RECORDED_IPA_SHA256="$(sed -n 's/^ipa_sha256=//p' "$RECEIPT")"
           test "$RECORDED_IPA_SHA256" = "$(
             shasum -a 256 "$IPA_PATH" | awk '{print $1}'
