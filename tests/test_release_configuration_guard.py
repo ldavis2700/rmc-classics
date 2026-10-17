@@ -212,6 +212,12 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
         self.assertIn("if (!normalizedUserId || !revenueCatKey) {", configure)
         self.assertIn('configuredUserId = "";', configure)
 
+    def test_revenuecat_identity_is_bounded_and_control_safe(self):
+        self.assertIn("function normalizedIAPUserId(userId)", IAP)
+        self.assertEqual(IAP.count("normalizedIAPUserId(userId)"), 3)
+        self.assertIn("value.length > 256", IAP)
+        self.assertIn("code < 32 || code === 127", IAP)
+
     def test_iap_identity_configuration_is_serialized_and_stale_safe(self):
         self.assertIn("let configurationQueue = Promise.resolve();", IAP)
         self.assertIn("const requestGeneration = ++configurationGeneration;", IAP)
