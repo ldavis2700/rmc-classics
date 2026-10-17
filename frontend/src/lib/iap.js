@@ -179,6 +179,9 @@ export async function purchaseFreezePack() {
   if (!Purchases || cachedProductCategory?.NON_SUBSCRIPTION == null) {
     return { ok: false, error: "Store unavailable" };
   }
+  if (!iapSessionStillActive(purchaseUserId, purchaseGeneration)) {
+    return { ok: false, error: "Your account changed. Start the purchase again." };
+  }
   try {
     // This SKU is a consumable. RevenueCat defaults Android lookups to
     // subscriptions unless the non-subscription category is explicit.
