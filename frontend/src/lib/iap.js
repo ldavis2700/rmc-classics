@@ -197,6 +197,9 @@ export async function purchaseFreezePack() {
     // Purchase. Once this resolves, payment is confirmed by the store.
     await Purchases.purchaseStoreProduct({ product });
   } catch (err) {
+    if (!iapSessionStillActive(purchaseUserId, purchaseGeneration)) {
+      return { ok: false, error: "Your account changed. Start the purchase again." };
+    }
     // Trust the SDK's explicit cancellation flag. Message matching is both
     // locale-dependent and can misclassify errors that merely mention cancellation.
     if (err?.userCancelled === true) return { ok: false, cancelled: true };
@@ -258,6 +261,9 @@ export async function restorePurchases() {
     if (!sync) throw new Error("invalid_iap_sync_response");
     return { ok: true, ...sync };
   } catch (err) {
+    if (!iapSessionStillActive(restoreUserId, restoreGeneration)) {
+      return { ok: false, error: "Your account changed. Sign in and restore again." };
+    }
     console.warn("restorePurchases failed");
     return {
       ok: false,
