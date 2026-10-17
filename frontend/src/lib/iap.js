@@ -86,9 +86,20 @@ async function getPurchases() {
   }
 }
 
+function normalizedIAPUserId(userId) {
+  if (typeof userId !== "string") return "";
+  const value = userId.trim();
+  const hasControlCharacter = [...value].some((character) => {
+    const code = character.charCodeAt(0);
+    return code < 32 || code === 127;
+  });
+  if (!value || value.length > 256 || hasControlCharacter) return "";
+  return value;
+}
+
 /** Configure one serialized RevenueCat identity request. */
 async function configureIAPRequest(userId, requestGeneration) {
-  const normalizedUserId = typeof userId === "string" ? userId.trim() : "";
+  const normalizedUserId = normalizedIAPUserId(userId);
   const revenueCatKey = revenueCatKeyForPlatform();
   if (!isNative()) return false;
   if (!normalizedUserId || !revenueCatKey) {
@@ -128,7 +139,7 @@ async function configureIAPRequest(userId, requestGeneration) {
 
 /** Configure RevenueCat with the logged-in user's stable ID. */
 export async function configureIAP(userId) {
-  const normalizedUserId = typeof userId === "string" ? userId.trim() : "";
+  const normalizedUserId = normalizedIAPUserId(userId);
   const requestGeneration = ++configurationGeneration;
   if (configuredUserId !== normalizedUserId) {
     // Disable paid actions immediately while a different account identity is
