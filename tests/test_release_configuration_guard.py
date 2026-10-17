@@ -302,7 +302,7 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             purchase.count(
                 "iapSessionStillActive(purchaseUserId, purchaseGeneration)"
             ),
-            3,
+            4,
         )
         self.assertLess(
             purchase.index(
@@ -323,6 +323,10 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
         self.assertLess(
             session_checks[2], purchase.index("validatedSyncPayload(data)")
         )
+        self.assertIn(
+            "iapSessionStillActive(purchaseUserId, purchaseGeneration)",
+            purchase.split("} catch (err) {", 1)[1],
+        )
         self.assertIn("return pendingCreditSyncResult();", purchase)
         self.assertIn(
             "sign in to the purchasing account and tap Restore Purchases",
@@ -341,7 +345,7 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             restore.count(
                 "iapSessionStillActive(restoreUserId, restoreGeneration)"
             ),
-            3,
+            4,
         )
         self.assertLess(
             restore.index(
@@ -349,17 +353,22 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             ),
             restore.index('api.post("/iap/sync"'),
         )
+        restore_checks = [
+            index for index in range(len(restore))
+            if restore.startswith(
+                "iapSessionStillActive(restoreUserId, restoreGeneration)",
+                index,
+            )
+        ]
         self.assertGreater(
-            restore.rindex(
-                "iapSessionStillActive(restoreUserId, restoreGeneration)"
-            ),
-            restore.index('api.post("/iap/sync"'),
+            restore_checks[2], restore.index('api.post("/iap/sync"')
         )
         self.assertLess(
-            restore.rindex(
-                "iapSessionStillActive(restoreUserId, restoreGeneration)"
-            ),
-            restore.index("validatedSyncPayload(data)"),
+            restore_checks[2], restore.index("validatedSyncPayload(data)")
+        )
+        self.assertIn(
+            "iapSessionStillActive(restoreUserId, restoreGeneration)",
+            restore.split("} catch (err) {", 1)[1],
         )
 
 
