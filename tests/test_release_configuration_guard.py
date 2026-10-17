@@ -302,11 +302,18 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
             purchase.count(
                 "iapSessionStillActive(purchaseUserId, purchaseGeneration)"
             ),
-            4,
+            5,
         )
         self.assertLess(
             purchase.index(
                 "iapSessionStillActive(purchaseUserId, purchaseGeneration)"
+            ),
+            purchase.index("Purchases.getProducts"),
+        )
+        self.assertLess(
+            purchase.index(
+                "iapSessionStillActive(purchaseUserId, purchaseGeneration)",
+                purchase.index("Purchases.getProducts"),
             ),
             purchase.index("Purchases.purchaseStoreProduct"),
         )
