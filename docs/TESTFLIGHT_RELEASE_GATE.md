@@ -1,6 +1,9 @@
 # RMC Classics TestFlight release gate
 
-Signed RMC Classics releases use Codemagic's `ios-testflight` workflow.
+Signed RMC Classics releases use Codemagic's manually started `ios-testflight`
+workflow. Repository pushes and tags do not start that signed workflow. The
+manually dispatched GitHub `iOS Build & Upload to TestFlight` workflow is a
+fallback and enforces the same current-main and monetization preflight gates.
 
 ## Protected Codemagic configuration
 
@@ -13,6 +16,39 @@ The Codemagic app must retain:
 - App Store signing access for bundle ID `com.rmcclassics.app`
 
 Do not commit signing keys, private RevenueCat keys, or App Store credentials.
+
+If the GitHub fallback is used, configure the equivalent repository Actions
+secrets, including `APP_STORE_APPLE_ID` and `REACT_APP_REVENUECAT_IOS_KEY`.
+Repository pushes and tags do not start the GitHub fallback. A manual dispatch
+must explicitly confirm the TestFlight upload. That workflow validates every
+named secret before installing dependencies and
+injects the public RevenueCat key into the web build. It also retains a
+`RMC-Classics-release-source` receipt alongside the IPA artifact. The
+signed-IPA verification receipt uses an `always()` upload guard so
+certificate, profile, version, and checksum evidence survives a later
+TestFlight upload failure.
+
+Before treating that receipt as evidence, download
+`release-ipa-metadata.txt` and `release-ipa-metadata.txt.sha256` from the same
+workflow run and verify the receipt itself:
+
+```sh
+shasum -a 256 -c release-ipa-metadata.txt.sha256
+```
+
+Proceed only when the command prints `release-ipa-metadata.txt: OK`; then bind
+every critical field to the exact candidate and App Store record: `repository`,
+`commit`, `app_store_apple_id`, `bundle_id`, `version`,
+`reviewed_marketing_version`, `build_number`, `reserved_build_number`,
+`profile_application_identifier`, `profile_top_level_team_identifier`,
+`signed_application_identifier`, `signed_team_identifier`, `signing_authority`,
+`signing_certificate_not_after`, `certificate_minimum_validity_days`,
+`profile_certificate_sha256`, `profile_uuid`, `profile_name`,
+`signed_get_task_allow`, `profile_get_task_allow`,
+`profile_beta_reports_active`, `profile_expiration`,
+`profile_minimum_validity_days`, `artifact`, and the lane-specific `sha256` or
+`ipa_sha256`. A missing, mismatched, expired, or unexpected value—or a missing
+or mismatched sidecar—invalidates the candidate.
 
 ## Required release checks
 
@@ -32,10 +68,11 @@ If configuration validation fails, open the RMC Classics app's Codemagic environ
 
 1. Merge all intended corrections into `main`.
 2. Wait for GitHub validation and the Vercel deployment check to pass.
-3. Create a fresh `rmc-testflight/*` branch or `rmc-testflight-*` tag from that exact `main` commit, or manually select current `main` in Codemagic.
+3. Manually select current `main` in Codemagic and start `ios-testflight`; repository pushes and tags are intentionally ignored for this signed workflow.
 4. Confirm **Verify release source is current main** succeeds.
 5. Confirm the remaining Codemagic steps succeed and the build appears in TestFlight.
-6. Retain the generated `release-source.txt` artifact as commit evidence.
-7. Smoke-test that exact TestFlight build before App Store submission.
+6. Retain the generated `release-source.txt`, `release-ipa-metadata.txt`, and `release-ipa-metadata.txt.sha256` artifacts from the same run.
+7. Verify the receipt sidecar with the exact command above and bind every recorded identity field to the release candidate.
+8. Smoke-test that exact TestFlight build before App Store submission.
 
-A stale trigger must be replaced with a new trigger from current `main`; it must not be forced past the gate.
+A stale manual selection must be replaced with current `main`; it must not be forced past the gate.
