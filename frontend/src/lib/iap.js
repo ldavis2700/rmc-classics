@@ -89,10 +89,7 @@ async function getPurchases() {
 function normalizedIAPUserId(userId) {
   if (typeof userId !== "string") return "";
   const value = userId.trim();
-  const hasControlCharacter = [...value].some((character) => {
-    const code = character.charCodeAt(0);
-    return code < 32 || code === 127;
-  });
+  const hasControlCharacter = /[\p{Cc}\p{Cf}]/u.test(value);
   if (!value || value.length > 256 || hasControlCharacter) return "";
   return value;
 }
