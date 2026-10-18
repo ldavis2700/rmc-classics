@@ -57,7 +57,14 @@ export function revenueCatKeyForPlatform(platform = nativePlatform()) {
     : platform === "android"
       ? "goog_"
       : "";
-  return requiredPrefix && key.startsWith(requiredPrefix) ? key : "";
+  const isValidKey = (
+    requiredPrefix
+    && typeof key === "string"
+    && key.startsWith(requiredPrefix)
+    && key.length <= 512
+    && /^[\x21-\x7E]+$/.test(key)
+  );
+  return isValidKey ? key : "";
 }
 
 function validatedSyncPayload(data) {
