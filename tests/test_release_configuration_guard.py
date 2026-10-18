@@ -208,6 +208,7 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
         key_guard = IAP.split(
             "export function revenueCatKeyForPlatform", 1
         )[1].split("function validatedSyncPayload", 1)[0]
+        self.assertIn("key.length > requiredPrefix.length", key_guard)
         self.assertIn("key.length <= 512", key_guard)
         self.assertIn(r"/^[\x21-\x7E]+$/.test(key)", key_guard)
         self.assertIn('key.startsWith(requiredPrefix)', key_guard)
