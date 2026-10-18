@@ -89,11 +89,13 @@ async function getPurchases() {
 function normalizedIAPUserId(userId) {
   if (typeof userId !== "string") return "";
   const value = userId.trim();
+  const hasOuterWhitespace = value !== userId;
   const hasControlCharacter = /[\p{Cc}\p{Cf}]/u.test(value);
   const hasWhitespace = /\s/u.test(value);
   const hasUnstableUnicodeNormalization = value.normalize("NFC") !== value;
   if (
     !value
+    || hasOuterWhitespace
     || value.length > 256
     || hasControlCharacter
     || hasWhitespace
