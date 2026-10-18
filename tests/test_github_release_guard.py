@@ -251,6 +251,11 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         self.assertIn("persist-credentials: false", checkout)
         self.assertIn('"$current_commit" != "$SOURCE_COMMIT"', SOURCE_SCRIPT)
 
+    def test_revenuecat_release_keys_match_client_validation_bounds(self):
+        for release_config in (WORKFLOW, CODEMAGIC):
+            self.assertIn(r"^appl_[!-~]+$", release_config)
+            self.assertIn('"${#sdk_key}" -gt 512', release_config)
+
     def test_revenuecat_key_is_injected_into_web_build(self):
         build = WORKFLOW.split("      - name: Build web bundle\n", 1)[1]
         build = build.split("      - name:", 1)[0]
@@ -525,8 +530,11 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             with self.subTest(app_id=repr(app_id)):
                 result = self.run_config(**{**valid, "APP_STORE_APPLE_ID": app_id})
                 self.assertNotEqual(result.returncode, 0)
-        for sdk_key in ("", " ", "\t\n", "sk_live_secret",
-                        "test_public", "appl_bad key"):
+        for sdk_key in (
+            "", " ", "\t\n", "appl_", "sk_live_secret",
+            "test_public", "appl_bad key", "appl_bad\x1fkey",
+            "appl_" + ("x" * 508),
+        ):
             with self.subTest(sdk_key=repr(sdk_key)):
                 result = self.run_config(**{
                     **valid, "REACT_APP_REVENUECAT_IOS_KEY": sdk_key})
