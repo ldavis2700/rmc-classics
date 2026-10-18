@@ -34,7 +34,16 @@ class AndroidRevenueCatKeyTests(unittest.TestCase):
         )
 
     def test_rejects_missing_ios_and_whitespace_bearing_keys(self):
-        for value in (None, "", "appl_wrong-platform", "goog_bad key", " goog_key"):
+        for value in (
+            None,
+            "",
+            "goog_",
+            "appl_wrong-platform",
+            "goog_bad key",
+            " goog_key",
+            "goog_bad\x1fkey",
+            "goog_" + ("x" * 508),
+        ):
             with self.subTest(value=value):
                 self.assertNotEqual(self.run_gate(value).returncode, 0)
 
