@@ -216,6 +216,7 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
         self.assertIn("function normalizedIAPUserId(userId)", IAP)
         self.assertEqual(IAP.count("normalizedIAPUserId(userId)"), 3)
         self.assertIn("value.length > 256", IAP)
+        self.assertIn(r"/\s/u.test(value)", IAP)
         self.assertIn(r"/[\p{Cc}\p{Cf}]/u.test(value)", IAP)
 
     def test_iap_identity_configuration_is_serialized_and_stale_safe(self):
