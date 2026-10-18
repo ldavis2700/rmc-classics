@@ -12,7 +12,11 @@ ENV_NAME = "REACT_APP_REVENUECAT_ANDROID_KEY"
 
 
 def fingerprint(value: str | None) -> str:
-    if not isinstance(value, str) or not re.fullmatch(r"goog_[!-~]+", value):
+    if (
+        not isinstance(value, str)
+        or len(value) > 512
+        or not re.fullmatch(r"goog_[!-~]+", value)
+    ):
         raise ValueError("invalid_android_revenuecat_public_key")
     return hashlib.sha256(value.encode()).hexdigest()
 
