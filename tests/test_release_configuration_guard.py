@@ -204,6 +204,14 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
         self.assertNotIn("configured = false", switch_failure)
         self.assertIn('configuredUserId = "";', switch_failure)
 
+    def test_client_revenuecat_key_is_bounded_and_printable(self):
+        key_guard = IAP.split(
+            "export function revenueCatKeyForPlatform", 1
+        )[1].split("function validatedSyncPayload", 1)[0]
+        self.assertIn("key.length <= 512", key_guard)
+        self.assertIn(r"/^[\x21-\x7E]+$/.test(key)", key_guard)
+        self.assertIn('key.startsWith(requiredPrefix)', key_guard)
+
     def test_missing_native_identity_or_key_disables_paid_actions(self):
         configure = IAP.split(
             "async function configureIAPRequest", 1
