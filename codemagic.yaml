@@ -77,7 +77,7 @@ workflows:
             invalid=1
           fi
           sdk_key="${REACT_APP_REVENUECAT_IOS_KEY:-}"
-          if [[ ! "$sdk_key" =~ ^appl_[^[:space:]]+$ ]]; then
+          if [[ ! "$sdk_key" =~ ^appl_[!-~]+$ ]] || [ "${#sdk_key}" -gt 512 ]; then
             echo "REACT_APP_REVENUECAT_IOS_KEY must be a protected public iOS SDK key beginning with appl_"
             invalid=1
           fi
