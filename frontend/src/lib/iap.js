@@ -61,6 +61,7 @@ export function revenueCatKeyForPlatform(platform = nativePlatform()) {
     requiredPrefix
     && typeof key === "string"
     && key.startsWith(requiredPrefix)
+    && key.length > requiredPrefix.length
     && key.length <= 512
     && /^[\x21-\x7E]+$/.test(key)
   );
