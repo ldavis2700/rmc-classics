@@ -90,7 +90,8 @@ function normalizedIAPUserId(userId) {
   if (typeof userId !== "string") return "";
   const value = userId.trim();
   const hasControlCharacter = /[\p{Cc}\p{Cf}]/u.test(value);
-  if (!value || value.length > 256 || hasControlCharacter) return "";
+  const hasWhitespace = /\s/u.test(value);
+  if (!value || value.length > 256 || hasControlCharacter || hasWhitespace) return "";
   return value;
 }
 
