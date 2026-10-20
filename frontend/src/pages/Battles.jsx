@@ -52,6 +52,9 @@ export default function Battles() {
       <p className="mt-2 max-w-xl text-sm text-[#a3a1c6]">
         Real-time Connect Four 1v1. Create a battle, share the link, and go head-to-head.
       </p>
+      <Link to="/tables" className="mt-5 block rounded-2xl border border-neon-cyan/40 bg-neon-cyan/10 p-4 text-neon-cyan">
+        New: Dominoes &amp; Spades · Find players worldwide or invite friends →
+      </Link>
 
       <div className="mt-8 grid gap-4 md:grid-cols-2">
         <div className="rounded-3xl border border-white/10 bg-[#16152b] p-6">

@@ -32,13 +32,13 @@ jobs:
 
       - name: Install frontend deps
         working-directory: frontend
-        run: yarn install --frozen-lockfile
+        run: npx --yes npm@10.9.4 ci
 
       - name: Build web bundle
         working-directory: frontend
         env:
           CI: 'false'
-        run: yarn build
+        run: npm run build
 
       - name: Sync Capacitor iOS
         working-directory: frontend
