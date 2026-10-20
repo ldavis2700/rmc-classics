@@ -117,8 +117,19 @@ export const GAMES = [
     accent: "#00F0FF",
     path: "/play/dominoes",
     description:
-      "Classic block dominoes. Chain your tiles, block the CPU, empty your hand to win.",
+      "Two-player draw dominoes. Play the computer, find players worldwide, or invite a friend.",
     era: "12th Century China",
+  },
+  {
+    id: "spades",
+    name: "Spades",
+    tagline: "Bid. Partner. Take the trick.",
+    color: "#00F0FF",
+    accent: "#FFD100",
+    path: "/play/spades",
+    description:
+      "Four-player partnership Spades. Team up with a computer or players worldwide and race to 500.",
+    era: "1930s",
   },
   {
     id: "gofish",

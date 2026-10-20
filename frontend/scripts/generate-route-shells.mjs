@@ -27,8 +27,8 @@ const games = [...gameSource.matchAll(/\{([\s\S]*?)\n  \},/g)]
   })
   .filter(({ id, name, path: route, description }) => id && name && route && description);
 
-if (games.length !== 14 || games.some((game) => game.path !== `/play/${game.id}`)) {
-  throw new Error("Refusing to generate route shells: the authoritative 14-game catalog could not be parsed safely.");
+if (games.length !== 15 || games.some((game) => game.path !== `/play/${game.id}`)) {
+  throw new Error("Refusing to generate route shells: the authoritative 15-game catalog could not be parsed safely.");
 }
 
 const requiredPublicRoutes = ["/", "/library", "/leaderboard", "/support-rmc", "/privacy", "/terms", "/support"];
