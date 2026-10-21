@@ -316,8 +316,8 @@ class AndroidBuildGuardTests(unittest.TestCase):
 
     def test_iap_switches_provider_identity_between_local_accounts(self):
         configure = IAP[
-            IAP.index("export async function configureIAP"):
-            IAP.index("/** Buy the 5-pack")
+            IAP.index("async function configureIAPRequest"):
+            IAP.index("/** Configure RevenueCat with")
         ]
         switch = configure[
             configure.index("if (configured) {"):
@@ -385,13 +385,19 @@ class AndroidBuildGuardTests(unittest.TestCase):
 
     def test_iap_requires_configured_stable_user_before_store_calls(self):
         configure = IAP[
-            IAP.index("export async function configureIAP"):
+            IAP.index("async function configureIAPRequest"):
             IAP.index("/** Buy the 5-pack")
         ]
         self.assertIn(
-            'typeof userId === "string" ? userId.trim() : ""',
+            'const normalizedUserId = normalizedIAPUserId(userId);',
             configure,
         )
+        identity = IAP.split("function normalizedIAPUserId(userId)", 1)[1].split(
+            "/** Configure one serialized", 1
+        )[0]
+        self.assertIn('if (typeof userId !== "string") return "";', identity)
+        self.assertIn('const hasOuterWhitespace = value !== userId;', identity)
+        self.assertIn('|| hasOuterWhitespace', identity)
         self.assertIn("!normalizedUserId", configure)
         self.assertIn("appUserID: normalizedUserId", configure)
         self.assertIn('let configuredUserId = "";', IAP)

@@ -75,7 +75,7 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             },
         }
         uses = [
-            line.strip().split()[2]
+            line.split("uses:", 1)[1].strip().split()[0]
             for workflow in (WORKFLOW, PR_WORKFLOW, ANDROID_WORKFLOW)
             for line in workflow.splitlines()
             if line.strip().startswith(("- uses:", "uses:"))
