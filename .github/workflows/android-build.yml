@@ -1,0 +1,198 @@
+name: RMC Classics Android Build Readiness
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/android-build.yml'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - 'frontend/capacitor.config.ts'
+      - 'frontend/src/**'
+      - 'tests/test_android_build_guard.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rmc-classics-android-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+          persist-credentials: false
+
+      - name: Setup Node 20
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Pin npm toolchain
+        run: |
+          npm install --global npm@10.9.4
+          test "$(npm --version)" = "10.9.4"
+
+      - name: Setup Java 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build production web bundle
+        working-directory: frontend
+        env:
+          CI: 'false'
+          REACT_APP_BACKEND_URL: https://rmcclassics.com
+        run: npm run build
+
+      - name: Generate and sync isolated Capacitor Android shell
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          if [ -d android ]; then
+            ./node_modules/.bin/cap sync android
+          else
+            ./node_modules/.bin/cap add android
+            ./node_modules/.bin/cap sync android
+          fi
+          test "$(grep -Ec '^[[:space:]]*compileSdkVersion[[:space:]]*=[[:space:]]*[0-9]+' android/variables.gradle)" -eq 1
+          test "$(grep -Ec '^[[:space:]]*targetSdkVersion[[:space:]]*=[[:space:]]*[0-9]+' android/variables.gradle)" -eq 1
+          sed -i -E 's/^([[:space:]]*)compileSdkVersion[[:space:]]*=.*/\1compileSdkVersion = 36/' android/variables.gradle
+          sed -i -E 's/^([[:space:]]*)targetSdkVersion[[:space:]]*=.*/\1targetSdkVersion = 36/' android/variables.gradle
+          grep -Eq '^[[:space:]]*compileSdkVersion[[:space:]]*=[[:space:]]*36$' android/variables.gradle
+          grep -Eq '^[[:space:]]*targetSdkVersion[[:space:]]*=[[:space:]]*36$' android/variables.gradle
+          grep -q 'applicationId "com.rmcclassics.app"' android/app/build.gradle
+
+      - name: Compile non-publishing Android App Bundle
+        working-directory: frontend/android
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify 'HEAD^{commit}')" = "$SOURCE_COMMIT" || {
+            echo "Checkout does not match the exact requested source commit."
+            exit 1
+          }
+          chmod +x gradlew
+          ./gradlew --no-daemon bundleRelease
+          AAB='app/build/outputs/bundle/release/app-release.aab'
+          test -s "$AAB"
+          test "$(grep -Ec '^[[:space:]]*versionCode[[:space:]]+[0-9]+' app/build.gradle)" -eq 1
+          test "$(grep -Ec '^[[:space:]]*versionName[[:space:]]+"[^"]+"' app/build.gradle)" -eq 1
+          VERSION_CODE="$(sed -nE 's/^[[:space:]]*versionCode[[:space:]]+([0-9]+).*/\1/p' app/build.gradle)"
+          VERSION_NAME="$(sed -nE 's/^[[:space:]]*versionName[[:space:]]+"([^"]+)".*/\1/p' app/build.gradle)"
+          test "$VERSION_CODE" -gt 0
+          test -n "$VERSION_NAME"
+          test "$(grep -Ec '^[[:space:]]*compileSdkVersion[[:space:]]*=[[:space:]]*[0-9]+' variables.gradle)" -eq 1
+          test "$(grep -Ec '^[[:space:]]*targetSdkVersion[[:space:]]*=[[:space:]]*[0-9]+' variables.gradle)" -eq 1
+          COMPILE_SDK="$(sed -nE 's/^[[:space:]]*compileSdkVersion[[:space:]]*=[[:space:]]*([0-9]+).*/\1/p' variables.gradle)"
+          TARGET_SDK="$(sed -nE 's/^[[:space:]]*targetSdkVersion[[:space:]]*=[[:space:]]*([0-9]+).*/\1/p' variables.gradle)"
+          test "$COMPILE_SDK" -ge 36
+          test "$TARGET_SDK" -ge 36
+          unzip -t "$AAB"
+          unzip -Z1 "$AAB" | grep -qx 'base/manifest/AndroidManifest.xml'
+          SIGNATURES="$(unzip -Z1 "$AAB" | grep -E '^META-INF/[^/]+\.(RSA|DSA|EC)$' || true)"
+          test -z "$SIGNATURES" || {
+            echo "Refusing signed artifact in non-publishing readiness workflow."
+            exit 1
+          }
+          BUNDLE_SHA256="$(sha256sum "$AAB" | awk '{print $1}')"
+          test -n "$BUNDLE_SHA256"
+          printf '%s  %s\n' "$BUNDLE_SHA256" "$AAB" > app-release.aab.sha256
+          {
+            echo "repository=${GITHUB_REPOSITORY}"
+            echo "commit=$(git rev-parse --verify 'HEAD^{commit}')"
+            echo "bundle_id=com.rmcclassics.app"
+            echo "version_code=$VERSION_CODE"
+            echo "version_name=$VERSION_NAME"
+            echo "compile_sdk=$COMPILE_SDK"
+            echo "target_sdk=$TARGET_SDK"
+            echo "artifact=$AAB"
+            echo "sha256=$BUNDLE_SHA256"
+            echo "signing_state=unsigned-readiness-only"
+          } > android-readiness-metadata.txt
+          sha256sum android-readiness-metadata.txt > \
+            android-readiness-metadata.txt.sha256
+
+      - name: Verify Android evidence set
+        working-directory: frontend/android
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify 'HEAD^{commit}')" = "$SOURCE_COMMIT" || {
+            echo "Retained Android evidence does not match the requested source commit."
+            exit 1
+          }
+          AAB='app/build/outputs/bundle/release/app-release.aab'
+          test -s "$AAB"
+          unzip -t "$AAB"
+          unzip -Z1 "$AAB" | grep -qx 'base/manifest/AndroidManifest.xml'
+          RETAINED_SIGNATURES="$(unzip -Z1 "$AAB" | grep -E '^META-INF/[^/]+\.(RSA|DSA|EC)$' || true)"
+          test -z "$RETAINED_SIGNATURES" || {
+            echo "Refusing signed artifact at evidence retention boundary."
+            exit 1
+          }
+          test "$(wc -l < app-release.aab.sha256)" -eq 1
+          grep -Eq '^[0-9a-f]{64}  app/build/outputs/bundle/release/app-release\.aab$' \
+            app-release.aab.sha256
+          test "$(wc -l < android-readiness-metadata.txt.sha256)" -eq 1
+          grep -Eq '^[0-9a-f]{64}  android-readiness-metadata\.txt$' \
+            android-readiness-metadata.txt.sha256
+          sha256sum --check --strict app-release.aab.sha256
+          sha256sum --check --strict android-readiness-metadata.txt.sha256
+          METADATA=android-readiness-metadata.txt
+          test "$(grep -c '^repository=' "$METADATA")" -eq 1
+          test "$(grep -c '^commit=' "$METADATA")" -eq 1
+          test "$(grep -c '^bundle_id=' "$METADATA")" -eq 1
+          test "$(grep -c '^version_code=' "$METADATA")" -eq 1
+          test "$(grep -c '^version_name=' "$METADATA")" -eq 1
+          test "$(grep -c '^compile_sdk=' "$METADATA")" -eq 1
+          test "$(grep -c '^target_sdk=' "$METADATA")" -eq 1
+          test "$(grep -c '^artifact=' "$METADATA")" -eq 1
+          test "$(grep -c '^sha256=' "$METADATA")" -eq 1
+          test "$(grep -c '^signing_state=' "$METADATA")" -eq 1
+          grep -Fqx "repository=$GITHUB_REPOSITORY" "$METADATA"
+          grep -Fqx "commit=$SOURCE_COMMIT" "$METADATA"
+          grep -Eq '^commit=[0-9a-f]{40}$' "$METADATA"
+          grep -Fqx "bundle_id=com.rmcclassics.app" "$METADATA"
+          EXPECTED_VERSION_CODE="$(sed -nE 's/^[[:space:]]*versionCode[[:space:]]+([0-9]+).*/\1/p' app/build.gradle)"
+          EXPECTED_VERSION_NAME="$(sed -nE 's/^[[:space:]]*versionName[[:space:]]+"([^"]+)".*/\1/p' app/build.gradle)"
+          grep -Fqx "version_code=$EXPECTED_VERSION_CODE" "$METADATA"
+          grep -Fqx "version_name=$EXPECTED_VERSION_NAME" "$METADATA"
+          grep -Fqx "compile_sdk=36" "$METADATA"
+          grep -Fqx "target_sdk=36" "$METADATA"
+          grep -Fqx "artifact=app/build/outputs/bundle/release/app-release.aab" "$METADATA"
+          grep -Fqx "signing_state=unsigned-readiness-only" "$METADATA"
+          grep -Eq '^version_code=[1-9][0-9]*$' "$METADATA"
+          grep -Eq '^version_name=.+$' "$METADATA"
+          grep -Eq '^compile_sdk=([3-9][6-9]|[4-9][0-9]|[1-9][0-9]{2,})$' "$METADATA"
+          grep -Eq '^target_sdk=([3-9][6-9]|[4-9][0-9]|[1-9][0-9]{2,})$' "$METADATA"
+          grep -Eq '^sha256=[0-9a-f]{64}$' "$METADATA"
+          RECORDED_SHA="$(sed -n 's/^sha256=//p' "$METADATA")"
+          ACTUAL_SHA="$(sha256sum app/build/outputs/bundle/release/app-release.aab | awk '{print $1}')"
+          test "$RECORDED_SHA" = "$ACTUAL_SHA"
+
+      - name: Retain Android readiness evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: rmc-classics-android-readiness-${{ env.SOURCE_COMMIT }}
+          path: |
+            frontend/android/app/build/outputs/bundle/release/app-release.aab
+            frontend/android/app-release.aab.sha256
+            frontend/android/android-readiness-metadata.txt
+            frontend/android/android-readiness-metadata.txt.sha256
+          if-no-files-found: error
+          retention-days: 30

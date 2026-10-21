@@ -13,6 +13,7 @@ import unicodedata
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
+from urllib.parse import quote
 
 import bcrypt
 import jwt as pyjwt
@@ -22,12 +23,17 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
+try:
+    from .game_tables import mount_table_routes
+except ImportError:
+    from game_tables import mount_table_routes
+
 # ---------- Config ----------
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_MINUTES = 60 * 24 * 7  # 7 days for MVP simplicity
 TERMS_VERSION = "2026-08-20"
 
-GAME_IDS = {"memory", "snakes", "connect4", "checkers", "rps", "crazy8", "chess", "uno", "ludo", "scrabble", "dominoes", "gofish", "oldmaid", "jenga"}
+GAME_IDS = {"memory", "snakes", "connect4", "checkers", "rps", "crazy8", "chess", "uno", "ludo", "scrabble", "dominoes", "spades", "gofish", "oldmaid", "jenga"}
 GAME_META = {
     "memory": {"name": "Memory Match", "score_dir": "asc"},   # lower moves better
     "snakes": {"name": "Snakes & Ladders", "score_dir": "desc"},
@@ -40,6 +46,7 @@ GAME_META = {
     "ludo": {"name": "Ludo", "score_dir": "desc"},
     "scrabble": {"name": "Word Tiles", "score_dir": "desc"},
     "dominoes": {"name": "Dominoes", "score_dir": "desc"},
+    "spades": {"name": "Spades", "score_dir": "desc"},
     "gofish": {"name": "Go Fish", "score_dir": "desc"},
     "oldmaid": {"name": "Old Maid", "score_dir": "desc"},
     "jenga": {"name": "Tumble Tower", "score_dir": "desc"},
@@ -461,6 +468,7 @@ async def delete_account(body: AccountDeletionIn, user: dict = Depends(get_curre
     deleted_ref = _deleted_account_ref(uid)
     await db.users.update_many({}, {"$pull": {"friend_ids": uid, "blocked_user_ids": uid}})
     await db.game_events.delete_many({"user_id": uid})
+    await db.game_tables.delete_many({"participant_ids": uid})
     await db.safety_reports.update_many(
         {"reporter_user_id": uid},
         {"$set": {
@@ -1329,6 +1337,10 @@ async def block_user(target_user_id: str, user: dict = Depends(get_current_user)
     )
     await db.users.update_one({"id": target_user_id}, {"$pull": {"friend_ids": user["id"]}})
     # Blocking ends any live direct interaction between the two accounts immediately.
+    await db.game_tables.update_many(
+        {"participant_ids": {"$all": [user["id"], target_user_id]}, "active": True},
+        {"$set": {"active": False, "status": "cancelled"}, "$inc": {"version": 1}},
+    )
     for room_id, room in list(_battle_rooms.items()):
         participants = {room.get("host_id"), room.get("guest_id")}
         if user["id"] in participants and target_user_id in participants:
@@ -1391,20 +1403,44 @@ REVENUECAT_API_BASE = "https://api.revenuecat.com/v1"
 
 
 async def _rc_get_subscriber(app_user_id: str) -> Optional[dict]:
-    """Fetch authoritative subscriber state from RevenueCat. Returns None if not configured."""
+    """Fetch bounded authoritative RevenueCat state, failing closed on provider errors."""
     secret = os.environ.get("REVENUECAT_SECRET_KEY", "").strip()
     if not secret:
         return None
     import httpx
-    async with httpx.AsyncClient(timeout=10) as client_http:
-        r = await client_http.get(
-            f"{REVENUECAT_API_BASE}/subscribers/{app_user_id}",
-            headers={"Authorization": f"Bearer {secret}"},
+    try:
+        async with httpx.AsyncClient(timeout=10) as client_http:
+            response = await client_http.get(
+                f"{REVENUECAT_API_BASE}/subscribers/{quote(app_user_id, safe='')}",
+                headers={"Authorization": f"Bearer {secret}"},
+            )
+    except httpx.HTTPError:
+        logger.warning("RevenueCat subscriber lookup transport failed")
+        return None
+    if response.status_code != 200:
+        logger.warning(
+            "RevenueCat subscriber lookup returned status %s",
+            response.status_code,
         )
-        if r.status_code != 200:
-            logger.warning("RevenueCat /subscribers returned %s: %s", r.status_code, r.text[:200])
-            return None
-        return r.json().get("subscriber")
+        return None
+    if len(response.content) > 2_000_000:
+        logger.warning("RevenueCat subscriber response was too large")
+        return None
+    try:
+        payload = response.json()
+    except (TypeError, ValueError):
+        logger.warning("RevenueCat subscriber response was not valid JSON")
+        return None
+    if not isinstance(payload, dict):
+        logger.warning("RevenueCat subscriber response was not an object")
+        return None
+    subscriber = payload.get("subscriber")
+    if subscriber is None:
+        return None
+    if not isinstance(subscriber, dict):
+        logger.warning("RevenueCat subscriber payload was not an object")
+        return None
+    return subscriber
 
 
 async def _credit_freeze_pack(user_id: str, transaction_ids: List[str]) -> int:
@@ -1512,6 +1548,7 @@ async def iap_webhook(request: Request):
 # ---------- Startup ----------
 @app.on_event("startup")
 async def startup():
+    await table_service.indexes()
     await db.users.create_index("email", unique=True)
     await db.users.create_index("total_wins")
     await db.game_events.create_index("user_id")
@@ -1566,4 +1603,5 @@ async def shutdown():
     client.close()
 
 
+table_service = mount_table_routes(api, db, get_current_user, _public_player_name)
 app.include_router(api)

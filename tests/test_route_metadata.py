@@ -40,7 +40,7 @@ def test_every_game_path_is_derived_from_authoritative_game_catalog():
     assert 'import PUBLIC_ROUTES from "@/lib/public-route-metadata.json";' in METADATA
     assert "GAMES.find(({ path }) => path === pathname)" in METADATA
     assert "canonicalPath: game.path" in METADATA
-    assert GAMES.count('path: "/play/') == 14
+    assert GAMES.count('path: "/play/') == 15
 
 
 def test_public_pages_are_indexable_and_private_routes_fail_closed():
@@ -81,9 +81,9 @@ def test_structured_catalog_is_strict_truthful_json_ld():
     assert by_type["SoftwareApplication"]["offers"]["price"] == "0"
 
     catalog = by_type["ItemList"]
-    assert catalog["numberOfItems"] == 14
-    assert len(catalog["itemListElement"]) == 14
-    assert [item["position"] for item in catalog["itemListElement"]] == list(range(1, 15))
+    assert catalog["numberOfItems"] == 15
+    assert len(catalog["itemListElement"]) == 15
+    assert [item["position"] for item in catalog["itemListElement"]] == list(range(1, 16))
 
     catalog_paths = {item["url"].removeprefix("https://rmcclassics.com") for item in catalog["itemListElement"]}
     game_paths = set(re.findall(r'path: "(/play/[^"]+)"', GAMES))
@@ -113,8 +113,8 @@ def test_build_generates_initial_metadata_for_every_game_route(tmp_path):
         r'path: "([^"]+)"[\s\S]*?description:\s*"([^"]+)"',
         GAMES,
     )
-    assert len(games) == 14
-    assert len(list((build_dir / "play").glob("*/index.html"))) == 14
+    assert len(games) == 15
+    assert len(list((build_dir / "play").glob("*/index.html"))) == 15
 
     for game_id, name, route, description in games:
         route_shell = (build_dir / "play" / game_id / "index.html").read_text(
@@ -184,7 +184,7 @@ def test_build_generates_initial_metadata_for_every_game_route(tmp_path):
 
 
 def test_every_game_has_explicit_consent_based_sharing():
-    assert len(GAME_PAGES) == 14
+    assert len(GAME_PAGES) == 15
     assert all("<GameShell" in page.read_text(encoding="utf-8") for page in GAME_PAGES)
 
     assert 'data-testid="game-share"' in GAME_SHELL
