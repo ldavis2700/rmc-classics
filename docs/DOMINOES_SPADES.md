@@ -82,6 +82,20 @@ against a disposable local backend serving `frontend/build`. It refuses remote
 targets. Install Playwright separately to run it; it creates only test accounts
 in the supplied disposable database.
 
+The full-stack wrapper creates and cleans up a disposable loopback MongoDB
+database and verifies seeded account, progress and purchase records survive
+startup and gameplay. It blocks browser requests to other origins.
+
+```sh
+RMC_TEST_MONGO_URL=mongodb://127.0.0.1:27017 python scripts/run_table_browser_test.py
+```
+
+Build the web bundle with `REACT_APP_BACKEND_URL` unset. The PR workflow installs
+pinned browser/backend test tools separately from application dependencies.
+Local runners can set `RMC_PLAYWRIGHT_MODULE` and `RMC_CHROMIUM_PATH`.
+Passing this test establishes local integration, not production, signed-device,
+or App Store acceptance.
+
 ## Release boundary
 
 The frontend and backend must be released together to the confirmed RMC CLASSICS

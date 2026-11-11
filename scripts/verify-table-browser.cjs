@@ -28,16 +28,21 @@ async function clickMove(page, action) {
 }
 
 (async () => {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: true,
+    ...(process.env.RMC_CHROMIUM_PATH ? { executablePath: process.env.RMC_CHROMIUM_PATH } : {}) });
+  const pages = [];
   try {
     const users = [];
-    const pages = [];
     const stamp = Date.now();
     for (let i = 0; i < 4; i += 1) {
       const email = `table-${stamp}-${i}@example.com`;
       const registered = await api("/auth/register", null, { name: `Test Player ${i + 1}`, email, password, accepted_terms: true });
       users.push({ ...registered, email });
       const context = await browser.newContext({ viewport: i === 0 ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
+      // A mistakenly production-bound bundle must fail locally, never call a live API.
+      // External fonts/analytics are also unnecessary for this disposable test.
+      await context.route("**/*", (route) => new URL(route.request().url()).origin === new URL(base).origin
+        ? route.continue() : route.abort());
       await context.addInitScript(({ token, insert }) => {
         if (insert) localStorage.setItem("rmc_token", token);
         const timeout = window.setTimeout.bind(window);
@@ -145,6 +150,9 @@ async function clickMove(page, action) {
     await pages[1].goto(`${base}/table/${safetyCode}`);
     await first.getByTestId("dominoes-board").waitFor();
     await first.getByText("Player safety · Report or block", { exact: true }).click();
+    // Polling and the one-second turn clock must not collapse safety controls.
+    await first.waitForTimeout(1100);
+    assert(await first.getByRole("button", { name: "Report Test Player 2", exact: true }).isVisible());
     await first.getByRole("button", { name: "Report Test Player 2", exact: true }).click();
     await first.locator("#table-report").fill("Disposable local test of table safety controls.");
     const reportResponse = first.waitForResponse((r) => r.url().endsWith("/safety/report") && r.request().method() === "POST");
@@ -162,5 +170,21 @@ async function clickMove(page, action) {
     assert.equal(removedTable.status, 404, "Account deletion removes linked table records");
     assert.deepEqual(errors, [], "No uncaught browser exceptions");
     console.log("PASS: complete computer Dominoes, in-table report/block, account-deletion cleanup, no uncaught browser exceptions");
+  } catch (error) {
+    if (pages[0] && process.env.RMC_SCREENSHOT_DIR) {
+      await pages[0].screenshot({ path: path.join(process.env.RMC_SCREENSHOT_DIR, "table-test-failure.png"), fullPage: true });
+      console.error("Browser failure state", JSON.stringify(await pages[0].evaluate(() => ({
+        url: location.pathname,
+        controls: [...document.querySelectorAll('button, summary')].filter((e) => e.textContent.includes('Player safety')).map((e) => ({
+          html: e.outerHTML, rect: e.getBoundingClientRect().toJSON(),
+          ancestors: [...(function* () { for (let p=e;p;p=p.parentElement) yield p; })()].map((p) => ({
+            tag: p.tagName, class: p.className, display: getComputedStyle(p).display,
+            visibility: getComputedStyle(p).visibility, contentVisibility: getComputedStyle(p).contentVisibility,
+            rect: p.getBoundingClientRect().toJSON(),
+          })),
+        })),
+      })), null, 2));
+    }
+    throw error;
   } finally { await browser.close(); }
 })().catch((error) => { console.error(error); process.exitCode = 1; });
