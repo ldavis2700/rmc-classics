@@ -59,6 +59,10 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Verify SVG loader compatibility
+        working-directory: frontend
+        run: node scripts/verify-svg-loader.cjs
+
       - name: Build frontend
         working-directory: frontend
         env:

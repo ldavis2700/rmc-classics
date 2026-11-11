@@ -98,7 +98,6 @@ class DependencyLockGuardTests(unittest.TestCase):
             "cssnano": {"yaml": "1.10.3"},
             "eslint": {"js-yaml": "4.3.2"},
             "@eslint/eslintrc": {"js-yaml": "4.3.2"},
-            "svgo": {"js-yaml": "3.15.2"},
             "@istanbuljs/load-nyc-config": {"js-yaml": "3.15.2"},
             "css-loader": {"postcss": "8.5.28"},
             "css-minimizer-webpack-plugin": {"postcss": "8.5.28"},
