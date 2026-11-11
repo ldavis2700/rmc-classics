@@ -50,6 +50,8 @@ class IOSReadinessGuardTests(unittest.TestCase):
         self.assertEqual(build['env']['REACT_APP_BACKEND_URL'], 'https://rmcclassics.com')
         self.assertIn('CODE_SIGNING_ALLOWED=NO', self.text)
         self.assertEqual(self.job['timeout-minutes'], 30)
+        self.assertIn('Gem.bin_path("cocoapods", "pod", ENV.fetch("COCOAPODS_VERSION"))', self.text)
+        self.assertIn('>> "$GITHUB_PATH"', self.text)
 
 
 if __name__ == '__main__':
