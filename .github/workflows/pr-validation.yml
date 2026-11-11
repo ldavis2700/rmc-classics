@@ -70,7 +70,7 @@ jobs:
       - name: Validate backend syntax and focused release regressions
         run: |
           python -m py_compile backend/server.py
-          python -m pip install --disable-pip-version-check pytest==8.3.5
+          python -m pip install --disable-pip-version-check pytest==8.3.5 PyYAML==6.0.2
           python -m pytest -q backend/tests/test_iap_idempotency_unit.py backend/tests/test_username_safety_unit.py backend/tests/test_block_visibility_unit.py backend/tests/test_safety_moderation_unit.py backend/tests/test_account_deletion_unit.py backend/tests/test_terms_consent_unit.py backend/tests/test_battle_invite_unit.py backend/tests/test_battle_join_unit.py backend/tests/test_battle_rematch_unit.py tests/test_public_shell_privacy.py tests/test_route_metadata.py
 
       - name: Test battle WebSocket input recovery
@@ -150,4 +150,5 @@ jobs:
           python tests/test_release_configuration_guard.py
           python tests/test_github_release_guard.py
           python tests/test_ios_build_number_guard.py
+          python tests/test_ios_readiness_guard.py
           grep -q 'release-source.txt' codemagic.yaml
