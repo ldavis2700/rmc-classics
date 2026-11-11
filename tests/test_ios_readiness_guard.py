@@ -52,6 +52,10 @@ class IOSReadinessGuardTests(unittest.TestCase):
         self.assertEqual(self.job['timeout-minutes'], 30)
         self.assertIn('Gem.bin_path("cocoapods", "pod", ENV.fetch("COCOAPODS_VERSION"))', self.text)
         self.assertIn('>> "$GITHUB_PATH"', self.text)
+        activation = 'gem "cocoapods", ENV.fetch("COCOAPODS_VERSION")'
+        loader = 'load Gem.bin_path'
+        self.assertIn(activation, self.text)
+        self.assertLess(self.text.index(activation), self.text.index(loader))
 
 
 if __name__ == '__main__':

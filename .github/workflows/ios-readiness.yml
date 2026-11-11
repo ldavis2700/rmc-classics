@@ -41,9 +41,10 @@ jobs:
           xcodebuild -version
           test "$(xcodebuild -version | head -1)" = "Xcode 26.5"
           gem install cocoapods --no-document --version "$COCOAPODS_VERSION"
-          # Hosted images may put a different Homebrew pod first on PATH.
+          # Activate the pinned gem before its executable requires CocoaPods.
+          # Resolving bin_path alone can still load a newer installed library.
           mkdir -p "$RUNNER_TEMP/rmc-bin"
-          printf '%s\n' '#!/usr/bin/env ruby' 'load Gem.bin_path("cocoapods", "pod", ENV.fetch("COCOAPODS_VERSION"))' > "$RUNNER_TEMP/rmc-bin/pod"
+          printf '%s\n' '#!/usr/bin/env ruby' 'gem "cocoapods", ENV.fetch("COCOAPODS_VERSION")' 'load Gem.bin_path("cocoapods", "pod", ENV.fetch("COCOAPODS_VERSION"))' > "$RUNNER_TEMP/rmc-bin/pod"
           chmod +x "$RUNNER_TEMP/rmc-bin/pod"
           export PATH="$RUNNER_TEMP/rmc-bin:$PATH"
           echo "$RUNNER_TEMP/rmc-bin" >> "$GITHUB_PATH"
