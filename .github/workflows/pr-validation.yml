@@ -29,7 +29,8 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    # Keep the browser toolchain on its supported Ubuntu image.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       mongo:
