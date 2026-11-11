@@ -1,37 +1,20 @@
 # RMC Classics Codemagic release trigger
 
-The signed `ios-testflight` Codemagic workflow is intentionally release-gated.
-
-## Accepted starts
-
-Start the workflow with one of these deliberate choices:
-
-- push a branch matching `rmc-testflight/*`
-- create a tag matching `rmc-testflight-*`
-- manually start the workflow in Codemagic
-
-Ordinary pushes to `main` never start a signed build.
+The signed `ios-testflight` workflow in `codemagic.yaml` is manually started only. It has no automatic branch, tag, or pull-request trigger. Creating `rmc-testflight/*` branches or `rmc-testflight-*` tags does not start a signed build; do not create them to work around this gate or repair a webhook for that purpose.
 
 ## Current-main source gate
 
-Every signed run fetches `origin/main` before installing dependencies or fetching signing files. The workflow stops immediately unless its checked-out commit exactly matches current `main`.
+Before installing dependencies or fetching signing files, every signed run fetches `origin/main` and stops unless its checked-out commit exactly matches current `main`. A manual run selected from a stale branch, tag or SHA fails this check. Select the current main revision after all intended release changes are merged and validated.
 
-This prevents an old release branch, tag, or manual selection from uploading a candidate that predates the latest safety or App Review corrections. Failed source verification happens before expensive release work and produces no TestFlight upload.
+The workflow records the verified repository and commit in `release-source.txt`. A successful unsigned GitHub Actions archive is separate compilation evidence: it is not a signed IPA or a processed TestFlight build.
 
-A successful run stores `release-source.txt` with the repository and verified commit alongside the build artifacts.
+## Final-candidate sequence
 
-## Recommended final-candidate sequence
+1. Verify the main-game hosting destination and deploy compatible frontend/backend revisions with health, data-preservation and rollback evidence. The founding-pilot Vercel project does not establish main-game availability. Confirm the configured `https://rmcclassics.com` backend and privacy route work before building a candidate for device testing.
+2. Confirm the intended release changes are merged into current `main` and required validation passed for that revision.
+3. In the existing Codemagic app, verify access to the `RMC ASC Key` App Store Connect integration, the `com.rmcclassics.app` App Store signing configuration and protected `rmc_release` variable group. The group must contain the real numeric `APP_STORE_APPLE_ID` and public iOS `REACT_APP_REVENUECAT_IOS_KEY`; never paste private keys into repository files or receipts.
+4. When the action-specific release gate is satisfied, deliberately start `ios-testflight` manually from current `main`. This workflow signs and uploads to TestFlight; it is not a read-only readiness check. Do not start it merely to discover whether credentials are configured.
+5. Verify **Verify release source is current main**, signing/provenance checks and upload all succeed. Retain `release-source.txt`, the signed IPA and the workflow's provenance receipt. Confirm App Store Connect has processed the matching build.
+6. Validate that exact signed build on devices against the deployed backend, using [TESTFLIGHT_RELEASE_GATE.md](TESTFLIGHT_RELEASE_GATE.md). Match screenshots, review recording, purchase/restore evidence and App Store metadata to the actual candidate before declaring resubmission readiness.
 
-1. Confirm the intended release changes are merged into `main` and all GitHub/Vercel checks passed.
-2. Create a fresh trigger from that exact commit, for example:
-   - branch: `rmc-testflight/app-review-resubmission-YYYY-MM-DD`
-   - tag: `rmc-testflight-YYYY.MM.DD-1`
-3. Confirm Codemagic's first step, **Verify release source is current main**, succeeds.
-4. Confirm the IPA uploads to TestFlight and retain `release-source.txt`.
-5. Smoke-test that exact TestFlight build before selecting it in App Store Connect.
-
-Never reuse an older trigger after `main` advances. Create a new trigger from the new `main` commit instead.
-
-## One-time Codemagic UI check
-
-If an accepted branch or tag does not trigger a build, open the RMC Classics app in Codemagic and repair the GitHub webhook under the app's webhook/integration settings. Manual starts remain available, but they must select current `main`.
+No step here submits the app to Apple review. Store submission is a separate authorized action. If Codemagic or App Store Connect authentication is unavailable, record provider state as unverified and continue independent release work; do not infer signing readiness from repository configuration.
