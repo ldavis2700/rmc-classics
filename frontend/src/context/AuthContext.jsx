@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import { signInGameCenter, submitLeaderboardScore } from "@/lib/gameCenter";
 import { configureIAP, suspendIAP } from "@/lib/iap";
@@ -8,6 +8,7 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const authAttempt = useRef(0);
 
   const refresh = useCallback(async () => {
     const token = localStorage.getItem("rmc_token");
@@ -39,17 +40,20 @@ export function AuthProvider({ children }) {
   }, [refresh]);
 
   const login = async (email, password, acceptedTerms = false) => {
+    const attempt = ++authAttempt.current;
     try {
       const { data } = await api.post("/auth/login", {
         email,
         password,
         accepted_terms: acceptedTerms,
       });
+      if (attempt !== authAttempt.current) return { ok: false, error: "Sign-in attempt superseded." };
       localStorage.setItem("rmc_token", data.token);
       setUser(data.user);
       // Finish the fail-closed provider setup before reporting auth success so
       // an immediate paid action cannot race an unconfigured IAP client.
       await configureIAP(data.user?.id);
+      if (attempt !== authAttempt.current) return { ok: false, error: "Sign-in attempt superseded." };
       return { ok: true };
     } catch (e) {
       return { ok: false, error: formatApiErrorDetail(e.response?.data?.detail) || e.message };
@@ -57,6 +61,7 @@ export function AuthProvider({ children }) {
   };
 
   const register = async (email, password, name, acceptedTerms = false) => {
+    const attempt = ++authAttempt.current;
     try {
       const { data } = await api.post("/auth/register", {
         email,
@@ -64,11 +69,13 @@ export function AuthProvider({ children }) {
         name,
         accepted_terms: acceptedTerms,
       });
+      if (attempt !== authAttempt.current) return { ok: false, error: "Sign-in attempt superseded." };
       localStorage.setItem("rmc_token", data.token);
       setUser(data.user);
       // Finish the fail-closed provider setup before reporting auth success so
       // an immediate paid action cannot race an unconfigured IAP client.
       await configureIAP(data.user?.id);
+      if (attempt !== authAttempt.current) return { ok: false, error: "Sign-in attempt superseded." };
       return { ok: true };
     } catch (e) {
       return { ok: false, error: formatApiErrorDetail(e.response?.data?.detail) || e.message };
@@ -76,6 +83,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    authAttempt.current += 1;
     localStorage.removeItem("rmc_token");
     suspendIAP();
     setUser(null);
