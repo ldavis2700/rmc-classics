@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import plistlib
 from pathlib import Path
+from xml.parsers.expat import ExpatError
 
 
 class CertificateProfileError(ValueError):
@@ -14,7 +15,9 @@ class CertificateProfileError(ValueError):
 
 
 def verify_profile_certificate(profile: dict, certificate: bytes) -> str:
-    if not certificate:
+    if not isinstance(profile, dict):
+        raise CertificateProfileError("profile is not a plist dictionary")
+    if not isinstance(certificate, (bytes, bytearray)) or not certificate:
         raise CertificateProfileError("signing certificate is empty")
     certificates = profile.get("DeveloperCertificates")
     if not isinstance(certificates, list) or not certificates:
@@ -48,11 +51,11 @@ def main() -> int:
         digest = verify_profile_certificate(
             profile, args.certificate.read_bytes()
         )
-    except (OSError, plistlib.InvalidFileException, CertificateProfileError) as exc:
+        if args.digest_file:
+            args.digest_file.write_text(digest + "\n", encoding="utf-8")
+    except (OSError, plistlib.InvalidFileException, ValueError, ExpatError) as exc:
         print(f"ERROR: {exc}")
         return 1
-    if args.digest_file:
-        args.digest_file.write_text(digest + "\n", encoding="utf-8")
     print(f"Verified provisioning-profile certificate binding: {digest}")
     return 0
 
