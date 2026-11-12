@@ -334,6 +334,16 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         build = build.split("      - name:", 1)[0]
         self.assertIn("REACT_APP_REVENUECAT_IOS_KEY: ${{ secrets.REACT_APP_REVENUECAT_IOS_KEY }}", build)
 
+    def test_fastlane_verification_uses_scoped_temporary_extraction(self):
+        self.assertIn('Dir.mktmpdir("rmc-ipa-verify-") do |verify_dir|', FASTFILE)
+        scope = FASTFILE.index('    rmc_with_ipa_verification do |verify_dir|')
+        self.assertLess(scope, FASTFILE.index('sh("unzip -q'))
+        self.assertLess(scope, FASTFILE.index('upload_to_testflight('))
+        self.assertNotIn('verify_dir = paths[:verify]', FASTFILE)
+        self.assertNotIn('FileUtils.mkdir_p(verify_dir)', FASTFILE)
+        self.assertIn('receipt_path = paths[:receipt]', FASTFILE)
+        self.assertIn('ipa_path = paths[:ipa]', FASTFILE)
+
     def test_fastlane_certificate_helper_resolves_before_provider_actions(self):
         match = re.search(
             r'certificate_verifier = File\.expand_path\(\s*"([^"]+)", (__dir__)\s*\)',

@@ -26,10 +26,28 @@ Dir.mktmpdir("rmc-fastlane-paths") do |unrelated|
       expected = {
         project: File.join(app, "App.xcodeproj"), workspace: File.join(app, "App.xcworkspace"),
         output: File.join(app, "build/ios/ipa"), ipa: File.join(app, "build/ios/ipa/App.ipa"),
-        verify: File.join(app, "build/ios/ipa/verify"),
         receipt: File.join(app, "build/ios/ipa/release-ipa-metadata.txt")
       }
       raise "Release paths depend on working directory" unless paths == expected
+      retained = File.join(unrelated, "release-receipt-fixture")
+      File.write(retained, "preserve")
+      extraction_dirs = []
+      [false, true].each do |fail_verification|
+        begin
+          harness.rmc_with_ipa_verification do |dir|
+            extraction_dirs << dir
+            raise "Extraction directory reused" unless Dir.children(dir).empty?
+            raise "Extraction directory not private" unless (File.stat(dir).mode & 0o777) == 0o700
+            File.write(File.join(dir, "certificate-fixture"), "fixture")
+            raise StopBeforeBuild if fail_verification
+          end
+        rescue StopBeforeBuild
+          # Simulate a verification exception; cleanup must still complete.
+        end
+        raise "Extraction leaked after verification" if File.exist?(extraction_dirs.last)
+      end
+      raise "Retry reused extraction path" unless extraction_dirs.uniq.length == 2
+      raise "Retained artifact changed" unless File.read(retained) == "preserve"
       # Fixture values only; no real provider or build implementation is loaded.
       fixture = {"ASC_KEY_ID" => "ABCDEFGHIJ", "ASC_ISSUER_ID" => "00000000-0000-0000-0000-000000000000", "ASC_KEY_P8" => "fixture"}
       old = fixture.keys.to_h { |key| [key, ENV[key]] }
@@ -52,4 +70,4 @@ Dir.mktmpdir("rmc-fastlane-paths") do |unrelated|
     end
   end
 end
-puts "Fastfile paths and build arguments passed from three working directories; no provider actions executed."
+puts "Fastfile paths, private extraction cleanup and build arguments passed from three working directories; no provider actions executed."
