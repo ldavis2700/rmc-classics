@@ -9,6 +9,12 @@ default_platform(:ios)
 platform :ios do
   desc "Build and upload RMC Classics to TestFlight using the App Store Connect API key"
   lane :testflight do
+    # Resolve from this file, independent of Fastlane's working directory.
+    certificate_verifier = File.expand_path(
+      "../../../../scripts/verify_ios_profile_certificate.py", __dir__
+    )
+    UI.user_error!("Profile certificate verifier is missing") unless File.file?(certificate_verifier)
+
     app_version = get_version_number(
       xcodeproj: "App.xcodeproj",
       target: "App"
@@ -89,9 +95,6 @@ platform :ios do
     sh(
       "security cms -D -i #{Shellwords.escape(profile_path)} > " \
       "#{Shellwords.escape(profile_plist)}"
-    )
-    certificate_verifier = File.expand_path(
-      "../../../scripts/verify_ios_profile_certificate.py", Dir.pwd
     )
     profile_certificate_digest_path = File.join(
       verify_dir, "profile-certificate.sha256"

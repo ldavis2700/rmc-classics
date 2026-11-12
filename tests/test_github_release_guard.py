@@ -3,6 +3,8 @@
 import os
 from pathlib import Path
 import shutil
+import re
+import sys
 import subprocess
 import tempfile
 import textwrap
@@ -331,6 +333,27 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         build = WORKFLOW.split("      - name: Build web bundle\n", 1)[1]
         build = build.split("      - name:", 1)[0]
         self.assertIn("REACT_APP_REVENUECAT_IOS_KEY: ${{ secrets.REACT_APP_REVENUECAT_IOS_KEY }}", build)
+
+    def test_fastlane_certificate_helper_resolves_before_provider_actions(self):
+        match = re.search(
+            r'certificate_verifier = File\.expand_path\(\s*"([^"]+)", (__dir__)\s*\)',
+            FASTFILE,
+        )
+        self.assertIsNotNone(match, "Verifier must resolve relative to the Fastfile")
+        fastfile_dir = ROOT / "frontend/ios/App/fastlane"
+        helper = (fastfile_dir / match.group(1)).resolve()
+        self.assertEqual(helper, ROOT / "scripts/verify_ios_profile_certificate.py")
+        self.assertTrue(helper.is_file())
+        # Exercise the actual helper entry point from an unrelated working directory.
+        with tempfile.TemporaryDirectory() as temp:
+            result = subprocess.run([sys.executable, str(helper), "--help"],
+                                    cwd=temp, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--profile", result.stdout)
+        self.assertIn("--certificate", result.stdout)
+        guard = FASTFILE.index('File.file?(certificate_verifier)')
+        self.assertLess(guard, FASTFILE.index('app_store_connect_api_key('))
+        self.assertLess(guard, FASTFILE.index('build_app('))
 
     def test_fastlane_verifies_profile_identity_and_expiry_before_upload(self):
         profile = FASTFILE.index(
