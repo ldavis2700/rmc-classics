@@ -33,12 +33,13 @@ jobs:
   build-ios:
     name: Build iOS IPA
     if: ${{ inputs.confirm_testflight }}
-    runs-on: macos-14
+    runs-on: macos-26
     timeout-minutes: 45
     environment: app-store-production
     env:
       REACT_APP_BACKEND_URL: https://rmcclassics.com
       SOURCE_COMMIT: ${{ github.sha }}
+      DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
       COCOAPODS_VERSION: 1.16.2
       FASTLANE_VERSION: 2.222.0
 
@@ -108,6 +109,22 @@ jobs:
       - name: Verify deployed release endpoints
         run: python3 scripts/verify_release_endpoints.py --origin "$REACT_APP_BACKEND_URL"
 
+      - name: Verify native toolchain
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          test "$(xcodebuild -version | head -1)" = "Xcode 26.5"
+          gem install cocoapods --no-document --version "$COCOAPODS_VERSION"
+          # Activate the pinned gem before its executable requires CocoaPods.
+          # Resolving bin_path alone can still load a newer installed library.
+          mkdir -p "$RUNNER_TEMP/rmc-bin"
+          printf '%s\n' '#!/usr/bin/env ruby' 'gem "cocoapods", ENV.fetch("COCOAPODS_VERSION")' 'load Gem.bin_path("cocoapods", "pod", ENV.fetch("COCOAPODS_VERSION"))' > "$RUNNER_TEMP/rmc-bin/pod"
+          chmod +x "$RUNNER_TEMP/rmc-bin/pod"
+          export PATH="$RUNNER_TEMP/rmc-bin:$PATH"
+          echo "$RUNNER_TEMP/rmc-bin" >> "$GITHUB_PATH"
+          pod --version
+          test "$(pod --version)" = "$COCOAPODS_VERSION"
+
       - name: Setup Node 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -135,10 +152,10 @@ jobs:
         working-directory: frontend
         run: ./node_modules/.bin/cap sync ios
 
-      - name: Install CocoaPods
+      - name: Install iOS pods
         working-directory: frontend/ios/App
         run: |
-          gem install cocoapods --no-document --version "$COCOAPODS_VERSION"
+          set -euo pipefail
           test "$(pod --version)" = "$COCOAPODS_VERSION"
           pod install --repo-update
 
