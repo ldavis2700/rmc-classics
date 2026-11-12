@@ -85,7 +85,8 @@ def test_default_admin_credentials_are_removed_and_legacy_seed_is_disabled():
     startup = functions()["startup"]
     assert "os.environ.get('ADMIN_EMAIL', '')" in startup
     assert "os.environ.get('ADMIN_PASSWORD', '')" in startup
-    assert "must be at least 12 characters" in startup
+    assert "validate_startup_configuration()" in startup
+    assert "must be at least 12 characters" in functions()["validate_startup_configuration"]
     assert "'disabled': True" in startup
     assert "'role': 'moderation_operator'" in startup
 

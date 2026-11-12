@@ -1546,8 +1546,21 @@ async def iap_webhook(request: Request):
 
 
 # ---------- Startup ----------
+def validate_startup_configuration():
+    # Reject unusable authentication before any startup database mutations.
+    if not os.environ.get("JWT_SECRET", "").strip():
+        raise RuntimeError("JWT_SECRET must be configured and nonblank")
+    admin_email = os.environ.get("ADMIN_EMAIL", "").lower().strip()
+    admin_password = os.environ.get("ADMIN_PASSWORD", "")
+    if bool(admin_email) != bool(admin_password):
+        raise RuntimeError("ADMIN_EMAIL and ADMIN_PASSWORD must be configured together")
+    if admin_email and len(admin_password) < 12:
+        raise RuntimeError("ADMIN_PASSWORD must be at least 12 characters")
+
+
 @app.on_event("startup")
 async def startup():
+    validate_startup_configuration()
     await table_service.indexes()
     await db.users.create_index("email", unique=True)
     await db.users.create_index("total_wins")
@@ -1560,10 +1573,6 @@ async def startup():
     # Operator provisioning is opt-in and must never fall back to public credentials.
     admin_email = os.environ.get("ADMIN_EMAIL", "").lower().strip()
     admin_password = os.environ.get("ADMIN_PASSWORD", "")
-    if bool(admin_email) != bool(admin_password):
-        raise RuntimeError("ADMIN_EMAIL and ADMIN_PASSWORD must be configured together")
-    if admin_email and len(admin_password) < 12:
-        raise RuntimeError("ADMIN_PASSWORD must be at least 12 characters")
 
     if admin_email:
         existing = await db.users.find_one({"email": admin_email})

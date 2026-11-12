@@ -83,7 +83,9 @@ jobs:
       - name: Test battle WebSocket input recovery
         # WebSocket protocol tests use only the standard library and fake I/O.
         # They exercise the real handler without live accounts or sockets.
-        run: python -m unittest discover -s backend/tests -p 'test_battle_websocket_unit.py' -v
+        run: |
+          python -m unittest discover -s backend/tests -p 'test_battle_websocket_unit.py' -v
+          python -m unittest discover -s backend/tests -p 'test_startup_configuration_unit.py' -v
 
       - name: Verify Dominoes and Spades rules, privacy, concurrency, and persistence
         env:
