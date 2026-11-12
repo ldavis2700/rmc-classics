@@ -55,8 +55,8 @@ jobs:
           npm install --global npm@10.9.4
           test "$(npm --version)" = "10.9.4"
 
-      - name: Verify login return paths
-        run: node --test tests/test_return_paths.mjs
+      - name: Verify return paths and sharing fallback behavior
+        run: node --test tests/test_return_paths.mjs tests/test_share_runtime.mjs
 
       - name: Install frontend dependencies
         working-directory: frontend
