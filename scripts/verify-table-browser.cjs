@@ -36,7 +36,8 @@ async function clickMove(page, action) {
     const stamp = Date.now();
     for (let i = 0; i < 4; i += 1) {
       const email = `table-${stamp}-${i}@example.com`;
-      const registered = await api("/auth/register", null, { name: `Test Player ${i + 1}`, email, password, accepted_terms: true });
+      // Player 3 must create the account through the real invitation UI below.
+      const registered = i === 2 ? {} : await api("/auth/register", null, { name: `Test Player ${i + 1}`, email, password, accepted_terms: true });
       users.push({ ...registered, email });
       const context = await browser.newContext({ viewport: i === 0 ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
       // A mistakenly production-bound bundle must fail locally, never call a live API.
@@ -48,7 +49,7 @@ async function clickMove(page, action) {
         const timeout = window.setTimeout.bind(window);
         // Accelerate thinking/polling in the test, preserving every actual move/API call.
         window.setTimeout = (fn, delay, ...args) => timeout(fn, delay === 650 ? 15 : delay === 2000 ? 75 : delay, ...args);
-      }, { token: registered.token, insert: i !== 0 });
+      }, { token: registered.token, insert: i === 3 });
       const page = await context.newPage();
       page.on("pageerror", (e) => errors.push(e.message));
       pages.push(page);
@@ -63,7 +64,46 @@ async function clickMove(page, action) {
     await first.getByRole("button", { name: "Create private table", exact: true }).click();
     await first.waitForURL("**/table/*");
     const code = new URL(first.url()).pathname.split("/").pop();
-    for (let i = 1; i < 4; i += 1) await pages[i].goto(`${base}/table/${code}`);
+    for (let i = 1; i < 4; i += 1) {
+      const page = pages[i];
+      const invitation = `${base}/table/${code}?ref=player-share#join`;
+      await page.goto(invitation);
+      if (i !== 3) {
+        await page.waitForURL(`${base}/login`);
+        assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), null,
+          "Invitation recipient starts without an injected authentication token");
+        // Both links must carry the original invitation through route state.
+        await page.getByTestId("link-register").click();
+        await page.waitForURL(`${base}/register`);
+        await page.getByTestId("link-login").click();
+        await page.waitForURL(`${base}/login`);
+        if (i === 1) {
+          await page.getByTestId("login-email").fill(users[i].email);
+          await page.getByTestId("login-password").fill(password);
+          await page.getByTestId("login-terms-checkbox").check();
+          await page.getByTestId("login-submit").click();
+        } else {
+          await page.getByTestId("link-register").click();
+          await page.getByTestId("register-name").fill(`Test Player ${i + 1}`);
+          await page.getByTestId("register-email").fill(users[i].email);
+          await page.getByTestId("register-password").fill(password);
+          await page.getByTestId("register-terms-checkbox").check();
+          const response = page.waitForResponse((r) => r.url().endsWith("/auth/register") && r.request().method() === "POST");
+          await page.getByTestId("register-submit").click();
+          const registration = await response;
+          assert.equal(registration.status(), 200);
+          users[i] = { ...await registration.json(), email: users[i].email };
+        }
+      }
+      await page.waitForURL(invitation);
+      await page.getByRole("button", { name: "Leave table", exact: true }).waitFor();
+      // Preserve the seat order assumed by the full-hand driver, and prove that
+      // authentication returned to and joined this exact private table.
+      const joined = await api(`/tables/${code}`, users[0].token);
+      assert.equal(joined.members.filter(Boolean).length, i + 1);
+      assert.equal(joined.members[i].id, users[i].user.id);
+    }
+    console.log("PASS: private invitation survives login, UI registration and auth-screen switches with query/fragment intact");
     await Promise.all(pages.map((p) => p.getByTestId("spades-board").waitFor()));
     const original = await api(`/tables/${code}`, users[0].token);
     await first.reload();
