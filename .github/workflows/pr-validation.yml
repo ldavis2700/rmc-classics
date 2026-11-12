@@ -152,7 +152,9 @@ jobs:
           test -d frontend/ios/App
 
       - name: Validate Fastlane lane syntax
-        run: ruby -c frontend/ios/App/fastlane/Fastfile
+        run: |
+          ruby -c frontend/ios/App/fastlane/Fastfile
+          ruby tests/test_fastlane_paths.rb
 
       - name: Validate Codemagic monetization release gate
         run: |

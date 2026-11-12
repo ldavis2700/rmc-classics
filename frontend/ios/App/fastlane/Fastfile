@@ -4,11 +4,27 @@ require "open3"
 require "shellwords"
 require "time"
 
+# Fastlane actions and Ruby lane code can use different working directories.
+# Keep every release artifact rooted at the native app directory.
+def rmc_release_paths
+  app_dir = File.expand_path("..", __dir__)
+  output_dir = File.join(app_dir, "build/ios/ipa")
+  {
+    project: File.join(app_dir, "App.xcodeproj"),
+    workspace: File.join(app_dir, "App.xcworkspace"),
+    output: output_dir,
+    ipa: File.join(output_dir, "App.ipa"),
+    verify: File.join(output_dir, "verify"),
+    receipt: File.join(output_dir, "release-ipa-metadata.txt")
+  }
+end
+
 default_platform(:ios)
 
 platform :ios do
   desc "Build and upload RMC Classics to TestFlight using the App Store Connect API key"
   lane :testflight do
+    paths = rmc_release_paths
     # Resolve from this file, independent of Fastlane's working directory.
     certificate_verifier = File.expand_path(
       "../../../../scripts/verify_ios_profile_certificate.py", __dir__
@@ -16,7 +32,7 @@ platform :ios do
     UI.user_error!("Profile certificate verifier is missing") unless File.file?(certificate_verifier)
 
     app_version = get_version_number(
-      xcodeproj: "App.xcodeproj",
+      xcodeproj: paths[:project],
       target: "App"
     )
 
@@ -44,19 +60,20 @@ platform :ios do
     expected_build_number = latest_build + 1
     increment_build_number(
       build_number: expected_build_number,
-      xcodeproj: "App.xcodeproj"
+      xcodeproj: paths[:project]
     )
 
     build_app(
-      workspace: "App.xcworkspace",
+      workspace: paths[:workspace],
       scheme: "App",
       export_method: "app-store",
-      output_directory: "build/ios/ipa",
+      output_directory: paths[:output],
+      output_name: "App.ipa",
       xcargs: "-allowProvisioningUpdates"
     )
 
-    ipa_path = File.expand_path("build/ios/ipa/App.ipa", Dir.pwd)
-    verify_dir = File.expand_path("build/ios/ipa/verify", Dir.pwd)
+    ipa_path = paths[:ipa]
+    verify_dir = paths[:verify]
     FileUtils.mkdir_p(verify_dir)
     sh("unzip -q #{Shellwords.escape(ipa_path)} -d #{Shellwords.escape(verify_dir)}")
     app_paths = Dir[File.join(verify_dir, "Payload", "*.app")]
@@ -193,9 +210,7 @@ platform :ios do
     UI.user_error!("IPA marketing version does not match the reviewed Xcode version") unless verified_version.to_s == app_version.to_s
     UI.user_error!("IPA build number does not match the reserved TestFlight build") unless verified_build.to_s == expected_build_number.to_s
 
-    receipt_path = File.expand_path(
-      "build/ios/ipa/release-ipa-metadata.txt", Dir.pwd
-    )
+    receipt_path = paths[:receipt]
     repository = ENV.fetch("GITHUB_REPOSITORY", "ldavis2700/rmc-classics")
     expected_commit = ENV.fetch("SOURCE_COMMIT") {
       ENV.fetch("GITHUB_SHA") {
