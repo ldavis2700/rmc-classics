@@ -62,6 +62,10 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Verify API request timeout
+        working-directory: frontend
+        run: node scripts/verify-api-timeout.mjs
+
       - name: Verify SVG loader compatibility
         working-directory: frontend
         run: node scripts/verify-svg-loader.cjs
