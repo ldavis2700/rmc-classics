@@ -30,7 +30,12 @@ export function publicGameShareUrl(gamePath) {
 }
 
 export function safeReturnPath(value, fallback = "/profile") {
-  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
+  if (
+    typeof value !== "string" ||
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    /[\\\u0000-\u001f\u007f]/.test(value)
+  ) {
     return fallback;
   }
   return value;

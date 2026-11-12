@@ -2,6 +2,10 @@
 
 Date: 2026-08-20
 
+> Historical remediation checklist, not a current readiness attestation. For the
+> 15-game candidate, use `memory/app_review_notes.md` and current signed-build /
+> deployed-backend evidence. Build 14 is historical; query current store state.
+
 ## Code remediation completed
 
 The current `main` codebase addresses the Apple review blockers identified in the latest review:
@@ -18,7 +22,7 @@ The current `main` codebase addresses the Apple review blockers identified in th
   - Invite recipients return to the exact battle after login or account creation instead of being diverted to a profile/library page.
 - **Guideline 5.1.1(v) — Account deletion**
   - Signed-in users have an in-app **Permanently delete account** flow under Account Settings.
-  - The flow requires typing `DELETE` plus a final confirmation.
+  - The flow requires the current password, typing `DELETE`, and a final confirmation.
   - The authenticated backend permanently removes the user account and associated account-linked data.
 - **Guideline 2.1(b) — In-App Purchase submission**
   - Existing consumable product ID remains `rmc.freeze.pack5`.
@@ -40,7 +44,7 @@ These are App Store Connect / physical-device evidence steps and cannot be satis
    - Open the invite while signed out → log in → verify the exact battle opens and joins.
    - Friends/social surface → **Report** another test user.
    - Friends/social surface → **Block** that user and show their immediate removal.
-   - Account Settings → Permanently delete account → type `DELETE` → confirm deletion.
+   - Account Settings → Permanently delete account → enter current password → type `DELETE` → confirm deletion.
 7. Attach the recording in **App Review Information** (or provide a reviewer-accessible link if App Store Connect requests a link).
 8. Log in to the demo/reviewer account, accept the current Terms, and verify it works on the production backend before resubmission.
 9. Save, add version 1.0 for review, and submit.

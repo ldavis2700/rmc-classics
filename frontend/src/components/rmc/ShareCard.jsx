@@ -4,6 +4,7 @@ import { Share2, Copy, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { sfx } from "@/lib/sound";
 import { share, haptic } from "@/lib/native";
+import { publicGameShareUrl } from "@/lib/routes";
 
 export default function ShareCard({ open, onClose, game, won, statLabel, statValue, xpGained, challengeCompleted, newlyUnlockedBadges = [], freezeUsed = false }) {
   const [copied, setCopied] = useState(false);
@@ -11,16 +12,17 @@ export default function ShareCard({ open, onClose, game, won, statLabel, statVal
   const shareText = useMemo(() => {
     const verdict = won ? "just won" : "just played";
     const stat = statValue != null ? ` · ${statLabel}: ${statValue}` : "";
-    return `I ${verdict} ${game?.name} on RMC CLASSICS${stat} 🎮\nPlay every childhood classic → ${typeof window !== "undefined" ? window.location.origin : ""}`;
+    return `I ${verdict} ${game?.name} on RMC CLASSICS${stat} 🎮\nPlay every childhood classic on RMC CLASSICS.`;
   }, [game, won, statLabel, statValue]);
 
-  const shareUrl = typeof window !== "undefined" ? `${window.location.origin}${game?.path || "/"}` : "";
+  const shareUrl = publicGameShareUrl(game?.path);
 
   const doShare = async () => {
     sfx.click();
     haptic("light");
     const ok = await share({ title: "RMC CLASSICS", text: shareText, url: shareUrl });
-    if (ok) toast.success("Shared!");
+    if (ok === true) toast.success("Result shared or copied");
+    if (ok === false) toast.error("Couldn't share or copy your result. Try the Copy button.");
   };
 
   const copyText = async () => {
