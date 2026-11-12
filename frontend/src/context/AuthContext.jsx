@@ -82,8 +82,13 @@ export function AuthProvider({ children }) {
   };
 
   const deleteAccount = async (password) => {
+    const token = localStorage.getItem("rmc_token");
+    if (!token) return { ok: false, error: "Please sign in first." };
     try {
       await api.delete("/auth/account", { data: { password } });
+      if (localStorage.getItem("rmc_token") !== token) {
+        return { ok: false, error: "Account changed while deletion was processing. Check the original account before retrying." };
+      }
       localStorage.removeItem("rmc_token");
       suspendIAP();
       setUser(null);
@@ -94,8 +99,13 @@ export function AuthProvider({ children }) {
   };
 
   const submitScore = async (payload) => {
+    const token = localStorage.getItem("rmc_token");
+    if (!token) return { ok: false, error: "Please sign in first." };
     try {
       const { data } = await api.post("/games/submit", payload);
+      if (localStorage.getItem("rmc_token") !== token) {
+        return { ok: false, error: "Account changed before the score result arrived." };
+      }
       setUser(data.user);
       if (payload?.game_id && typeof payload?.score === "number") {
         submitLeaderboardScore(payload.game_id, payload.score);
