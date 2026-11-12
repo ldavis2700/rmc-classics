@@ -97,6 +97,8 @@ export function AuthProvider({ children }) {
       if (localStorage.getItem("rmc_token") !== token) {
         return { ok: false, error: "Account changed while deletion was processing. Check the original account before retrying." };
       }
+      // Deletion signs out just like logout, including in-flight auth attempts.
+      authAttempt.current += 1;
       localStorage.removeItem("rmc_token");
       suspendIAP();
       setUser(null);

@@ -14,6 +14,7 @@ function harness(token = 'original-token') {
   const calls = [];
   const state = { token, user: { id: 'original-user' } };
   const actions = vm.runInNewContext(`${source.slice(start, end)}\n({ deleteAccount, submitScore })`, {
+    authAttempt: { current: 0 },
     localStorage: { getItem: () => state.token, removeItem: () => { state.token = null; calls.push('remove'); } },
     api: { delete: () => { calls.push('request'); return pending; }, post: () => { calls.push('request'); return pending; } },
     setUser: (user) => { state.user = user; calls.push('user'); },
