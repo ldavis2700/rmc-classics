@@ -18,6 +18,75 @@ async function api(endpoint, token, body) {
   assert(response.ok, `${endpoint}: ${response.status} ${JSON.stringify(data)}`);
   return data;
 }
+async function signIn(page, email) {
+  await page.getByTestId("login-email").fill(email);
+  await page.getByTestId("login-password").fill(password);
+  await page.getByTestId("login-terms-checkbox").check();
+  await page.getByTestId("login-submit").click();
+}
+async function verifyStaleProfile(page, users) {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  for (const switchAccount of [false, true]) {
+    const originalToken = await page.evaluate(() => localStorage.getItem("rmc_token"));
+    let release;
+    const held = new Promise((resolve) => { release = resolve; });
+    let first = true;
+    const handler = async (route) => {
+      if (!first) return route.continue();
+      first = false;
+      assert.equal(route.request().headers().authorization, `Bearer ${originalToken}`);
+      // Obtain real account A data, but delay its delivery to the application.
+      const response = await route.fetch();
+      assert.equal(response.status(), 200);
+      assert.equal((await response.json()).user.id, users[0].user.id);
+      await held;
+      await route.fulfill({ response });
+    };
+    await page.route("**/api/auth/me", handler);
+    try {
+      const requested = page.waitForRequest((r) => r.url().endsWith("/api/auth/me"));
+      await page.getByTestId("nav-profile").click();
+      await requested;
+      await page.getByTestId("profile-logout").click();
+      await page.waitForURL(`${base}/login`);
+      assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), null);
+      let newToken = null;
+      if (switchAccount) {
+        await signIn(page, users[1].email);
+        await page.waitForURL(`${base}/profile`);
+        await page.getByTestId("profile-email").filter({ hasText: users[1].email }).waitFor();
+        newToken = await page.evaluate(() => localStorage.getItem("rmc_token"));
+        assert(newToken && newToken !== originalToken);
+      }
+      const delivered = page.waitForResponse((r) => r.url().endsWith("/api/auth/me") &&
+        r.request().headers().authorization === `Bearer ${originalToken}`);
+      release();
+      await (await delivered).finished();
+      // Allow React to commit the response handler before checking visible identity.
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), newToken);
+      if (switchAccount) {
+        assert.equal(await page.getByTestId("profile-email").textContent(), users[1].email);
+        await page.getByTestId("profile-logout").click();
+      } else {
+        assert.equal(new URL(page.url()).pathname, "/login");
+        await page.getByTestId("header-login").waitFor();
+        assert.equal(await page.getByTestId("profile-email").count(), 0);
+      }
+    } finally {
+      release();
+      await page.unroute("**/api/auth/me", handler);
+    }
+    await page.waitForURL(`${base}/login`);
+    await signIn(page, users[0].email);
+    await page.waitForURL(`${base}/profile`);
+    await page.getByTestId("profile-email").filter({ hasText: users[0].email }).waitFor();
+    await page.getByTestId("nav-library").click();
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${base}/tables?game=spades`);
+  console.log("PASS: real profile response cannot undo UI logout or replace a newer UI login");
+}
 async function clickMove(page, action) {
   if (action.type === "bid") await page.getByRole("button", { name: `Bid ${action.bid === 0 ? "nil" : action.bid}`, exact: true }).click();
   else if (action.card) await page.getByTestId("spades-hand").getByRole("button", { name: cardLabel(action.card), exact: true }).click();
@@ -61,6 +130,7 @@ async function clickMove(page, action) {
     await first.getByTestId("login-terms-checkbox").check();
     await first.getByTestId("login-submit").click();
     await first.waitForURL("**/tables?game=spades");
+    await verifyStaleProfile(first, users);
     await first.getByRole("button", { name: "Create private table", exact: true }).click();
     await first.waitForURL("**/table/*");
     const code = new URL(first.url()).pathname.split("/").pop();
