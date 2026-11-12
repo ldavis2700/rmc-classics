@@ -162,6 +162,7 @@ jobs:
           grep -q 'APP_STORE_APPLE_ID must be the real numeric App Store Connect Apple ID' codemagic.yaml
           grep -q 'REACT_APP_REVENUECAT_IOS_KEY must be a protected public iOS SDK key beginning with appl_' codemagic.yaml
           grep -q 'Verify release source is current main' codemagic.yaml
+          python -m unittest discover -s tests -p 'test_release_endpoint_guard.py'
           python tests/test_release_source_guard.py
           python tests/test_release_configuration_guard.py
           python tests/test_github_release_guard.py

@@ -37,6 +37,7 @@ jobs:
     timeout-minutes: 45
     environment: app-store-production
     env:
+      REACT_APP_BACKEND_URL: https://rmcclassics.com
       SOURCE_COMMIT: ${{ github.sha }}
       COCOAPODS_VERSION: 1.16.2
       FASTLANE_VERSION: 2.222.0
@@ -103,6 +104,9 @@ jobs:
             echo "Configure every named GitHub Actions secret before starting another signed build."
             exit 1
           fi
+
+      - name: Verify deployed release endpoints
+        run: python3 scripts/verify_release_endpoints.py --origin "$REACT_APP_BACKEND_URL"
 
       - name: Setup Node 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0

@@ -18,3 +18,9 @@ The workflow records the verified repository and commit in `release-source.txt`.
 6. Validate that exact signed build on devices against the deployed backend, using [TESTFLIGHT_RELEASE_GATE.md](TESTFLIGHT_RELEASE_GATE.md). Match screenshots, review recording, purchase/restore evidence and App Store metadata to the actual candidate before declaring resubmission readiness.
 
 No step here submits the app to Apple review. Store submission is a separate authorized action. If Codemagic or App Store Connect authentication is unavailable, record provider state as unverified and continue independent release work; do not infer signing readiness from repository configuration.
+
+## Read-only availability preflight
+
+Both signed build paths run `python3 scripts/verify_release_endpoints.py --origin "$REACT_APP_BACKEND_URL"` before dependency installation or signing. The configured HTTPS origin must return the RMC API identity, a Dominoes/Spades catalog, and the correct privacy/terms/support route titles and canonical URLs. Redirects, unavailable endpoints, HTML API fallbacks and home-page route fallbacks fail closed. Requests are GET-only, time-limited and size-limited; no account or payment is created.
+
+A pass is only an availability observation. It does not prove database health, matching deployed commit identities, gameplay, rollback, native behavior or Apple acceptance. The JSON result deliberately retains `resubmission_ready: false`. Keep provider provenance and signed-device acceptance as separate required evidence. Unsigned compilation checks remain independent of production availability.
