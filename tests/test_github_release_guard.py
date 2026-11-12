@@ -15,6 +15,7 @@ PR_WORKFLOW = (ROOT / ".github/workflows/pr-validation.yml").read_text()
 ANDROID_WORKFLOW = (ROOT / ".github/workflows/android-build.yml").read_text()
 FASTFILE = (ROOT / "frontend/ios/App/fastlane/Fastfile").read_text()
 CODEMAGIC = (ROOT / "codemagic.yaml").read_text()
+FASTLANE_INSTALLER = (ROOT / "scripts/install_fastlane_toolchain.sh").read_text()
 RELEASE_GATE = (ROOT / "docs/TESTFLIGHT_RELEASE_GATE.md").read_text()
 
 
@@ -111,16 +112,18 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         self.assertNotIn("cocoapods: default", CODEMAGIC)
 
     def test_fastlane_toolchain_is_exactly_pinned_and_verified(self):
-        self.assertIn("FASTLANE_VERSION: 2.222.0", WORKFLOW)
-        self.assertIn(
-            'gem install fastlane --no-document --version "$FASTLANE_VERSION"',
-            WORKFLOW,
-        )
-        self.assertIn(
-            'Fastlane::VERSION == ENV.fetch("FASTLANE_VERSION")',
-            WORKFLOW,
-        )
-        self.assertNotIn("gem install fastlane -N -v 2.222", WORKFLOW)
+        unsigned = (ROOT / ".github/workflows/ios-readiness.yml").read_text()
+        for workflow in (WORKFLOW, unsigned):
+            self.assertIn("FASTLANE_VERSION: 2.222.0", workflow)
+            self.assertIn("run: bash scripts/install_fastlane_toolchain.sh", workflow)
+        self.assertIn('gem install fastlane --no-document --version "$FASTLANE_VERSION"', FASTLANE_INSTALLER)
+        self.assertIn('Fastlane::VERSION == ENV.fetch("FASTLANE_VERSION")', FASTLANE_INSTALLER)
+        self.assertLess(FASTLANE_INSTALLER.index('gem "fastlane",'),
+                        FASTLANE_INSTALLER.index('load Gem.bin_path'))
+        self.assertIn('>> "$GITHUB_PATH"', FASTLANE_INSTALLER)
+        self.assertIn('fastlane --version', FASTLANE_INSTALLER)
+        self.assertNotIn('fastlane testflight', FASTLANE_INSTALLER)
+        self.assertNotIn('ASC_', FASTLANE_INSTALLER)
 
     def test_github_release_actions_are_immutable_commit_pins(self):
         expected = {

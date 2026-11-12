@@ -160,9 +160,7 @@ jobs:
           pod install --repo-update
 
       - name: Install fastlane
-        run: |
-          gem install fastlane --no-document --version "$FASTLANE_VERSION"
-          ruby -e 'require "fastlane"; abort "unexpected fastlane version" unless Fastlane::VERSION == ENV.fetch("FASTLANE_VERSION")'
+        run: bash scripts/install_fastlane_toolchain.sh
 
       - name: Install Apple Distribution certificate
         env:

@@ -8,6 +8,7 @@ on:
       - 'frontend/**'
       - '.github/workflows/ios-readiness.yml'
       - 'tests/test_ios_readiness_guard.py'
+      - 'scripts/install_fastlane_toolchain.sh'
 
 permissions:
   contents: read
@@ -24,6 +25,7 @@ jobs:
       SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
       DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
       COCOAPODS_VERSION: 1.16.2
+      FASTLANE_VERSION: 2.222.0
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
@@ -52,6 +54,8 @@ jobs:
           test "$(pod --version)" = "$COCOAPODS_VERSION"
           npm install --global npm@10.9.4
           test "$(npm --version)" = "10.9.4"
+      - name: Verify release tool startup without credentials
+        run: bash scripts/install_fastlane_toolchain.sh
       - name: Build and sync locked frontend
         working-directory: frontend
         env:
