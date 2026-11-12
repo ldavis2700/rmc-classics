@@ -66,6 +66,10 @@ jobs:
         working-directory: frontend
         run: node scripts/verify-api-timeout.mjs
 
+      - name: Verify API session identity at dispatch
+        working-directory: frontend
+        run: node scripts/verify-api-session.mjs
+
       - name: Verify SVG loader compatibility
         working-directory: frontend
         run: node scripts/verify-svg-loader.cjs

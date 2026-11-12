@@ -9,6 +9,9 @@ const api = axios.create({
   timeout: 15000,
 });
 
+// Bind credentials before yielding: a later account switch must not reattribute
+// an already initiated score, deletion, or profile request to the new account.
+// Keep every request interceptor synchronous to preserve this boundary.
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("rmc_token");
   if (token) {
@@ -16,7 +19,7 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
-});
+}, (error) => { throw error; }, { synchronous: true });
 
 export function formatApiErrorDetail(detail) {
   if (detail == null) return "Something went wrong. Please try again.";
