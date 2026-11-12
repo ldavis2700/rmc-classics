@@ -19,14 +19,17 @@ export function AuthProvider({ children }) {
     }
     try {
       const { data } = await api.get("/auth/me");
+      // Ignore responses belonging to an account that has since signed out or changed.
+      if (localStorage.getItem("rmc_token") !== token) return;
       setUser(data.user);
       await configureIAP(data.user?.id);
     } catch (e) {
+      if (localStorage.getItem("rmc_token") !== token) return;
       localStorage.removeItem("rmc_token");
       suspendIAP();
       setUser(null);
     } finally {
-      setLoading(false);
+      if (localStorage.getItem("rmc_token") === token || !localStorage.getItem("rmc_token")) setLoading(false);
     }
   }, []);
 

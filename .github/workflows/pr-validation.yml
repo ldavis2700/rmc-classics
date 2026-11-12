@@ -56,7 +56,7 @@ jobs:
           test "$(npm --version)" = "10.9.4"
 
       - name: Verify return paths and sharing fallback behavior
-        run: node --test tests/test_return_paths.mjs tests/test_share_runtime.mjs
+        run: node --test tests/test_return_paths.mjs tests/test_share_runtime.mjs tests/test_auth_refresh_runtime.cjs
 
       - name: Install frontend dependencies
         working-directory: frontend
