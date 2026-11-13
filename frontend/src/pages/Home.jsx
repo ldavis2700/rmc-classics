@@ -13,7 +13,7 @@ import SponsorUnit from "@/components/rmc/SponsorUnit";
 import { MONETIZATION } from "@/lib/monetization";
 
 const stats = [
-  { label: "Classic games", value: "14", icon: Gamepad2, color: "#00F0FF" },
+  { label: "Classic games", value: "15", icon: Gamepad2, color: "#00F0FF" },
   { label: "Live leaderboards", value: "∞", icon: Trophy, color: "#FFD100" },
   { label: "Retro sounds", value: "8-bit", icon: Zap, color: "#39FF14" },
 ];
@@ -94,7 +94,7 @@ export default function Home() {
             </h1>
             <p className="mt-5 max-w-xl text-base leading-relaxed text-[#c9c8e2]">
               RMC CLASSICS is a pocket-sized shrine to the games that filled every
-              rainy afternoon and family road trip. Fourteen timeless classics, real-time
+              rainy afternoon and family road trip. Fifteen timeless classics, real-time
               friend battles, and one global leaderboard — zero downloads.
             </p>
 

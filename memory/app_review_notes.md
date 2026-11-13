@@ -38,12 +38,12 @@ Hi Reviewer,
 Thanks for taking the time to review RMC CLASSICS. Below are notes to make your review faster.
 
 WHAT THE APP IS
-A nostalgic collection of 14 timeless childhood games (Chess, Ludo, Memory Match, Connect Four, Checkers, Snakes & Ladders, Rock Paper Scissors, Crazy Eights, Wild Cards, Word Tiles, Dominoes, Go Fish, Old Maid, Tumble Tower). Users can play solo, compete on global and weekly leaderboards, complete a daily challenge, battle friends in real time over WebSocket, and unlock badges and themes.
+A nostalgic collection of 15 timeless childhood games (Chess, Ludo, Memory Match, Connect Four, Checkers, Snakes & Ladders, Rock Paper Scissors, Crazy Eights, Wild Cards, Word Tiles, Dominoes, Spades, Go Fish, Old Maid, Tumble Tower). Users can play solo, compete on global and weekly leaderboards, complete a daily challenge, battle friends in real time over WebSocket, and unlock badges and themes.
 
 HOW TO USE THE DEMO ACCOUNT
 Reviewer sign-in: Use the current rotated demo credentials entered privately in App Store Connect.
 - The account already has XP, streak history, friends, and unlocked themes so you can see the full experience without seeding data.
-- All 14 games are playable immediately from Library or Home.
+- All 15 games appear in the Library. Dominoes and Spades support computer play; online tables require real players.
 
 NATIVE FEATURES (please note for Guideline 4.2)
 This is NOT a thin web wrapper. The app uses these native iOS integrations:
@@ -87,7 +87,7 @@ DATA COLLECTION (matches our Privacy Nutrition label)
 Full policy at https://rmcclassics.com/privacy
 
 WEB VERSION
-The same app runs at rmcclassics.com as a Progressive Web App. The iOS app is the same codebase wrapped in Capacitor with native features added on top. This is disclosed in our Privacy policy.
+The web build is intended to run at rmcclassics.com as a Progressive Web App; verify production availability independently before submitting this release. The iOS app is the same codebase wrapped in Capacitor with native features added on top. This is disclosed in our Privacy policy.
 
 TRADEMARKS WE DO USE
 "Chess", "Checkers", "Dominoes", "Go Fish", "Old Maid", "Ludo", "Snakes and Ladders", "Connect Four" — these are either genuinely public-domain classics or generic descriptive game names. We are not aware of any live trademark on them for game software.

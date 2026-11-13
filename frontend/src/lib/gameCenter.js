@@ -23,6 +23,9 @@ const LEADERBOARD_IDS = {
   ludo:     { ios: "rmc.ludo.wins",     android: "" },
   scrabble: { ios: "rmc.wordtiles.high",android: "" },
   dominoes: { ios: "rmc.dominoes.wins", android: "" },
+  // Spades scores are tracked by our API. Native IDs must be provisioned first;
+  // never fall back to the global wins board with a 500-point Spades score.
+  spades:   { ios: "", android: "" },
   gofish:   { ios: "rmc.gofish.wins",   android: "" },
   oldmaid:  { ios: "rmc.oldmaid.wins",  android: "" },
   global:   { ios: "rmc.global.wins",   android: "" },
