@@ -23,12 +23,12 @@ Provide **both** — reviewer may test either. Both are pre-seeded on the live b
 
 | Field | Value |
 |---|---|
-| Username | `admin@rmc.com` |
-| Password | `admin123` |
+| Username | *(Enter the current reviewer account privately in App Store Connect; never commit credentials)* |
+| Password | *(Rotate the prior password; enter the new value privately in App Store Connect)* |
 
 Alternative account (also works):
-- Username: `player1@rmc.com`
-- Password: `player123`
+- Username: *(Retrieve only from the authorized private reviewer account store; never commit)*
+- Password: *(Rotate the prior value; enter the new value privately in App Store Connect)*
 
 ## Notes (paste into the "Notes" field — this is the letter to the reviewer)
 
@@ -41,7 +41,7 @@ WHAT THE APP IS
 A nostalgic collection of 14 timeless childhood games (Chess, Ludo, Memory Match, Connect Four, Checkers, Snakes & Ladders, Rock Paper Scissors, Crazy Eights, Wild Cards, Word Tiles, Dominoes, Go Fish, Old Maid, Tumble Tower). Users can play solo, compete on global and weekly leaderboards, complete a daily challenge, battle friends in real time over WebSocket, and unlock badges and themes.
 
 HOW TO USE THE DEMO ACCOUNT
-Email: admin@rmc.com    Password: admin123
+Reviewer sign-in: Use the current rotated demo credentials entered privately in App Store Connect.
 - The account already has XP, streak history, friends, and unlocked themes so you can see the full experience without seeding data.
 - All 14 games are playable immediately from Library or Home.
 
