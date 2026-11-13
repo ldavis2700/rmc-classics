@@ -29,7 +29,8 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    # Playwright 1.58.2 does not publish chromium for ubuntu-26.04 yet.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       mongo:
