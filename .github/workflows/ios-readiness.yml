@@ -40,11 +40,11 @@ jobs:
           xcodebuild -version
           test "$(xcodebuild -version | head -1)" = "Xcode 26.5"
           gem install cocoapods --no-document --version "$COCOAPODS_VERSION"
-          # Prefer the executable installed for this Ruby, not a host preinstalled pod.
-          export PATH="$(ruby -e 'print Gem.bindir'):$PATH"
-          echo "$(ruby -e 'print Gem.bindir')" >> "$GITHUB_PATH"
-          pod --version
-          test "$(pod --version)" = "$COCOAPODS_VERSION"
+          # The macOS image has a newer preinstalled pod; run the pinned gem directly.
+          RMC_POD_BIN="$(ruby -e 'print Gem.bin_path("cocoapods", "pod", ENV.fetch("COCOAPODS_VERSION"))')"
+          ruby "$RMC_POD_BIN" --version
+          test "$(ruby "$RMC_POD_BIN" --version)" = "$COCOAPODS_VERSION"
+          echo "RMC_POD_BIN=$RMC_POD_BIN" >> "$GITHUB_ENV"
           npm install --global npm@10.9.4
           test "$(npm --version)" = "10.9.4"
       - name: Build and sync locked frontend
@@ -60,7 +60,7 @@ jobs:
         working-directory: frontend/ios/App
         run: |
           set -euo pipefail
-          pod install --repo-update
+          ruby "$RMC_POD_BIN" install --repo-update
           ruby -c fastlane/Fastfile
           xcodebuild -workspace App.xcworkspace -scheme App \
             -configuration Release -destination 'generic/platform=iOS' \
