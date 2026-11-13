@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import { signInGameCenter, submitLeaderboardScore } from "@/lib/gameCenter";
-import { configureIAP } from "@/lib/iap";
+import { configureIAP, suspendIAP } from "@/lib/iap";
 
 const AuthContext = createContext(null);
 
@@ -12,6 +12,7 @@ export function AuthProvider({ children }) {
   const refresh = useCallback(async () => {
     const token = localStorage.getItem("rmc_token");
     if (!token) {
+      suspendIAP();
       setUser(null);
       setLoading(false);
       return;
@@ -19,9 +20,10 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await api.get("/auth/me");
       setUser(data.user);
-      configureIAP(data.user?.id);
+      await configureIAP(data.user?.id);
     } catch (e) {
       localStorage.removeItem("rmc_token");
+      suspendIAP();
       setUser(null);
     } finally {
       setLoading(false);
@@ -42,6 +44,9 @@ export function AuthProvider({ children }) {
       });
       localStorage.setItem("rmc_token", data.token);
       setUser(data.user);
+      // Finish the fail-closed provider setup before reporting auth success so
+      // an immediate paid action cannot race an unconfigured IAP client.
+      await configureIAP(data.user?.id);
       return { ok: true };
     } catch (e) {
       return { ok: false, error: formatApiErrorDetail(e.response?.data?.detail) || e.message };
@@ -58,6 +63,9 @@ export function AuthProvider({ children }) {
       });
       localStorage.setItem("rmc_token", data.token);
       setUser(data.user);
+      // Finish the fail-closed provider setup before reporting auth success so
+      // an immediate paid action cannot race an unconfigured IAP client.
+      await configureIAP(data.user?.id);
       return { ok: true };
     } catch (e) {
       return { ok: false, error: formatApiErrorDetail(e.response?.data?.detail) || e.message };
@@ -66,6 +74,7 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     localStorage.removeItem("rmc_token");
+    suspendIAP();
     setUser(null);
   };
 
@@ -73,6 +82,7 @@ export function AuthProvider({ children }) {
     try {
       await api.delete("/auth/account", { data: { password } });
       localStorage.removeItem("rmc_token");
+      suspendIAP();
       setUser(null);
       return { ok: true };
     } catch (e) {

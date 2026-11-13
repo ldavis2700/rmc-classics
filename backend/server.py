@@ -13,6 +13,7 @@ import unicodedata
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
+from urllib.parse import quote
 
 import bcrypt
 import jwt as pyjwt
@@ -1391,20 +1392,44 @@ REVENUECAT_API_BASE = "https://api.revenuecat.com/v1"
 
 
 async def _rc_get_subscriber(app_user_id: str) -> Optional[dict]:
-    """Fetch authoritative subscriber state from RevenueCat. Returns None if not configured."""
+    """Fetch bounded authoritative RevenueCat state, failing closed on provider errors."""
     secret = os.environ.get("REVENUECAT_SECRET_KEY", "").strip()
     if not secret:
         return None
     import httpx
-    async with httpx.AsyncClient(timeout=10) as client_http:
-        r = await client_http.get(
-            f"{REVENUECAT_API_BASE}/subscribers/{app_user_id}",
-            headers={"Authorization": f"Bearer {secret}"},
+    try:
+        async with httpx.AsyncClient(timeout=10) as client_http:
+            response = await client_http.get(
+                f"{REVENUECAT_API_BASE}/subscribers/{quote(app_user_id, safe='')}",
+                headers={"Authorization": f"Bearer {secret}"},
+            )
+    except httpx.HTTPError:
+        logger.warning("RevenueCat subscriber lookup transport failed")
+        return None
+    if response.status_code != 200:
+        logger.warning(
+            "RevenueCat subscriber lookup returned status %s",
+            response.status_code,
         )
-        if r.status_code != 200:
-            logger.warning("RevenueCat /subscribers returned %s: %s", r.status_code, r.text[:200])
-            return None
-        return r.json().get("subscriber")
+        return None
+    if len(response.content) > 2_000_000:
+        logger.warning("RevenueCat subscriber response was too large")
+        return None
+    try:
+        payload = response.json()
+    except (TypeError, ValueError):
+        logger.warning("RevenueCat subscriber response was not valid JSON")
+        return None
+    if not isinstance(payload, dict):
+        logger.warning("RevenueCat subscriber response was not an object")
+        return None
+    subscriber = payload.get("subscriber")
+    if subscriber is None:
+        return None
+    if not isinstance(subscriber, dict):
+        logger.warning("RevenueCat subscriber payload was not an object")
+        return None
+    return subscriber
 
 
 async def _credit_freeze_pack(user_id: str, transaction_ids: List[str]) -> int:

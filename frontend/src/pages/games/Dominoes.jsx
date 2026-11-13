@@ -100,13 +100,16 @@ export default function Dominoes() {
     if (winner) finalize(winner === "you");
   }, [winner, finalize]);
 
-  const canPlay = (tile, side) => {
+  const canPlay = useCallback((tile, side) => {
     const target = side === "left" ? leftEnd : rightEnd;
     return tile.a === target || tile.b === target;
-  };
-  const canPlayAny = (hand) => hand.some((t) => t.a === leftEnd || t.b === leftEnd || t.a === rightEnd || t.b === rightEnd);
+  }, [leftEnd, rightEnd]);
+  const canPlayAny = useCallback(
+    (hand) => hand.some((t) => t.a === leftEnd || t.b === leftEnd || t.a === rightEnd || t.b === rightEnd),
+    [leftEnd, rightEnd]
+  );
 
-  const placeTile = (tile, side, from) => {
+  const placeTile = useCallback((tile, side, from) => {
     // Orient tile so matching pip is on the connecting side
     let a = tile.a, b = tile.b;
     if (side === "left") {
@@ -138,7 +141,7 @@ export default function Dominoes() {
       setMessage(`CPU played ${tile.a}|${tile.b}. Your turn.`);
       setTurn("you");
     }
-  };
+  }, [leftEnd, rightEnd, you, cpu]);
 
   const drawForYou = () => {
     if (turn !== "you" || winner) return;
@@ -204,7 +207,7 @@ export default function Dominoes() {
       placeTile(pick.tile, pick.side, "cpu");
     }, 800);
     return () => clearTimeout(t);
-  }, [turn, cpu, pool, leftEnd, rightEnd, winner, you, ready]);
+  }, [turn, cpu, pool, winner, you, ready, canPlay, canPlayAny, placeTile]);
 
   return (
     <GameShell
