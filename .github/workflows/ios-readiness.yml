@@ -40,6 +40,10 @@ jobs:
           xcodebuild -version
           test "$(xcodebuild -version | head -1)" = "Xcode 26.5"
           gem install cocoapods --no-document --version "$COCOAPODS_VERSION"
+          # Prefer the executable installed for this Ruby, not a host preinstalled pod.
+          export PATH="$(ruby -e 'print Gem.bindir'):$PATH"
+          echo "$(ruby -e 'print Gem.bindir')" >> "$GITHUB_PATH"
+          pod --version
           test "$(pod --version)" = "$COCOAPODS_VERSION"
           npm install --global npm@10.9.4
           test "$(npm --version)" = "10.9.4"
