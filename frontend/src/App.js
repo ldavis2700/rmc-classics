@@ -39,7 +39,7 @@ function ProtectedRoute({ children }) {
   const location = useLocation();
   if (loading) {
     return (
-      <div className="grid min-h-[60vh] place-items-center">
+      <div className="grid min-h-[60vh] place-items-center" role="status" aria-live="polite" aria-busy="true">
         <div className="font-pixel text-neon-cyan">LOADING…</div>
       </div>
     );
