@@ -25,8 +25,13 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 try:
     from .game_tables import mount_table_routes
+    from .release_identity import backend_source_fingerprint
 except ImportError:
     from game_tables import mount_table_routes
+    from release_identity import backend_source_fingerprint
+
+# Capture at process startup; editing files cannot relabel an already running process.
+BACKEND_SOURCE_FINGERPRINT = backend_source_fingerprint()
 
 # ---------- Config ----------
 JWT_ALGORITHM = "HS256"
@@ -1394,6 +1399,12 @@ async def select_theme(body: ThemeSelectIn, user: dict = Depends(get_current_use
 @api.get("/")
 async def root():
     return {"app": "RMC CLASSICS", "status": "ok"}
+
+
+@api.get("/release")
+async def release_identity():
+    return {"app": "RMC CLASSICS", "backend_source_sha256": BACKEND_SOURCE_FINGERPRINT,
+            "scope": "source-fingerprint-only"}
 
 
 # ---------- In-App Purchases (RevenueCat) ----------

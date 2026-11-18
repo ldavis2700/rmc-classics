@@ -89,7 +89,7 @@ workflows:
       - name: Verify deployed release endpoints
         script: |
           set -eu
-          python3 scripts/verify_release_endpoints.py --origin "$REACT_APP_BACKEND_URL"
+          python3 scripts/verify_release_endpoints.py --origin "$REACT_APP_BACKEND_URL" --match-backend-source
 
       - name: Pin npm toolchain
         script: |

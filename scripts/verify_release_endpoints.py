@@ -1,5 +1,6 @@
 """Read-only availability gate, not deployment provenance or device acceptance."""
 import argparse
+import importlib.util
 import json
 from html.parser import HTMLParser
 from pathlib import Path
@@ -59,14 +60,21 @@ def fetch(url):
         raise GateError(f'Endpoint request failed ({type(exc).__name__})') from exc
 
 
-def verify(origin, get=fetch):
+def verify(origin, get=fetch, expected_backend_fingerprint=None):
     parsed = urlsplit(origin)
     if (parsed.scheme != 'https' or not parsed.hostname or parsed.username or
             parsed.password or parsed.query or parsed.fragment or parsed.path not in ('', '/')):
         raise GateError('Backend URL must be a credential-free HTTPS origin')
     origin = origin.rstrip('/')
+    if expected_backend_fingerprint is not None:
+        import re
+        if not re.fullmatch(r'[0-9a-f]{64}', expected_backend_fingerprint):
+            raise GateError('Expected backend fingerprint must be a SHA-256 digest')
     checked = []
-    for path, expected in [('/api/', 'identity'), ('/api/games/meta', 'catalog')]:
+    api_checks = [('/api/', 'identity'), ('/api/games/meta', 'catalog')]
+    if expected_backend_fingerprint is not None:
+        api_checks.append(('/api/release', 'release'))
+    for path, expected in api_checks:
         media, body = get(origin + path)
         if media != 'application/json':
             raise GateError(f'{path}: expected JSON, not an HTML fallback')
@@ -80,6 +88,10 @@ def verify(origin, get=fetch):
             raise GateError('Backend identity/status mismatch')
         if expected == 'catalog' and (not isinstance(data.get('games'), dict) or not {'dominoes', 'spades'} <= data['games'].keys()):
             raise GateError('Backend lacks the Dominoes/Spades catalog')
+        if expected == 'release' and (data.get('app') != 'RMC CLASSICS' or
+                data.get('scope') != 'source-fingerprint-only' or
+                data.get('backend_source_sha256') != expected_backend_fingerprint):
+            raise GateError('Running backend source does not match the candidate checkout')
         checked.append(path)
     metadata = json.loads((ROOT / 'frontend/src/lib/public-route-metadata.json').read_text())
     for path in ('/privacy', '/terms', '/support'):
@@ -90,16 +102,29 @@ def verify(origin, get=fetch):
                 page.canonicals != [origin + path]):
             raise GateError(f'{path}: route metadata mismatch; possible home-page fallback')
         checked.append(path)
-    return {'origin': origin, 'checked_paths': checked, 'scope': 'availability-only',
+    return {'origin': origin, 'checked_paths': checked,
+            'scope': 'availability-and-source-match' if expected_backend_fingerprint else 'availability-only',
+            'backend_source_sha256': expected_backend_fingerprint,
+            'provider_provenance_verified': False,
             'resubmission_ready': False}
+
+
+def candidate_backend_fingerprint():
+    spec = importlib.util.spec_from_file_location('rmc_release_identity', ROOT / 'backend/release_identity.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.backend_source_fingerprint()
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--origin', required=True)
+    parser.add_argument('--match-backend-source', action='store_true',
+                        help='Require the running backend to match this candidate source tree')
     args = parser.parse_args()
     try:
-        print(json.dumps(verify(args.origin)))
+        expected = candidate_backend_fingerprint() if args.match_backend_source else None
+        print(json.dumps(verify(args.origin, expected_backend_fingerprint=expected)))
     except (GateError, OSError) as exc:
         parser.exit(1, f'Release endpoint preflight failed: {exc}\n')
 

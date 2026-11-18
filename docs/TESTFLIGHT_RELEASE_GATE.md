@@ -58,7 +58,7 @@ Before a signed build can continue, the workflow verifies:
 2. the App Store app ID is a valid non-placeholder number
 3. the RevenueCat iOS public SDK key is present
 4. signing files can be fetched from the configured App Store Connect integration
-5. the deployed release endpoints pass `scripts/verify_release_endpoints.py`
+5. the deployed release endpoints pass `scripts/verify_release_endpoints.py --match-backend-source`
 6. the web bundle, Capacitor sync, CocoaPods install, and signed IPA build succeed
 
 The current-main comparison runs first, followed by release-configuration validation, before dependency installation or the scripted signing/upload steps. Missing configuration reports variable names and the `rmc_release` group without printing values. Codemagic may perform its own signing setup before custom scripts.
@@ -74,8 +74,9 @@ If configuration validation fails, open the RMC Classics app's Codemagic environ
    rollback identifiers; deploy the compatible pair using the verified provider.
    A founding-pilot Vercel preview or deployment check is insufficient.
 3. Verify the deployed API/game metadata and direct privacy/terms/support routes.
-   Run `python3 scripts/verify_release_endpoints.py --origin https://rmcclassics.com`.
-   This is availability evidence only, not proof of signed-device functionality.
+   Run `python3 scripts/verify_release_endpoints.py --origin https://rmcclassics.com --match-backend-source`.
+   This verifies availability and matching backend source, not provider provenance
+   or signed-device functionality.
    Do not proceed through signing while the deployed endpoint gate fails.
 4. With signed-build/upload authorization and verified App Store configuration,
    manually select current `main` in Codemagic and start `ios-testflight`;
@@ -119,3 +120,19 @@ checks after candidate changes. Production rollout and signed-device evidence
 remain separate gates.
 
 A stale manual selection must be replaced with current `main`; it must not be forced past the gate.
+
+## Backend source identity
+
+Both signed-build lanes require `/api/release` to return the same SHA-256
+fingerprint as the candidate checkout. The API captures its fingerprint at process
+startup from runtime Python files and `requirements.txt`; it excludes tests,
+bytecode, `.env`, database contents and credentials. Missing identity, an older
+backend, HTML fallback or a mismatched digest blocks signing. A documentation-only
+commit does not require redeploying identical backend source.
+
+The digest is a diagnostic source match, not a signed attestation. Independently
+record provider deployment IDs/commits, frontend artifact identity, installed
+dependencies, database binding, backup and rollback before release. The endpoint
+does not establish database health, frontend compatibility, signing, purchases or
+device acceptance. Keep `resubmission_ready` and `provider_provenance_verified`
+false until those separate evidence gates are satisfied.
