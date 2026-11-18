@@ -58,7 +58,8 @@ Before a signed build can continue, the workflow verifies:
 2. the App Store app ID is a valid non-placeholder number
 3. the RevenueCat iOS public SDK key is present
 4. signing files can be fetched from the configured App Store Connect integration
-5. the web bundle, Capacitor sync, CocoaPods install, and signed IPA build succeed
+5. the deployed release endpoints pass `scripts/verify_release_endpoints.py`
+6. the web bundle, Capacitor sync, CocoaPods install, and signed IPA build succeed
 
 The current-main comparison runs first, followed by release-configuration validation, before dependency installation or the scripted signing/upload steps. Missing configuration reports variable names and the `rmc_release` group without printing values. Codemagic may perform its own signing setup before custom scripts.
 
@@ -66,13 +67,55 @@ If configuration validation fails, open the RMC Classics app's Codemagic environ
 
 ## Release sequence
 
-1. Merge all intended corrections into `main`.
-2. Wait for GitHub validation and the Vercel deployment check to pass.
-3. Manually select current `main` in Codemagic and start `ios-testflight`; repository pushes and tags are intentionally ignored for this signed workflow.
-4. Confirm **Verify release source is current main** succeeds.
-5. Confirm the remaining Codemagic steps succeed and the build appears in TestFlight.
-6. Retain the generated `release-source.txt`, `release-ipa-metadata.txt`, and `release-ipa-metadata.txt.sha256` artifacts from the same run.
-7. Verify the receipt sidecar with the exact command above and bind every recorded identity field to the release candidate.
-8. Smoke-test that exact TestFlight build before App Store submission.
+1. Confirm the candidate incorporates all intended corrections and passes hosted
+   PR, Android and unsigned iOS checks; then merge under the applicable review gates.
+2. Identify the actual main-game hosting projects and database binding. Record
+   compatible frontend/backend revisions, data-preservation/backup evidence and
+   rollback identifiers; deploy the compatible pair using the verified provider.
+   A founding-pilot Vercel preview or deployment check is insufficient.
+3. Verify the deployed API/game metadata and direct privacy/terms/support routes.
+   Run `python3 scripts/verify_release_endpoints.py --origin https://rmcclassics.com`.
+   This is availability evidence only, not proof of signed-device functionality.
+   Do not proceed through signing while the deployed endpoint gate fails.
+4. With signed-build/upload authorization and verified App Store configuration,
+   manually select current `main` in Codemagic and start `ios-testflight`;
+   repository pushes and tags are intentionally ignored for this workflow.
+5. Confirm **Verify release source is current main** and every remaining step
+   succeeds, and independently confirm the processed build appears in TestFlight.
+6. Retain `release-source.txt`, `release-ipa-metadata.txt`, and
+   `release-ipa-metadata.txt.sha256` from the same run. Verify the receipt sidecar
+   and bind every recorded identity field to the candidate and App Store record.
+7. Test that exact signed build against the recorded deployed backend: login,
+   invitations, concurrent rematch, native sharing, privacy routing, Game Center,
+   safety/account deletion, sandbox purchase and restore. Record actual device
+   results, candidate screenshots/recording and IAP/version association.
+8. Assess resubmission readiness from those receipts. Submission to Apple remains
+   a separate authorized action; preparing this checklist does not submit the app.
+
+## Native integration evidence — November 18, 2026
+
+PR #57 head `70e48dc78e687c27373ec62d205a9094a5472201` is an ancestor of PR #58
+candidate `4ca9a4b28774ff3028f4cc69c6dc5e56858b48fa`. Verify with:
+
+```sh
+git merge-base --is-ancestor 70e48dc78e687c27373ec62d205a9094a5472201 4ca9a4b28774ff3028f4cc69c6dc5e56858b48fa
+```
+
+The candidate retains the current-main/configuration checks, RevenueCat key
+injection, lockfile, Android setup and native signing verification. Later changes
+add deployed-endpoint gating and pinned Xcode/CocoaPods/Fastlane startup checks.
+Do not reapply an older native branch over these later safeguards.
+
+Exact-candidate hosted results:
+
+- [PR validation](https://github.com/ldavis2700/rmc-classics/actions/runs/44357078561): passed, including production-bundle/API/MongoDB browser checks.
+- [Android readiness](https://github.com/ldavis2700/rmc-classics/actions/runs/44357078357): passed.
+- [iOS readiness](https://github.com/ldavis2700/rmc-classics/actions/runs/44357078505): passed, including locked frontend sync, tool startup and unsigned native archive.
+
+The iOS workflow explicitly sets `CODE_SIGNING_ALLOWED=NO` and rejects signed
+output. Its readiness receipt is not a signed IPA, TestFlight upload, device test
+or App Store approval. These results apply to the named commit; rerun applicable
+checks after candidate changes. Production rollout and signed-device evidence
+remain separate gates.
 
 A stale manual selection must be replaced with current `main`; it must not be forced past the gate.

@@ -56,11 +56,14 @@ online XP or update the profile leaderboard for table matches.
 
 ## Build and verification
 
-The dependency lock, compatibility pins, and calendar migration reuse the
-existing release-hardening work from `integration/rmc-release-hardening-54-56`.
-Install with npm 10.9.4 (the lockfile's version). The release-hardening PR still
-contains separate native purchase/signing/Android work; this feature does not
-supersede that work or its release gates.
+The candidate includes the release-hardening history from
+`integration/rmc-release-hardening-54-56`, including native purchase, signing and
+Android changes. PR #57 head `70e48dc78e687c27373ec62d205a9094a5472201` is an
+ancestor of candidate `4ca9a4b28774ff3028f4cc69c6dc5e56858b48fa`; it does not need
+to be reapplied. Install with npm 10.9.4 (the lockfile's version). Incorporation
+of source does not satisfy the signing, deployed-service or device release gates.
+See `docs/TESTFLIGHT_RELEASE_GATE.md` for dated native evidence and the release
+sequence.
 
 ```sh
 cd frontend
