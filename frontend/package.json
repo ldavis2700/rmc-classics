@@ -72,7 +72,7 @@
   },
   "scripts": {
     "start": "craco start",
-    "build": "craco build && node scripts/generate-route-shells.mjs",
+    "build": "craco build && node scripts/generate-route-shells.mjs && node scripts/generate-release-manifest.mjs",
     "test": "craco test"
   },
   "browserslist": {

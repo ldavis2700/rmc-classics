@@ -108,6 +108,17 @@ uvicorn.run(app, fd=int(os.environ["RMC_TEST_LISTENER"]), log_level="warning")
             assert actual == {'app': 'RMC CLASSICS', 'scope': 'source-fingerprint-only',
                               'backend_source_sha256': identity.backend_source_fingerprint()}
             print("PASS: running API source fingerprint matches candidate backend", flush=True)
+            from verify_frontend_release import verify, MAX_BYTES
+            manifest = json.loads((ROOT / 'frontend/build/rmc-release.json').read_text())
+            # Exercise the release verifier over actual disposable HTTP responses.
+            # Its public origin remains HTTPS-only; this adapter is test-runner-only.
+            def get_test_asset(url):
+                prefix = 'https://rmcclassics.com/'
+                assert url.startswith(prefix)
+                with opener.open(env['RMC_BROWSER_TEST_URL'] + '/' + url[len(prefix):], timeout=5) as response:
+                    return response.read(MAX_BYTES + 1)
+            result = verify('https://rmcclassics.com', manifest, get_test_asset)
+            print(f"PASS: deployed frontend bytes match {result['verified_files']} candidate HTML/JS/CSS assets", flush=True)
             subprocess.run(["node", "scripts/verify-table-browser.cjs"], cwd=ROOT,
                            env=env, check=True, timeout=300)
             for collection, record in preserved.items():

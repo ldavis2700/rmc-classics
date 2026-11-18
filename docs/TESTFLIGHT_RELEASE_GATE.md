@@ -123,6 +123,25 @@ A stale manual selection must be replaced with current `main`; it must not be fo
 
 ## Backend source identity
 
+### Frontend artifact verification
+
+`npm run build` also writes `frontend/build/rmc-release.json`, recording SHA-256
+hashes of the completed HTML, JavaScript and CSS assets. Retain this manifest
+with the exact web deployment artifact and its provider deployment/commit record.
+After deploying that artifact, run:
+
+```sh
+python3 scripts/verify_frontend_release.py --origin https://rmcclassics.com --manifest frontend/build/rmc-release.json
+```
+
+The verifier compares the deployed manifest and independently downloads/hashes
+every listed asset. Missing/stale assets, pilot HTML fallbacks, unsafe paths,
+redirects and unavailable responses cannot pass. Use the retained deployed-web
+artifact manifest, not a rebuild with different native/web configuration.
+This complements the backend source check; it does not prove provider provenance,
+database health, runtime configuration correctness, or signed-device acceptance.
+Images/media are outside this manifest's scope and still require visual checks.
+
 Both signed-build lanes require `/api/release` to return the same SHA-256
 fingerprint as the candidate checkout. The API captures its fingerprint at process
 startup from runtime Python files and `requirements.txt`; it excludes tests,
