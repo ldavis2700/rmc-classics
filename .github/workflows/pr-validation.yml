@@ -186,3 +186,38 @@ jobs:
           python tests/test_ios_build_number_guard.py
           python tests/test_ios_readiness_guard.py
           grep -q 'release-source.txt' codemagic.yaml
+
+      - name: Package tested web bundle and source receipt
+        env:
+          CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -eu
+          checkout_commit="$(git rev-parse --verify HEAD^{commit})"
+          checkout_tree="$(git rev-parse --verify HEAD^{tree})"
+          test -s frontend/build/rmc-release.json
+          mkdir -p "$RUNNER_TEMP/rmc-web-evidence"
+          tar -czf "$RUNNER_TEMP/rmc-web-evidence/frontend-build.tar.gz" -C frontend/build .
+          cp frontend/build/rmc-release.json "$RUNNER_TEMP/rmc-web-evidence/"
+          {
+            echo 'scope=isolated-ci-web-build-only'
+            echo "repository=$GITHUB_REPOSITORY"
+            echo "candidate_commit=$CANDIDATE_COMMIT"
+            echo "checkout_commit=$checkout_commit"
+            echo "checkout_tree=$checkout_tree"
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "run_attempt=$GITHUB_RUN_ATTEMPT"
+            echo 'backend_origin=same-origin'
+            echo 'signed_device_validation=false'
+            echo 'production_deployment_verified=false'
+          } > "$RUNNER_TEMP/rmc-web-evidence/source-receipt.txt"
+          cd "$RUNNER_TEMP/rmc-web-evidence"
+          sha256sum frontend-build.tar.gz rmc-release.json source-receipt.txt > SHA256SUMS
+          sha256sum -c SHA256SUMS
+
+      - name: Retain tested web build evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rmc-web-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/rmc-web-evidence/
+          if-no-files-found: error
+          retention-days: 14

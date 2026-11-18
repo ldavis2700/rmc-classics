@@ -128,6 +128,15 @@ A stale manual selection must be replaced with current `main`; it must not be fo
 `npm run build` also writes `frontend/build/rmc-release.json`, recording SHA-256
 hashes of the completed HTML, JavaScript and CSS assets. Retain this manifest
 with the exact web deployment artifact and its provider deployment/commit record.
+Successful PR validation retains `rmc-web-evidence-<candidate>` for 14 days:
+the tested `frontend-build.tar.gz`, `rmc-release.json`, source receipt and
+`SHA256SUMS`. Verify `sha256sum -c SHA256SUMS` before using the downloaded files.
+The receipt records both candidate and actual checkout/tree because pull-request
+CI can test a synthetic merge commit. This artifact uses same-origin API routing
+and is isolated CI evidence, not a signed native build or approved production
+deployment. Check the recorded source tree, runtime configuration and full
+deployment/rollback gates before any use beyond validation. Preserve the artifact
+through the actual deployment provider when releasing; CI retention is finite.
 After deploying that artifact, run:
 
 ```sh
