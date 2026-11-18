@@ -24,6 +24,48 @@ async function signIn(page, email) {
   await page.getByTestId("login-terms-checkbox").check();
   await page.getByTestId("login-submit").click();
 }
+async function verifyRefreshRecovery(page, user) {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  let failureStatus = 503;
+  const failRefresh = (route) => route.fulfill({ status: failureStatus,
+    contentType: "application/json", body: JSON.stringify({ detail: "Disposable failure fixture" }) });
+  const token = await page.evaluate(() => localStorage.getItem("rmc_token"));
+  // An established session survives a profile refresh outage.
+  await page.route("**/api/auth/me", failRefresh);
+  await page.getByTestId("nav-profile").click();
+  await page.getByTestId("account-refresh-error").waitFor();
+  assert.equal(await page.getByTestId("profile-email").textContent(), user.email);
+  assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), token);
+  await page.unroute("**/api/auth/me", failRefresh);
+  await page.getByTestId("account-refresh-retry").click();
+  await page.getByTestId("account-refresh-error").waitFor({ state: "detached" });
+  // Cold startup must not expose a protected profile before verification. Retry
+  // then uses the real API and original token without asking for credentials.
+  await page.route("**/api/auth/me", failRefresh);
+  await page.reload();
+  await page.getByTestId("account-refresh-error").waitFor();
+  assert.equal(await page.getByTestId("profile-email").count(), 0);
+  assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), token);
+  assert.equal(new URL(page.url()).pathname, "/profile");
+  await page.unroute("**/api/auth/me", failRefresh);
+  await page.getByTestId("account-refresh-retry").click();
+  await page.getByTestId("profile-email").filter({ hasText: user.email }).waitFor();
+  assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), token);
+  for (failureStatus of [401, 403]) {
+    await page.route("**/api/auth/me", failRefresh);
+    await page.reload();
+    await page.waitForURL(`${base}/login`);
+    assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), null);
+    assert.equal(await page.getByTestId("account-refresh-error").count(), 0);
+    await page.unroute("**/api/auth/me", failRefresh);
+    await signIn(page, user.email);
+    await page.waitForURL(`${base}/profile`);
+    await page.getByTestId("profile-email").filter({ hasText: user.email }).waitFor();
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${base}/tables?game=spades`);
+  console.log("PASS: profile outage preserves session, cold-start retry recovers, and 401/403 require sign-in");
+}
 async function verifyStaleProfile(page, users) {
   await page.setViewportSize({ width: 1280, height: 900 });
   for (const switchAccount of [false, true]) {
@@ -131,6 +173,7 @@ async function clickMove(page, action) {
     await first.getByTestId("login-submit").click();
     await first.waitForURL("**/tables?game=spades");
     await verifyStaleProfile(first, users);
+    await verifyRefreshRecovery(first, users[0]);
     await first.getByRole("button", { name: "Create private table", exact: true }).click();
     await first.waitForURL("**/table/*");
     const code = new URL(first.url()).pathname.split("/").pop();

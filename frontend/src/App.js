@@ -37,8 +37,10 @@ import Friends from "@/pages/Friends";
 import { Privacy, Terms, Support } from "@/pages/Legal";
 import SupportRMC from "@/pages/SupportRMC";
 
+import AccountRefreshNotice from "@/components/rmc/AccountRefreshNotice";
+
 function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
+  const { user, loading, refreshError } = useAuth();
   const location = useLocation();
   if (loading) {
     return (
@@ -47,6 +49,7 @@ function ProtectedRoute({ children }) {
       </div>
     );
   }
+  if (!user && refreshError) return <AccountRefreshNotice />;
   if (!user) {
     const from = `${location.pathname}${location.search}${location.hash}`;
     return <Navigate to="/login" replace state={{ from }} />;

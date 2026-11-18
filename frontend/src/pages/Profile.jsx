@@ -15,6 +15,8 @@ import {
 import { purchaseFreezePack, restorePurchases, IAP_PRODUCTS } from "@/lib/iap";
 import { trackEvent } from "@/lib/analytics";
 
+import AccountRefreshNotice from "@/components/rmc/AccountRefreshNotice";
+
 export default function Profile() {
   const { user, logout, refresh } = useAuth();
 
@@ -28,6 +30,7 @@ export default function Profile() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 pt-8 md:px-8 md:pt-14">
+      <AccountRefreshNotice />
       <div className="rounded-3xl border border-white/10 bg-[#16152b] p-6 sm:p-8">
         <div className="flex flex-wrap items-center gap-6">
           <div

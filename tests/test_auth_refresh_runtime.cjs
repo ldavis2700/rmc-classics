@@ -19,13 +19,14 @@ function harness(token = 'old-token') {
     useCallback: (fn) => fn,
     localStorage: { getItem: () => state.token, removeItem: () => { state.token = null; calls.push('remove'); } },
     api: { get: (url) => { assert.equal(url, '/auth/me'); return pending; } },
+    setRefreshError: error => { state.refreshError = error; },
     setUser: (user) => { state.user = user; calls.push('user'); },
     setLoading: (loading) => { state.loading = loading; },
     configureIAP: async (id) => calls.push(`configure:${id}`),
     suspendIAP: () => calls.push('suspend'),
   };
   const refresh = vm.runInNewContext(`${callback}\nrefresh`, context);
-  return { state, calls, refresh, resolve, reject };
+  return { state, calls, refresh, resolve, reject, api: context.api };
 }
 for (const outcome of ['success', 'failure']) {
   for (const nextToken of [null, 'new-token']) {
@@ -53,8 +54,29 @@ test('current refresh still loads user and configures purchases', async () => {
 });
 test('current refresh failure still clears invalid session', async () => {
   const h = harness(); const pending = h.refresh();
-  h.reject(new Error('Unauthorized')); await pending;
+  h.reject({ response: { status: 401 } }); await pending;
   assert.equal(h.state.token, null); assert.equal(h.state.user, null);
   assert.equal(h.state.loading, false);
   assert.deepEqual(h.calls, ['remove', 'suspend', 'user']);
+});
+
+for (const failure of [{code:'ECONNABORTED'}, {response:{status:503}}, {response:{status:429}}]) {
+  for (const existing of [null, {id:'current'}]) {
+    test(`temporary ${failure.code || failure.response.status} preserves credentials and recovers (${!!existing})`, async () => {
+      const h = harness(); h.state.user = existing;
+      const pending = h.refresh(); h.reject(failure); await pending;
+      assert.equal(h.state.token, 'old-token'); assert.equal(h.state.user, existing);
+      assert.equal(h.state.loading, false); assert.match(h.state.refreshError, /try again/);
+      assert.deepEqual(h.calls, []);
+      h.api.get = async () => ({data:{user:{id:'recovered'}}});
+      await h.refresh();
+      assert.equal(h.state.user.id, 'recovered'); assert.equal(h.state.refreshError, null);
+    });
+  }
+}
+test('terms rejection clears session instead of allowing stale access', async () => {
+  const h = harness(); h.state.user = {id:'old'};
+  const pending = h.refresh(); h.reject({response:{status:403}}); await pending;
+  assert.equal(h.state.token, null); assert.equal(h.state.user, null);
+  assert.equal(h.state.refreshError, null);
 });
