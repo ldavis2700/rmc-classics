@@ -166,6 +166,7 @@ async function verifyUnavailableStore(browser, user) {
       for (const control of [retry, page.getByTestId("freeze-restore-btn")]) {
         const box = await control.boundingBox();
         assert(box && box.x >= 0 && box.x + box.width <= 390, "Store controls must fit mobile width");
+        assert(box.height >= 44, "Store controls must offer at least a 44px-high touch target");
       }
       await page.evaluate(() => document.fonts.ready);
       unavailableStoreCapture = await page.screenshot({ type: "png", fullPage: false, animations: "disabled" });

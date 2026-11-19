@@ -406,7 +406,7 @@ export function FreezePackShop() {
               onClick={doRestore}
               disabled={busy || !isNativeApp}
               data-testid="freeze-restore-btn"
-              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-[#a3a1c6] hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-[44px] rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-[#a3a1c6] hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               <RefreshCw className="mr-2 inline h-3.5 w-3.5" />
               Restore Purchases
