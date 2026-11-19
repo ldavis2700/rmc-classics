@@ -21,7 +21,7 @@ class Fixture(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/login":
-            body = """<form action="/" method="get">
+            body = """<form action="/login" method="post">
             <input type="email" required><input type="password" required>
             <input type="checkbox" data-testid="login-terms-checkbox" required>
             <button data-testid="login-submit" type="submit">Login fixture</button></form>"""
@@ -34,6 +34,17 @@ class Fixture(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/html")
         self.end_headers()
         self.wfile.write(body.encode())
+
+    def do_POST(self):
+        # Simulate only a successful redirect for a synthetic fixture login;
+        # this does not authenticate with the real RMC backend.
+        if self.path != "/login":
+            self.send_error(404)
+            return
+        self.send_response(303)
+        self.send_header("Location", "/profile")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
 
 @unittest.skipUnless(importlib.util.find_spec("playwright"), "Playwright not installed")
