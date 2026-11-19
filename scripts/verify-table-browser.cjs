@@ -109,6 +109,51 @@ async function captureActualApp(browser, user) {
     await context.close();
   }
 }
+async function verifyUnavailableStore(browser, user) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const creditRequests = [];
+  await context.route("**/*", (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.startsWith("/api/iap/")) {
+      creditRequests.push(url.pathname);
+      return route.abort();
+    }
+    return url.origin === new URL(base).origin ? route.continue() : route.abort();
+  });
+  // Test-only bridge: every plugin call fails, never reaches a device/store.
+  await context.addInitScript(() => {
+    window.__unavailableStoreCalls = [];
+    window.androidBridge = { postMessage(raw) {
+      const call = JSON.parse(raw);
+      window.__unavailableStoreCalls.push(call.methodName);
+      queueMicrotask(() => window.Capacitor?.fromNative?.({
+        callbackId: call.callbackId, pluginId: call.pluginId, methodName: call.methodName,
+        success: false, error: { message: "Disposable unavailable-store fixture", code: "UNAVAILABLE" },
+      }));
+    } };
+    window.Capacitor = { isNativePlatform: () => true, getPlatform: () => "android" };
+  });
+  try {
+    const page = await context.newPage();
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(`${base}/login`);
+    await signIn(page, user.email);
+    await page.waitForURL(`${base}/profile`);
+    const retry = page.getByTestId("freeze-buy-btn");
+    await retry.filter({ hasText: "Retry store price" }).waitFor();
+    assert(await retry.isEnabled());
+    const balance = await page.getByTestId("freeze-balance").textContent();
+    await retry.click();
+    await retry.filter({ hasText: "Retry store price" }).waitFor();
+    assert(await retry.isEnabled());
+    await page.getByTestId("freeze-restore-btn").click();
+    await page.getByText("Purchases are temporarily unavailable.", { exact: true }).waitFor();
+    assert.equal(await page.getByTestId("freeze-balance").textContent(), balance);
+    assert.deepEqual(creditRequests, [], "Unavailable store must not request purchase credits");
+    assert.equal(await page.evaluate(() => window.__unavailableStoreCalls.includes("purchaseStoreProduct")), false);
+    console.log("PASS: unavailable native-store fixture permits price retry, reports restore failure, preserves balance and never requests purchase credits");
+  } finally { await context.close(); }
+}
 async function verifyRefreshRecovery(page, user) {
   await page.setViewportSize({ width: 1280, height: 900 });
   let failureStatus = 503;
@@ -416,6 +461,7 @@ async function clickMove(page, action) {
     await first.waitForURL("**/tables");
     assert.equal((await api("/tables/current", users[0].token)).room, null);
     assert.equal((await api("/tables/current", users[1].token)).room, null);
+    await verifyUnavailableStore(browser, users[0]);
     await captureActualApp(browser, users[0]);
     const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${users[0].token}` }, body: JSON.stringify({ password }) });
