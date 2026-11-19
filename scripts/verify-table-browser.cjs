@@ -57,7 +57,12 @@ async function captureActualApp(browser, user) {
     for (const [route, name, ready] of screens) {
       const response = await page.goto(`${base}${route}`);
       assert(response.ok(), "Capture route must respond successfully");
-      assert.equal(page.url(), `${base}${route}`);
+      const destination = new URL(page.url());
+      assert.equal(destination.origin, new URL(base).origin);
+      assert([route, route === "/" ? "/" : `${route}/`].includes(destination.pathname),
+        `Unexpected capture route: ${destination.pathname}`);
+      assert.equal(destination.search, "");
+      assert.equal(destination.hash, "");
       await page.getByTestId(ready).waitFor();
       await page.evaluate(() => document.fonts.ready);
       await page.waitForTimeout(1200); // Finish entrance animations.
