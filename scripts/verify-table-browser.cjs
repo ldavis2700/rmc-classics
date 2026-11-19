@@ -10,6 +10,7 @@ assert(["127.0.0.1", "localhost"].includes(new URL(base).hostname), "Use only a 
 const password = "DisposableTableTest-2026!";
 const errors = [];
 const tableCaptures = {};
+let unavailableStoreCapture = null;
 async function captureTableState(page, name) {
   if (!process.env.RMC_APP_CAPTURE_DIR) return;
   assert.equal(new URL(page.url()).origin, new URL(base).origin);
@@ -94,6 +95,13 @@ async function captureActualApp(browser, user) {
       tableFiles[name] = { sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
         width: 390, height: 844, scope: "actual-online-table-disposable-ci-browser-only" };
     }
+    assert(unavailableStoreCapture, "Require unavailable-store fixture capture");
+    const storeName = "12-store-unavailable-fixture.png";
+    fs.writeFileSync(path.join(output, storeName), unavailableStoreCapture);
+    const storeFixture = { file: storeName,
+      sha256: crypto.createHash("sha256").update(unavailableStoreCapture).digest("hex"),
+      width: 390, height: 844, scope: "simulated-android-store-unavailable-browser-only",
+      real_store_validated: false };
     const manifest = fs.readFileSync("frontend/build/rmc-release.json");
     fs.writeFileSync(path.join(output, "capture-receipt.json"), JSON.stringify({
       scope: "actual-app-disposable-ci-browser-only", candidate_commit: candidate,
@@ -102,9 +110,9 @@ async function captureActualApp(browser, user) {
       account_type: "synthetic-disposable-test-account",
       web_manifest_sha256: crypto.createHash("sha256").update(manifest).digest("hex"),
       signed_device_validation: false, production_deployment_verified: false,
-      resubmission_ready: false, files_sha256: files, table_captures: tableFiles,
+      resubmission_ready: false, files_sha256: files, table_captures: tableFiles, store_fixture: storeFixture,
     }, null, 2) + "\n");
-    console.log("PASS: eight app views and three online table captures, dimensions and hashes; disposable CI only");
+    console.log("PASS: eight app views, three online tables and one simulated store capture; dimensions and hashes; disposable CI only");
   } finally {
     await context.close();
   }
@@ -151,6 +159,19 @@ async function verifyUnavailableStore(browser, user) {
     assert.equal(await page.getByTestId("freeze-balance").textContent(), balance);
     assert.deepEqual(creditRequests, [], "Unavailable store must not request purchase credits");
     assert.equal(await page.evaluate(() => window.__unavailableStoreCalls.includes("purchaseStoreProduct")), false);
+    if (process.env.RMC_APP_CAPTURE_DIR) {
+      await page.getByTestId("freeze-restore-btn").scrollIntoViewIfNeeded();
+      assert(await page.locator("html").evaluate((el) => el.scrollWidth <= window.innerWidth),
+        "Unavailable store must not overflow mobile width");
+      for (const control of [retry, page.getByTestId("freeze-restore-btn")]) {
+        const box = await control.boundingBox();
+        assert(box && box.x >= 0 && box.x + box.width <= 390, "Store controls must fit mobile width");
+      }
+      await page.evaluate(() => document.fonts.ready);
+      unavailableStoreCapture = await page.screenshot({ type: "png", fullPage: false, animations: "disabled" });
+      assert.equal(unavailableStoreCapture.readUInt32BE(16), 390);
+      assert.equal(unavailableStoreCapture.readUInt32BE(20), 844);
+    }
     console.log("PASS: unavailable native-store fixture permits price retry, reports restore failure, preserves balance and never requests purchase credits");
   } finally { await context.close(); }
 }
