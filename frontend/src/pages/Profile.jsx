@@ -216,7 +216,7 @@ function ReminderToggle() {
   );
 }
 
-function FreezePackShop() {
+export function FreezePackShop() {
   const { user, refresh } = useAuth();
   const [busy, setBusy] = useState(false);
   const platform = nativePlatform();
