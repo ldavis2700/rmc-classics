@@ -1,6 +1,8 @@
 /* Run against a disposable local API serving frontend/build. Never production. */
 const assert = require("node:assert/strict");
 const path = require("node:path");
+const fs = require("node:fs");
+const crypto = require("node:crypto");
 const { chromium } = require(process.env.RMC_PLAYWRIGHT_MODULE || (process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES
   ? path.join(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES, "playwright") : "playwright"));
 const base = process.env.RMC_BROWSER_TEST_URL || "http://127.0.0.1:8765";
@@ -23,6 +25,62 @@ async function signIn(page, email) {
   await page.getByTestId("login-password").fill(password);
   await page.getByTestId("login-terms-checkbox").check();
   await page.getByTestId("login-submit").click();
+}
+async function captureActualApp(browser, user) {
+  const output = process.env.RMC_APP_CAPTURE_DIR;
+  if (!output) return; // Opt-in only in the disposable CI harness.
+  const candidate = process.env.RMC_CAPTURE_CANDIDATE;
+  assert(/^[a-f0-9]{40}$/.test(candidate || ""), "Capture requires candidate identity");
+  fs.mkdirSync(output, { recursive: false });
+  const context = await browser.newContext({
+    viewport: { width: 428, height: 926 }, deviceScaleFactor: 3,
+    isMobile: true, hasTouch: true,
+  });
+  const page = await context.newPage();
+  page.on("pageerror", (error) => errors.push(error.message));
+  const files = {};
+  try {
+    await page.goto(`${base}/login`);
+    await signIn(page, user.email);
+    await page.waitForURL(`${base}/profile`);
+    await page.getByTestId("profile-email").filter({ hasText: user.email }).waitFor();
+    const screens = [
+      ["/", "01-home", "hero-tag"],
+      ["/library", "02-library", "game-card-chess"],
+      ["/leaderboard", "03-leaderboard", "leaderboard-list"],
+      ["/play/chess", "04-chess", "chess-board"],
+      ["/play/memory", "05-memory", "memory-board"],
+      ["/play/connect4", "06-connect4", "c4-board"],
+      ["/profile", "07-profile", "profile-name"],
+      ["/privacy", "08-privacy", "legal-title"],
+    ];
+    for (const [route, name, ready] of screens) {
+      const response = await page.goto(`${base}${route}`);
+      assert(response.ok(), "Capture route must respond successfully");
+      assert.equal(page.url(), `${base}${route}`);
+      await page.getByTestId(ready).waitFor();
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(1200); // Finish entrance animations.
+      const bytes = await page.screenshot({ type: "png", fullPage: false, animations: "disabled" });
+      assert.equal(bytes.readUInt32BE(16), 1284);
+      assert.equal(bytes.readUInt32BE(20), 2778);
+      fs.writeFileSync(path.join(output, name + ".png"), bytes);
+      files[name + ".png"] = crypto.createHash("sha256").update(bytes).digest("hex");
+    }
+    const manifest = fs.readFileSync("frontend/build/rmc-release.json");
+    fs.writeFileSync(path.join(output, "capture-receipt.json"), JSON.stringify({
+      scope: "actual-app-disposable-ci-browser-only", candidate_commit: candidate,
+      run_id: process.env.GITHUB_RUN_ID || null,
+      browser: "Chromium", width: 1284, height: 2778,
+      account_type: "synthetic-disposable-test-account",
+      web_manifest_sha256: crypto.createHash("sha256").update(manifest).digest("hex"),
+      signed_device_validation: false, production_deployment_verified: false,
+      resubmission_ready: false, files_sha256: files,
+    }, null, 2) + "\n");
+    console.log("PASS: eight actual-app browser captures, dimensions and hashes; disposable CI only");
+  } finally {
+    await context.close();
+  }
 }
 async function verifyRefreshRecovery(page, user) {
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -316,6 +374,7 @@ async function clickMove(page, action) {
     await first.waitForURL("**/tables");
     assert.equal((await api("/tables/current", users[0].token)).room, null);
     assert.equal((await api("/tables/current", users[1].token)).room, null);
+    await captureActualApp(browser, users[0]);
     const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${users[0].token}` }, body: JSON.stringify({ password }) });
     assert.equal(deleted.status, 200);
