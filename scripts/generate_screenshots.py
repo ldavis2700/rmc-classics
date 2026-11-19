@@ -1,32 +1,44 @@
-"""Auto-capture App Store screenshots at all required iOS device sizes.
+"""Capture browser reference images for release review, not signed-device evidence.
 
-Runs headless Chromium against the live preview URL and saves PNGs.
-Output: /app/frontend/appstore-assets/screenshots/{device}/{screen}.png
-
-Apple screenshot requirements (portrait):
-  iPhone 6.7"  1290x2796  (iPhone 15 Pro Max)
-  iPhone 6.5"  1284x2778  (iPhone 14 Plus)
-  iPhone 5.5"  1242x2208  (iPhone 8 Plus - required for older-device compatibility)
-  iPad Pro 12.9" 2048x2732
-
-Usage: python3 scripts/generate_screenshots.py
+Requires SCREENSHOT_BASE_URL, SCREENSHOT_LOGIN_EMAIL, SCREENSHOT_LOGIN_PASSWORD,
+and SCREENSHOT_OUT_DIR (a new directory). Use an authorized test account.
+A successful run is not App Store submission approval.
 """
 from __future__ import annotations
 import os
 import sys
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
+import hashlib
+import json
+from urllib.parse import urlsplit
 
-BASE_URL = os.environ.get(
-    "SCREENSHOT_BASE_URL",
-    "https://childhood-games-5.preview.emergentagent.com",
-)
-OUT_DIR = Path("/app/frontend/appstore-assets/screenshots")
+BASE_URL = None
+OUT_DIR = None
+LOGIN_EMAIL = None
+LOGIN_PASSWORD = None
 
-# Login credentials (see /app/memory/test_credentials.md)
-LOGIN_EMAIL = "admin@rmc.com"
-LOGIN_PASSWORD = "admin123"
+
+def configure(env):
+    """Fail before browser/network activity if explicit inputs are missing."""
+    global BASE_URL, OUT_DIR, LOGIN_EMAIL, LOGIN_PASSWORD
+    names = ("SCREENSHOT_BASE_URL", "SCREENSHOT_LOGIN_EMAIL",
+             "SCREENSHOT_LOGIN_PASSWORD", "SCREENSHOT_OUT_DIR")
+    if any(not env.get(name, "").strip() for name in names):
+        raise ValueError("Set all four SCREENSHOT_* inputs; use an authorized test account.")
+    url = env["SCREENSHOT_BASE_URL"].rstrip("/")
+    parsed = urlsplit(url)
+    if (parsed.scheme not in ("https", "http") or not parsed.hostname
+            or parsed.username or parsed.password or parsed.query or parsed.fragment
+            or parsed.path or
+            (parsed.scheme == "http" and parsed.hostname not in ("localhost", "127.0.0.1", "::1"))):
+        raise ValueError("Use an HTTPS origin, or HTTP localhost, without credentials or paths.")
+    out = Path(env["SCREENSHOT_OUT_DIR"])
+    if out.exists():
+        raise ValueError("Choose a new output directory; existing captures are never overwritten.")
+    BASE_URL, OUT_DIR = url, out
+    LOGIN_EMAIL, LOGIN_PASSWORD = env["SCREENSHOT_LOGIN_EMAIL"], env["SCREENSHOT_LOGIN_PASSWORD"]
+
 
 DEVICES = [
     # name              width  height  scale
@@ -49,30 +61,14 @@ SCREENS = [
 
 
 def login(page):
-    """Log in so authenticated pages render properly."""
+    """Require successful login; never substitute guest images."""
     page.goto(f"{BASE_URL}/login", wait_until="domcontentloaded")
-    page.wait_for_timeout(500)
-    try:
-        # try common selectors
-        for sel_email in ["input[type='email']", "[data-testid='login-email']", "input[name='email']"]:
-            if page.locator(sel_email).count():
-                page.locator(sel_email).fill(LOGIN_EMAIL)
-                break
-        for sel_pw in ["input[type='password']", "[data-testid='login-password']", "input[name='password']"]:
-            if page.locator(sel_pw).count():
-                page.locator(sel_pw).fill(LOGIN_PASSWORD)
-                break
-        # submit
-        for sel_btn in ["[data-testid='login-submit']", "button[type='submit']", "button:has-text('Log in')"]:
-            if page.locator(sel_btn).count():
-                page.locator(sel_btn).first.click()
-                break
-        page.wait_for_url(f"{BASE_URL}/", timeout=5000)
-        page.wait_for_timeout(800)
-        return True
-    except Exception as e:
-        print(f"  login flow failed (continuing as guest): {e}")
-        return False
+    page.locator("input[type='email']").fill(LOGIN_EMAIL)
+    page.locator("input[type='password']").fill(LOGIN_PASSWORD)
+    page.locator("[data-testid='login-terms-checkbox']").check()
+    page.locator("[data-testid='login-submit']").click()
+    page.wait_for_url(f"{BASE_URL}/", timeout=15000)
+
 
 
 def capture(device_name: str, w: int, h: int, scale: int):
@@ -82,6 +78,7 @@ def capture(device_name: str, w: int, h: int, scale: int):
     css_w, css_h = w // scale, h // scale
     print(f"\n=== {device_name} — CSS viewport {css_w}x{css_h} @ {scale}x (output {w}x{h}) ===")
 
+    from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path="/usr/bin/google-chrome", headless=True)
         context = browser.new_context(
@@ -99,35 +96,38 @@ def capture(device_name: str, w: int, h: int, scale: int):
         login(page)
         for path, name, wait_sel, action in SCREENS:
             url = f"{BASE_URL}{path}"
-            try:
-                page.goto(url, wait_until="domcontentloaded", timeout=20000)
-                page.wait_for_timeout(1200)  # let animations settle
-                if wait_sel:
-                    try:
-                        page.wait_for_selector(wait_sel, timeout=5000)
-                    except Exception:
-                        pass
-                if action:
-                    try:
-                        action(page)
-                    except Exception as e:
-                        print(f"  action for {name} failed: {e}")
-                out = device_dir / f"{name}.png"
-                page.screenshot(path=str(out), full_page=False, type="png")
-                print(f"  {name}: {out}")
-            except Exception as e:
-                print(f"  {name}: FAILED - {e}")
+            response = page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            if response is None or not response.ok or urlsplit(page.url).path != path:
+                raise RuntimeError(f"Capture navigation failed for {name}")
+            page.wait_for_timeout(1200)
+            if wait_sel:
+                page.wait_for_selector(wait_sel, timeout=5000)
+            if action:
+                action(page)
+            out = device_dir / f"{name}.png"
+            page.screenshot(path=str(out), full_page=False, type="png")
+            print(f"  {name}: captured browser reference")
         context.close()
         browser.close()
 
 
 def main():
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    configure(os.environ)
+    OUT_DIR.mkdir(parents=True, exist_ok=False)
     for name, w, h, scale in DEVICES:
         capture(name, w, h, scale)
     print("\n=== DONE ===")
     print(f"Screenshots in {OUT_DIR}")
-    print("Upload the 3 best from each device folder to App Store Connect.")
+    files = {str(p.relative_to(OUT_DIR)): hashlib.sha256(p.read_bytes()).hexdigest()
+             for p in sorted(OUT_DIR.rglob("*.png"))}
+    (OUT_DIR / "capture-receipt.json").write_text(json.dumps({
+        "capture_type": "chromium_browser_reference",
+        "base_url": BASE_URL,
+        "signed_device_verified": False,
+        "resubmission_ready": False,
+        "files_sha256": files,
+    }, indent=2) + "\n")
+    print("Browser references only. Verify the exact signed candidate and Apple requirements separately.")
 
 
 if __name__ == "__main__":
