@@ -2,7 +2,7 @@ import { useAuth } from "@/context/AuthContext";
 import { GAMES } from "@/lib/games";
 import { Link } from "react-router-dom";
 import { LogOut, Sparkles, Snowflake, Bell, BellOff, ShoppingBag, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { sfx } from "@/lib/sound";
 import { BadgeShelf } from "@/components/rmc/Badge";
@@ -219,6 +219,14 @@ function ReminderToggle() {
 export function FreezePackShop() {
   const { user, refresh } = useAuth();
   const [busy, setBusy] = useState(false);
+  const operationBusy = useRef(false);
+  const operationScope = useRef(null);
+  useEffect(() => {
+    const scope = { active: true };
+    operationScope.current = scope;
+    return () => { scope.active = false; };
+  }, [user?.id]);
+
   const platform = nativePlatform();
   const isNativeApp = platform === "ios" || platform === "android";
   const [priceRequest, setPriceRequest] = useState(0);
@@ -245,7 +253,10 @@ export function FreezePackShop() {
 
 
   const doPurchase = async () => {
-    if (busy || !price) return;
+    if (operationBusy.current || !price || !isNativeApp || !user?.id) return;
+    operationBusy.current = true;
+    const scope = operationScope.current;
+    const isCurrent = () => scope?.active && operationScope.current === scope;
     setBusy(true);
     sfx.click();
     trackEvent("freeze_pack_checkout_started", {
@@ -255,6 +266,7 @@ export function FreezePackShop() {
     });
     try {
       const res = await purchaseFreezePack();
+      if (!isCurrent()) return;
       if (res.cancelled) {
         trackEvent("freeze_pack_checkout_cancelled", {
           product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
@@ -289,18 +301,26 @@ export function FreezePackShop() {
         credited: res.credited > 0,
       });
       await refresh();
+      if (!isCurrent()) return;
       if (res.credited > 0) {
         toast.success(`+${res.credited} streak freezes added!`);
       } else {
         toast.success("Purchase verified. Your freeze balance is up to date.");
       }
+    } catch {
+      if (isCurrent()) toast.error("Unable to confirm your balance. Check your account or use Restore Purchases before buying again.");
     } finally {
-      setBusy(false);
+      operationBusy.current = false;
+      // Release a mounted screen after an account change, but not after unmount.
+      if (operationScope.current?.active) setBusy(false);
     }
   };
 
   const doRestore = async () => {
-    if (busy) return;
+    if (operationBusy.current || !isNativeApp || !user?.id) return;
+    operationBusy.current = true;
+    const scope = operationScope.current;
+    const isCurrent = () => scope?.active && operationScope.current === scope;
     setBusy(true);
     sfx.click();
     trackEvent("freeze_pack_restore_started", {
@@ -310,6 +330,7 @@ export function FreezePackShop() {
     });
     try {
       const res = await restorePurchases();
+      if (!isCurrent()) return;
       if (!res.ok) {
         trackEvent("freeze_pack_restore_failed", {
           product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
@@ -326,10 +347,15 @@ export function FreezePackShop() {
         credited: res.credited > 0,
       });
       await refresh();
+      if (!isCurrent()) return;
       if (res.credited > 0) toast.success(`Restored ${res.credited} streak freezes`);
       else toast.success("Purchases restored");
+    } catch {
+      if (isCurrent()) toast.error("Unable to confirm your balance. Check your account or use Restore Purchases before buying again.");
     } finally {
-      setBusy(false);
+      operationBusy.current = false;
+      // Release a mounted screen after an account change, but not after unmount.
+      if (operationScope.current?.active) setBusy(false);
     }
   };
 

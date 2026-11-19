@@ -2,7 +2,10 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { FreezePackShop } from "./Profile";
 import { useAuth } from "@/context/AuthContext";
-import { getFreezePackPrice, nativePlatform, purchaseFreezePack } from "@/lib/iap";
+import { getFreezePackPrice, nativePlatform, purchaseFreezePack, restorePurchases } from "@/lib/iap";
+
+import { toast } from "sonner";
+import { trackEvent } from "@/lib/analytics";
 
 jest.mock("@/context/AuthContext", () => ({ useAuth: jest.fn() }));
 jest.mock("@/lib/iap", () => ({
@@ -23,7 +26,7 @@ jest.mock("@/components/rmc/Badge", () => ({ BadgeShelf: () => null }));
 jest.mock("@/components/rmc/ThemePicker", () => () => null);
 jest.mock("@/components/rmc/AccountRefreshNotice", () => () => null);
 
-let container, root, currentUser;
+let container, root, currentUser, refresh;
 const deferred = () => {
   let resolve;
   const promise = new Promise((done) => { resolve = done; });
@@ -38,7 +41,8 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
   currentUser = { id: "account-A", freezes_available: 0 };
-  useAuth.mockImplementation(() => ({ user: currentUser, refresh: jest.fn() }));
+  refresh = jest.fn().mockResolvedValue(undefined);
+  useAuth.mockImplementation(() => ({ user: currentUser, refresh }));
   nativePlatform.mockReturnValue("ios");
   purchaseFreezePack.mockResolvedValue({ ok: false, cancelled: true });
   container = document.createElement("div");
@@ -113,4 +117,62 @@ test("web never requests a native price or enables purchase and restore", async 
   expect(restore().disabled).toBe(true);
   expect(getFreezePackPrice).not.toHaveBeenCalled();
   expect(purchaseFreezePack).not.toHaveBeenCalled();
+});
+
+
+test.each(["purchase", "restore"])("%s ignores a late result after switching accounts", async (kind) => {
+  const pending = deferred();
+  getFreezePackPrice.mockResolvedValue("$0.99");
+  (kind === "purchase" ? purchaseFreezePack : restorePurchases).mockReturnValueOnce(pending.promise);
+  await render();
+  await click(kind === "purchase" ? buy() : restore());
+  expect(buy().disabled).toBe(true);
+  expect(restore().disabled).toBe(true);
+  currentUser = { id: "account-B" };
+  await render();
+  trackEvent.mockClear();
+  await act(async () => pending.resolve({ ok: true, credited: 5 }));
+  expect(refresh).not.toHaveBeenCalled();
+  expect(toast.success).not.toHaveBeenCalled();
+  expect(toast.error).not.toHaveBeenCalled();
+  expect(trackEvent).not.toHaveBeenCalled();
+  expect(buy().disabled).toBe(false);
+});
+
+test.each(["purchase", "restore"])("%s ignores a late result after unmount", async (kind) => {
+  const pending = deferred();
+  getFreezePackPrice.mockResolvedValue("$0.99");
+  (kind === "purchase" ? purchaseFreezePack : restorePurchases).mockReturnValueOnce(pending.promise);
+  await render();
+  await click(kind === "purchase" ? buy() : restore());
+  await act(async () => root.render(null));
+  trackEvent.mockClear();
+  await act(async () => pending.resolve({ ok: true, credited: 5 }));
+  expect(refresh).not.toHaveBeenCalled();
+  expect(toast.success).not.toHaveBeenCalled();
+  expect(trackEvent).not.toHaveBeenCalled();
+});
+
+test("purchase blocks same-turn duplicate clicks and restore overlap", async () => {
+  const pending = deferred();
+  getFreezePackPrice.mockResolvedValue("$0.99");
+  purchaseFreezePack.mockReturnValueOnce(pending.promise);
+  await render();
+  await act(async () => { buy().click(); buy().click(); restore().click(); });
+  expect(purchaseFreezePack).toHaveBeenCalledTimes(1);
+  expect(restorePurchases).not.toHaveBeenCalled();
+  await act(async () => pending.resolve({ cancelled: true }));
+  expect(buy().disabled).toBe(false);
+  expect(restore().disabled).toBe(false);
+});
+
+test("refresh rejection after payment is handled without recommending another purchase", async () => {
+  getFreezePackPrice.mockResolvedValue("$0.99");
+  purchaseFreezePack.mockResolvedValueOnce({ ok: true, credited: 5 });
+  refresh.mockRejectedValueOnce(new Error("offline"));
+  await render();
+  await click(buy());
+  expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("before buying again"));
+  expect(toast.success).not.toHaveBeenCalled();
+  expect(buy().disabled).toBe(false);
 });
