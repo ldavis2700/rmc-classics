@@ -113,6 +113,13 @@ Exact-candidate hosted results:
 - [Android readiness](https://github.com/ldavis2700/rmc-classics/actions/runs/44357078357): passed.
 - [iOS readiness](https://github.com/ldavis2700/rmc-classics/actions/runs/44357078505): passed, including locked frontend sync, tool startup and unsigned native archive.
 
+The unsigned readiness receipt records the compiled app's version/build number,
+source tree, workflow run/attempt, bundle identifier, toolchain versions and
+native API origin. Versions come from the archived app's Info.plist, not a
+planned App Store version. Its executable checksum is a build record only:
+the unsigned archive is not retained for distribution. Production, signed-device
+and TestFlight flags remain false; a configured API origin is not a live check.
+
 The iOS workflow explicitly sets `CODE_SIGNING_ALLOWED=NO` and rejects signed
 output. Its readiness receipt is not a signed IPA, TestFlight upload, device test
 or App Store approval. These results apply to the named commit; rerun applicable

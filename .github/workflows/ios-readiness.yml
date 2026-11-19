@@ -82,8 +82,26 @@ jobs:
             echo 'Refusing signed output in unsigned readiness workflow'
             exit 1
           fi
+          MARKETING_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")"
+          BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")"
+          test -n "$MARKETING_VERSION"
+          test -n "$BUILD_NUMBER"
           {
+            echo "repository=$GITHUB_REPOSITORY"
             echo "commit=$SOURCE_COMMIT"
+            echo "checkout_tree=$(git rev-parse HEAD^{tree})"
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "run_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "version=$MARKETING_VERSION"
+            echo "build_number=$BUILD_NUMBER"
+            echo "cocoapods_version=$(pod --version)"
+            echo "node_version=$(node --version)"
+            echo "npm_version=$(npm --version)"
+            echo "fastlane_version=$FASTLANE_VERSION"
+            echo 'backend_origin=https://rmcclassics.com'
+            echo 'production_deployment_verified=false'
+            echo 'signed_device_validation=false'
+            echo 'testflight_uploaded=false'
             echo 'bundle_id=com.rmcclassics.app'
             echo 'signing_state=unsigned-readiness-only'
             xcodebuild -version
