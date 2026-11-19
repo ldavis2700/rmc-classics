@@ -24,7 +24,8 @@ on:
 permissions:
   contents: read
 
-# Never allow two signed builds to race the same App Store Connect record.
+# Serialize this GitHub workflow only; Codemagic is outside this lock.
+# Follow the cross-provider release checks in docs/TESTFLIGHT_RELEASE_GATE.md.
 concurrency:
   group: rmc-classics-testflight-upload
   cancel-in-progress: false

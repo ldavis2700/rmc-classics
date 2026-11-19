@@ -171,3 +171,39 @@ dependencies, database binding, backup and rollback before release. The endpoint
 does not establish database health, frontend compatibility, signing, purchases or
 device acceptance. Keep `resubmission_ready` and `provider_provenance_verified`
 false until those separate evidence gates are satisfied.
+
+## Overlapping release jobs and retries
+
+The GitHub concurrency group serializes only this repository's GitHub signed
+workflow. It does not lock Codemagic, local uploads or App Store Connect.
+Both release paths read a latest build number and select the next number.
+The existing `reserved_build_number` receipt field and
+`reserved-build-number.txt` are records of that local selection, **not an atomic
+provider reservation**. Two jobs that read N before either upload becomes visible
+can both select N+1. No collision was observed in production; this is a verified
+gap in the source-level coordination.
+
+Before any authorized signed release, the connected operator must:
+
+1. Inspect both providers' current queued/running signed jobs and unresolved
+   upload attempts for this app. Use one release provider for the attempt and
+   record its run ID, source commit and chosen number in the canonical receipt.
+   If either provider's state is inaccessible, do not infer that it is idle.
+2. Do not start the fallback while Codemagic is queued/running, uploading or
+   awaiting reconciliation, or vice versa. The same applies to overlapping
+   Codemagic starts. Do not cancel an upload merely to switch providers.
+3. After a timeout, cancellation or ambiguous upload result, inspect App Store
+   Connect for the app/version/build and processing state before retrying.
+   A successful transport response alone does not prove processed TestFlight
+   availability. A failed client response does not prove Apple received nothing.
+4. If that exact build is already present, reconcile its candidate/receipt and
+   processing state. Do not upload it again or label it successful without that
+   evidence. If a new authorized build is necessary, reread the latest provider
+   state and rebuild with the newly selected number; never edit an existing IPA
+   or its receipt to relabel it.
+
+These are release-operation checks, not new owner-only work. They reduce
+operational overlap but do not create a distributed lock. Automated concurrent
+signed releases remain unsupported until a shared atomic allocator/lock is
+implemented and tested across both providers. A late pre-upload read alone would
+still have a race and must not be described as a fix.
