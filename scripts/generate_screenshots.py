@@ -50,19 +50,30 @@ DEVICES = [
 
 # (path, screen_name, wait_for_selector, extra_action_fn)
 SCREENS = [
-    ("/",                  "01-hero",         "[data-testid='brand-logo']", None),
-    ("/library",           "02-library",      "[data-testid='nav-library']", None),
-    ("/leaderboard",       "03-leaderboard",  "[data-testid='nav-leaderboard']", None),
-    ("/play/chess",        "04-chess",        None, None),
-    ("/play/memory",       "05-memory",       None, None),
-    ("/play/connect4",     "06-connect4",     None, None),
-    ("/profile",           "07-profile",      "[data-testid='profile-chip']", None),
+    ("/",                  "01-hero",         "[data-testid='hero-tag']", None),
+    ("/library",           "02-library",      "[data-testid='game-card-chess']", None),
+    ("/leaderboard",       "03-leaderboard",  "[data-testid='leaderboard-list']", None),
+    ("/play/chess", "04-chess", "[data-testid='chess-board']", None),
+    ("/play/memory", "05-memory", "[data-testid='memory-board']", None),
+    ("/play/connect4", "06-connect4", "[data-testid='c4-board']", None),
+    ("/profile",           "07-profile",      "[data-testid='profile-name']", None),
 ]
+
+
+def navigate(page, path):
+    """Reject redirects before filling credentials or accepting a capture."""
+    target = f"{BASE_URL}{path}"
+    response = page.goto(target, wait_until="domcontentloaded", timeout=20000)
+    expected, actual = urlsplit(target), urlsplit(page.url)
+    if (response is None or not response.ok
+            or (actual.scheme, actual.netloc, actual.path) !=
+               (expected.scheme, expected.netloc, expected.path)):
+        raise RuntimeError("Capture navigation did not reach the expected origin and route")
 
 
 def login(page):
     """Require successful login; never substitute guest images."""
-    page.goto(f"{BASE_URL}/login", wait_until="domcontentloaded")
+    navigate(page, "/login")
     page.locator("input[type='email']").fill(LOGIN_EMAIL)
     page.locator("input[type='password']").fill(LOGIN_PASSWORD)
     page.locator("[data-testid='login-terms-checkbox']").check()
@@ -95,10 +106,7 @@ def capture(device_name: str, w: int, h: int, scale: int):
         # Warm up + login
         login(page)
         for path, name, wait_sel, action in SCREENS:
-            url = f"{BASE_URL}{path}"
-            response = page.goto(url, wait_until="domcontentloaded", timeout=20000)
-            if response is None or not response.ok or urlsplit(page.url).path != path:
-                raise RuntimeError(f"Capture navigation failed for {name}")
+            navigate(page, path)
             page.wait_for_timeout(1200)
             if wait_sel:
                 page.wait_for_selector(wait_sel, timeout=5000)
