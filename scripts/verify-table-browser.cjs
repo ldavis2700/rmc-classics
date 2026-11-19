@@ -9,6 +9,18 @@ const base = process.env.RMC_BROWSER_TEST_URL || "http://127.0.0.1:8765";
 assert(["127.0.0.1", "localhost"].includes(new URL(base).hostname), "Use only a disposable local test backend");
 const password = "DisposableTableTest-2026!";
 const errors = [];
+const tableCaptures = {};
+async function captureTableState(page, name) {
+  if (!process.env.RMC_APP_CAPTURE_DIR) return;
+  assert.equal(new URL(page.url()).origin, new URL(base).origin);
+  assert(await page.locator("html").evaluate((el) => el.scrollWidth <= window.innerWidth),
+    `Horizontal overflow in ${name}`);
+  await page.evaluate(() => document.fonts.ready);
+  const bytes = await page.screenshot({ type: "png", fullPage: false, animations: "disabled" });
+  assert.equal(bytes.readUInt32BE(16), 390);
+  assert.equal(bytes.readUInt32BE(20), 844);
+  tableCaptures[name + ".png"] = bytes;
+}
 const labels = { C: "clubs", D: "diamonds", H: "hearts", S: "spades" };
 const ranks = { 11: "J", 12: "Q", 13: "K", 14: "A" };
 const cardLabel = (c) => `${ranks[c.slice(1)] || c.slice(1)} of ${labels[c[0]]}`;
@@ -36,6 +48,9 @@ async function captureActualApp(browser, user) {
     viewport: { width: 428, height: 926 }, deviceScaleFactor: 3,
     isMobile: true, hasTouch: true,
   });
+  // Captures obey the same isolation boundary as the gameplay acceptance.
+  await context.route("**/*", (route) => new URL(route.request().url()).origin === new URL(base).origin
+    ? route.continue() : route.abort());
   const page = await context.newPage();
   page.on("pageerror", (error) => errors.push(error.message));
   const files = {};
@@ -72,6 +87,13 @@ async function captureActualApp(browser, user) {
       fs.writeFileSync(path.join(output, name + ".png"), bytes);
       files[name + ".png"] = crypto.createHash("sha256").update(bytes).digest("hex");
     }
+    assert.equal(Object.keys(tableCaptures).length, 3, "Require all online table states");
+    const tableFiles = {};
+    for (const [name, bytes] of Object.entries(tableCaptures)) {
+      fs.writeFileSync(path.join(output, name), bytes);
+      tableFiles[name] = { sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
+        width: 390, height: 844, scope: "actual-online-table-disposable-ci-browser-only" };
+    }
     const manifest = fs.readFileSync("frontend/build/rmc-release.json");
     fs.writeFileSync(path.join(output, "capture-receipt.json"), JSON.stringify({
       scope: "actual-app-disposable-ci-browser-only", candidate_commit: candidate,
@@ -80,9 +102,9 @@ async function captureActualApp(browser, user) {
       account_type: "synthetic-disposable-test-account",
       web_manifest_sha256: crypto.createHash("sha256").update(manifest).digest("hex"),
       signed_device_validation: false, production_deployment_verified: false,
-      resubmission_ready: false, files_sha256: files,
+      resubmission_ready: false, files_sha256: files, table_captures: tableFiles,
     }, null, 2) + "\n");
-    console.log("PASS: eight actual-app browser captures, dimensions and hashes; disposable CI only");
+    console.log("PASS: eight app views and three online table captures, dimensions and hashes; disposable CI only");
   } finally {
     await context.close();
   }
@@ -287,6 +309,7 @@ async function clickMove(page, action) {
     assert.deepEqual((await api(`/tables/${code}`, users[0].token)).state.hand, original.state.hand);
     assert(await first.locator("html").evaluate((el) => el.scrollWidth <= window.innerWidth), "Mobile horizontal overflow");
     if (process.env.RMC_SCREENSHOT_DIR) await first.screenshot({ path: path.join(process.env.RMC_SCREENSHOT_DIR, "spades-online-mobile.png"), fullPage: true });
+    await captureTableState(first, "09-spades-online-bidding");
     let onlineMoves = 0;
     for (; onlineMoves < 60; onlineMoves += 1) {
       const host = await api(`/tables/${code}`, users[0].token);
@@ -300,6 +323,8 @@ async function clickMove(page, action) {
       assert.equal((await response).status(), 200);
     }
     assert.equal(onlineMoves, 56, "Four bids and 52 legal cards complete a Spades hand");
+    await first.getByRole("button", { name: "Deal next hand", exact: true }).waitFor();
+    await captureTableState(first, "10-spades-online-scoring");
     await first.getByRole("button", { name: "Deal next hand", exact: true }).click();
     await first.getByRole("button", { name: "Leave table", exact: true }).waitFor();
     first.once("dialog", (dialog) => dialog.accept());
@@ -316,6 +341,7 @@ async function clickMove(page, action) {
     }));
     const dominoCode = new URL(first.url()).pathname.split("/").pop();
     assert.equal(new URL(pages[1].url()).pathname.split("/").pop(), dominoCode);
+    await captureTableState(first, "11-dominoes-online-hand");
     let finished = false;
     for (let i = 0; i < 100; i += 1) {
       const host = await api(`/tables/${dominoCode}`, users[0].token);
