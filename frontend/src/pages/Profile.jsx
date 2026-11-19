@@ -2,7 +2,7 @@ import { useAuth } from "@/context/AuthContext";
 import { GAMES } from "@/lib/games";
 import { Link } from "react-router-dom";
 import { LogOut, Sparkles, Snowflake, Bell, BellOff, ShoppingBag, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { sfx } from "@/lib/sound";
 import { BadgeShelf } from "@/components/rmc/Badge";
@@ -12,8 +12,10 @@ import {
   disableDailyReminder,
   isReminderEnabled,
 } from "@/lib/notifications";
-import { purchaseFreezePack, restorePurchases, IAP_PRODUCTS } from "@/lib/iap";
+import { purchaseFreezePack, restorePurchases, IAP_PRODUCTS, nativePlatform, getFreezePackPrice } from "@/lib/iap";
 import { trackEvent } from "@/lib/analytics";
+
+import AccountRefreshNotice from "@/components/rmc/AccountRefreshNotice";
 
 export default function Profile() {
   const { user, logout, refresh } = useAuth();
@@ -28,6 +30,7 @@ export default function Profile() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 pt-8 md:px-8 md:pt-14">
+      <AccountRefreshNotice />
       <div className="rounded-3xl border border-white/10 bg-[#16152b] p-6 sm:p-8">
         <div className="flex flex-wrap items-center gap-6">
           <div
@@ -213,27 +216,62 @@ function ReminderToggle() {
   );
 }
 
-function FreezePackShop() {
+export function FreezePackShop() {
   const { user, refresh } = useAuth();
   const [busy, setBusy] = useState(false);
-  const isIOSApp = typeof window !== "undefined" && !!window.Capacitor?.isNativePlatform?.();
+  const operationBusy = useRef(false);
+  const operationScope = useRef(null);
+  useEffect(() => {
+    const scope = { active: true };
+    operationScope.current = scope;
+    return () => { scope.active = false; };
+  }, [user?.id]);
+
+  const platform = nativePlatform();
+  const isNativeApp = platform === "ios" || platform === "android";
+  const [priceRequest, setPriceRequest] = useState(0);
+  const [storePrice, setStorePrice] = useState(null);
+  const price = storePrice?.userId === user?.id ? storePrice.price : null;
+  const priceLoading = storePrice?.userId !== user?.id || storePrice?.loading;
+
+  useEffect(() => {
+    if (!isNativeApp || !user?.id) return undefined;
+    let active = true;
+    const userId = user.id;
+    setStorePrice({ userId, price: null, loading: true });
+    const timer = setTimeout(() => {
+      active = false;
+      setStorePrice({ userId, price: null, loading: false });
+    }, 12000);
+    getFreezePackPrice(userId).then((localizedPrice) => {
+      if (!active) return;
+      clearTimeout(timer);
+      setStorePrice({ userId, price: localizedPrice, loading: false });
+    });
+    return () => { active = false; clearTimeout(timer); };
+  }, [user?.id, isNativeApp, priceRequest]);
+
 
   const doPurchase = async () => {
-    if (busy) return;
+    if (operationBusy.current || !price || !isNativeApp || !user?.id) return;
+    operationBusy.current = true;
+    const scope = operationScope.current;
+    const isCurrent = () => scope?.active && operationScope.current === scope;
     setBusy(true);
     sfx.click();
     trackEvent("freeze_pack_checkout_started", {
       product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
       placement: "profile",
-      platform: "ios",
+      platform,
     });
     try {
       const res = await purchaseFreezePack();
+      if (!isCurrent()) return;
       if (res.cancelled) {
         trackEvent("freeze_pack_checkout_cancelled", {
           product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
           placement: "profile",
-          platform: "ios",
+          platform,
         });
         return;
       }
@@ -241,7 +279,7 @@ function FreezePackShop() {
         trackEvent("freeze_pack_checkout_failed", {
           product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
           placement: "profile",
-          platform: "ios",
+          platform,
           stage: "store",
         });
         toast.error(res.error || "Purchase failed");
@@ -251,7 +289,7 @@ function FreezePackShop() {
         trackEvent("freeze_pack_activation_pending", {
           product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
           placement: "profile",
-          platform: "ios",
+          platform,
         });
         toast.success(res.error || "Payment received. Your streak freezes are syncing.");
         return;
@@ -259,36 +297,45 @@ function FreezePackShop() {
       trackEvent("freeze_pack_purchase_completed", {
         product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
         placement: "profile",
-        platform: "ios",
+        platform,
         credited: res.credited > 0,
       });
       await refresh();
+      if (!isCurrent()) return;
       if (res.credited > 0) {
         toast.success(`+${res.credited} streak freezes added!`);
       } else {
         toast.success("Purchase verified. Your freeze balance is up to date.");
       }
+    } catch {
+      if (isCurrent()) toast.error("Unable to confirm your balance. Check your account or use Restore Purchases before buying again.");
     } finally {
-      setBusy(false);
+      operationBusy.current = false;
+      // Release a mounted screen after an account change, but not after unmount.
+      if (operationScope.current?.active) setBusy(false);
     }
   };
 
   const doRestore = async () => {
-    if (busy) return;
+    if (operationBusy.current || !isNativeApp || !user?.id) return;
+    operationBusy.current = true;
+    const scope = operationScope.current;
+    const isCurrent = () => scope?.active && operationScope.current === scope;
     setBusy(true);
     sfx.click();
     trackEvent("freeze_pack_restore_started", {
       product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
       placement: "profile",
-      platform: "ios",
+      platform,
     });
     try {
       const res = await restorePurchases();
+      if (!isCurrent()) return;
       if (!res.ok) {
         trackEvent("freeze_pack_restore_failed", {
           product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
           placement: "profile",
-          platform: "ios",
+          platform,
         });
         toast.error(res.error || "Nothing to restore");
         return;
@@ -296,14 +343,19 @@ function FreezePackShop() {
       trackEvent("freeze_pack_restore_completed", {
         product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
         placement: "profile",
-        platform: "ios",
+        platform,
         credited: res.credited > 0,
       });
       await refresh();
+      if (!isCurrent()) return;
       if (res.credited > 0) toast.success(`Restored ${res.credited} streak freezes`);
       else toast.success("Purchases restored");
+    } catch {
+      if (isCurrent()) toast.error("Unable to confirm your balance. Check your account or use Restore Purchases before buying again.");
     } finally {
-      setBusy(false);
+      operationBusy.current = false;
+      // Release a mounted screen after an account change, but not after unmount.
+      if (operationScope.current?.active) setBusy(false);
     }
   };
 
@@ -326,7 +378,7 @@ function FreezePackShop() {
               </h3>
               <p className="mt-1 max-w-md text-sm text-[#a3a1c6]">
                 Life happens. Freeze up to 5 missed days without losing your streak. One-time
-                purchase, credited instantly.
+                purchase. Your balance updates after payment verification.
               </p>
               <p className="mt-2 font-pixel text-xs text-[#7a789e]">
                 Current balance:{" "}
@@ -340,21 +392,21 @@ function FreezePackShop() {
           <div className="flex flex-col items-stretch gap-2 sm:min-w-[220px]">
             <button
               type="button"
-              onClick={doPurchase}
-              disabled={busy || !isIOSApp}
+              onClick={price ? doPurchase : () => setPriceRequest((value) => value + 1)}
+              disabled={busy || !isNativeApp || priceLoading}
               data-testid="freeze-buy-btn"
               className="btn-arcade rounded-2xl px-4 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50"
-              title={isIOSApp ? "" : "Available in the iOS app"}
+              title={isNativeApp ? "" : "Available in the mobile app"}
             >
               <ShoppingBag className="mr-2 inline h-4 w-4" />
-              {isIOSApp ? `Buy · ${IAP_PRODUCTS.FREEZE_PACK_5.price}` : "iOS App Only · $0.99"}
+              {!isNativeApp ? "Mobile App Only" : priceLoading ? "Loading price…" : price ? `Buy · ${price}` : "Retry store price"}
             </button>
             <button
               type="button"
               onClick={doRestore}
-              disabled={busy || !isIOSApp}
+              disabled={busy || !isNativeApp}
               data-testid="freeze-restore-btn"
-              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-[#a3a1c6] hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-[44px] rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-[#a3a1c6] hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               <RefreshCw className="mr-2 inline h-3.5 w-3.5" />
               Restore Purchases

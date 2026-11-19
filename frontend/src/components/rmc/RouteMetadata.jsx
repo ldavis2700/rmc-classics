@@ -12,6 +12,8 @@ const PRIVATE_ROUTE_PREFIXES = [
   "/account",
   "/battle/",
   "/battles",
+  "/tables",
+  "/table/",
   "/friends",
   "/login",
   "/profile",

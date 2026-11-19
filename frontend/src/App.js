@@ -25,6 +25,9 @@ import Uno from "@/pages/games/Uno";
 import Ludo from "@/pages/games/Ludo";
 import Scrabble from "@/pages/games/Scrabble";
 import Dominoes from "@/pages/games/Dominoes";
+import Spades from "@/pages/games/Spades";
+import Tables from "@/pages/Tables";
+import TablePlay from "@/pages/TablePlay";
 import GoFish from "@/pages/games/GoFish";
 import OldMaid from "@/pages/games/OldMaid";
 import Jenga from "@/pages/games/Jenga";
@@ -34,8 +37,10 @@ import Friends from "@/pages/Friends";
 import { Privacy, Terms, Support } from "@/pages/Legal";
 import SupportRMC from "@/pages/SupportRMC";
 
+import AccountRefreshNotice from "@/components/rmc/AccountRefreshNotice";
+
 function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
+  const { user, loading, refreshError } = useAuth();
   const location = useLocation();
   if (loading) {
     return (
@@ -44,6 +49,7 @@ function ProtectedRoute({ children }) {
       </div>
     );
   }
+  if (!user && refreshError) return <AccountRefreshNotice />;
   if (!user) {
     const from = `${location.pathname}${location.search}${location.hash}`;
     return <Navigate to="/login" replace state={{ from }} />;
@@ -92,6 +98,9 @@ function App() {
                 <Route path="/play/ludo" element={<Ludo />} />
                 <Route path="/play/scrabble" element={<Scrabble />} />
                 <Route path="/play/dominoes" element={<Dominoes />} />
+                <Route path="/play/spades" element={<Spades />} />
+                <Route path="/tables" element={<ProtectedRoute><Tables /></ProtectedRoute>} />
+                <Route path="/table/:roomId" element={<ProtectedRoute><TablePlay /></ProtectedRoute>} />
                 <Route path="/play/gofish" element={<GoFish />} />
                 <Route path="/play/oldmaid" element={<OldMaid />} />
                 <Route path="/play/jenga" element={<Jenga />} />

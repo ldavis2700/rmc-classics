@@ -47,6 +47,13 @@ export function Privacy() {
           and friend connections — used for leaderboards, daily challenges, and matchmaking.
         </li>
         <li>
+          <b>Online tables:</b> player IDs, display names, hands, bids, turns, and game state
+          keep Dominoes and Spades synchronized and allow reconnecting. Players receive
+          only their own hand. Waiting tables close after 15 minutes; active tables close
+          after an hour without a move. Table records are scheduled for deletion 24 hours
+          after creation or the latest move. Account deletion removes associated table records.
+        </li>
+        <li>
           <b>Device data:</b> anonymous device type and screen size for responsive rendering.
         </li>
         <li>
