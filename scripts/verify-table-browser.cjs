@@ -324,6 +324,17 @@ async function clickMove(page, action) {
     }
     assert.equal(onlineMoves, 56, "Four bids and 52 legal cards complete a Spades hand");
     await first.getByRole("button", { name: "Deal next hand", exact: true }).waitFor();
+    const mobileScores = first.getByTestId("spades-mobile-scoring");
+    await mobileScores.waitFor();
+    const roundScores = (await api(`/tables/${code}`, users[0].token)).state.last_round;
+    const pointCells = first.getByTestId("spades-mobile-points");
+    assert.equal(await pointCells.count(), 2);
+    for (let i = 0; i < roundScores.length; i += 1) {
+      assert.equal(await pointCells.nth(i).textContent(), `${roundScores[i].delta > 0 ? "+" : ""}${roundScores[i].delta}`);
+      const box = await pointCells.nth(i).boundingBox();
+      assert(box && box.x >= 0 && box.x + box.width <= 390, "Mobile points must fit without sideways scrolling");
+    }
+    await mobileScores.scrollIntoViewIfNeeded();
     await captureTableState(first, "10-spades-online-scoring");
     await first.getByRole("button", { name: "Deal next hand", exact: true }).click();
     await first.getByRole("button", { name: "Leave table", exact: true }).waitFor();
