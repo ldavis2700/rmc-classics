@@ -153,3 +153,48 @@ test('matching product and valid balance complete one store purchase and one cre
   assert.equal(result.credited, 5);
   assert.deepEqual(calls.map(([name]) => name), ['configure', 'purchaseStoreProduct', 'sync']);
 });
+
+test('localized price is read for exact SKU without purchase or credit sync', async () => {
+  const { iap, calls } = await harness({ getProducts: async (options) => {
+    assert.equal(options.type, 'NON_SUBSCRIPTION');
+    return { products: [
+      { identifier: 'other', priceString: '$9.99' },
+      { identifier: 'rmc.freeze.pack5', priceString: '1,19 €' },
+    ] };
+  } });
+  await iap.configureIAP('account-A');
+  assert.equal(await iap.getFreezePackPrice('account-A'), '1,19 €');
+  assert.deepEqual(calls.map(([name]) => name), ['configure']);
+});
+
+test('missing, malformed and unavailable prices never invent a fallback price', async () => {
+  for (const priceString of [undefined, null, '', '   ', 0, 'x'.repeat(129)]) {
+    const { iap } = await harness({ getProducts: async () => ({
+      products: [{ identifier: 'rmc.freeze.pack5', priceString }],
+    }) });
+    await iap.configureIAP('account-A');
+    assert.equal(await iap.getFreezePackPrice('account-A'), null);
+  }
+  const { iap } = await harness({ getProducts: async () => { throw Error('offline'); } });
+  await iap.configureIAP('account-A');
+  assert.equal(await iap.getFreezePackPrice('account-A'), null);
+  assert.equal(await iap.getFreezePackPrice('account-B'), null);
+});
+
+test('price lookup waits for configuration and discards a signed-out result', async () => {
+  const configuration = deferred();
+  const lookup = deferred();
+  const entered = deferred();
+  const { iap } = await harness({
+    configure: () => configuration.promise,
+    getProducts: () => { entered.resolve(); return lookup.promise; },
+  });
+  const setup = iap.configureIAP('account-A');
+  const price = iap.getFreezePackPrice('account-A');
+  configuration.resolve();
+  await setup;
+  await entered.promise;
+  iap.suspendIAP();
+  lookup.resolve({ products: [{ identifier: 'rmc.freeze.pack5', priceString: '¥150' }] });
+  assert.equal(await price, null);
+});

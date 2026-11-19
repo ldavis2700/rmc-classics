@@ -2,7 +2,7 @@
  * In-App Purchases via RevenueCat (Capacitor).
  *
  * Products:
- *   FREEZE_PACK_5  - Consumable, $0.99, grants 5 streak freezes.
+ *   FREEZE_PACK_5  - Consumable, store-priced, grants 5 streak freezes.
  *
  * Flow:
  *   1. configureIAP(user)      - call once after login (no-op on web)
@@ -23,7 +23,6 @@ export const IAP_PRODUCTS = {
   FREEZE_PACK_5: {
     id: "rmc.freeze.pack5",
     label: "5 Streak Freezes",
-    price: "$0.99",
     freezes: 5,
   },
 };
@@ -189,6 +188,30 @@ function pendingCreditSyncResult() {
     credited: 0,
     error: "Payment received. Your freezes are still syncing—sign in to the purchasing account and tap Restore Purchases shortly.",
   };
+}
+
+/** Read the store-formatted price without purchasing or syncing credits. */
+export async function getFreezePackPrice(userId) {
+  await configurationQueue;
+  if (!isNative() || !revenueCatKeyForPlatform() || configuredUserId !== userId) return null;
+  const generation = configurationGeneration;
+  if (!iapSessionStillActive(userId, generation)) return null;
+  try {
+    const Purchases = await getPurchases();
+    if (!Purchases || cachedProductCategory?.NON_SUBSCRIPTION == null) return null;
+    if (!iapSessionStillActive(userId, generation)) return null;
+    const { products } = await Purchases.getProducts({
+      productIdentifiers: [IAP_PRODUCTS.FREEZE_PACK_5.id],
+      type: cachedProductCategory.NON_SUBSCRIPTION,
+    });
+    if (!iapSessionStillActive(userId, generation)) return null;
+    const price = products?.find(
+      (product) => product?.identifier === IAP_PRODUCTS.FREEZE_PACK_5.id,
+    )?.priceString;
+    return typeof price === "string" && price.trim() && price.length <= 128 ? price : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Buy the 5-pack. Returns { ok, freezes_available? } or { ok: false, error }. */

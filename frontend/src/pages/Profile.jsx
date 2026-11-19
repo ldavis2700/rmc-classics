@@ -12,7 +12,7 @@ import {
   disableDailyReminder,
   isReminderEnabled,
 } from "@/lib/notifications";
-import { purchaseFreezePack, restorePurchases, IAP_PRODUCTS, nativePlatform } from "@/lib/iap";
+import { purchaseFreezePack, restorePurchases, IAP_PRODUCTS, nativePlatform, getFreezePackPrice } from "@/lib/iap";
 import { trackEvent } from "@/lib/analytics";
 
 import AccountRefreshNotice from "@/components/rmc/AccountRefreshNotice";
@@ -221,9 +221,31 @@ function FreezePackShop() {
   const [busy, setBusy] = useState(false);
   const platform = nativePlatform();
   const isNativeApp = platform === "ios" || platform === "android";
+  const [priceRequest, setPriceRequest] = useState(0);
+  const [storePrice, setStorePrice] = useState(null);
+  const price = storePrice?.userId === user?.id ? storePrice.price : null;
+  const priceLoading = storePrice?.userId !== user?.id || storePrice?.loading;
+
+  useEffect(() => {
+    if (!isNativeApp || !user?.id) return undefined;
+    let active = true;
+    const userId = user.id;
+    setStorePrice({ userId, price: null, loading: true });
+    const timer = setTimeout(() => {
+      active = false;
+      setStorePrice({ userId, price: null, loading: false });
+    }, 12000);
+    getFreezePackPrice(userId).then((localizedPrice) => {
+      if (!active) return;
+      clearTimeout(timer);
+      setStorePrice({ userId, price: localizedPrice, loading: false });
+    });
+    return () => { active = false; clearTimeout(timer); };
+  }, [user?.id, isNativeApp, priceRequest]);
+
 
   const doPurchase = async () => {
-    if (busy) return;
+    if (busy || !price) return;
     setBusy(true);
     sfx.click();
     trackEvent("freeze_pack_checkout_started", {
@@ -344,14 +366,14 @@ function FreezePackShop() {
           <div className="flex flex-col items-stretch gap-2 sm:min-w-[220px]">
             <button
               type="button"
-              onClick={doPurchase}
-              disabled={busy || !isNativeApp}
+              onClick={price ? doPurchase : () => setPriceRequest((value) => value + 1)}
+              disabled={busy || !isNativeApp || priceLoading}
               data-testid="freeze-buy-btn"
               className="btn-arcade rounded-2xl px-4 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50"
               title={isNativeApp ? "" : "Available in the mobile app"}
             >
               <ShoppingBag className="mr-2 inline h-4 w-4" />
-              {isNativeApp ? `Buy · ${IAP_PRODUCTS.FREEZE_PACK_5.price}` : "Mobile App Only"}
+              {!isNativeApp ? "Mobile App Only" : priceLoading ? "Loading price…" : price ? `Buy · ${price}` : "Retry store price"}
             </button>
             <button
               type="button"
