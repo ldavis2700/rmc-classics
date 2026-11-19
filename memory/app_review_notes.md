@@ -87,7 +87,7 @@ DATA COLLECTION (matches our Privacy Nutrition label)
 Full policy at https://rmcclassics.com/privacy
 
 WEB VERSION
-The same app runs at rmcclassics.com as a Progressive Web App. The iOS app is the same codebase wrapped in Capacitor with native features added on top. This is disclosed in our Privacy policy.
+The web build is intended to run at rmcclassics.com as a Progressive Web App; verify production availability independently before submitting this release. The iOS app is the same codebase wrapped in Capacitor with native features added on top. This is disclosed in our Privacy policy.
 
 TRADEMARKS WE DO USE
 "Chess", "Checkers", "Dominoes", "Go Fish", "Old Maid", "Ludo", "Snakes and Ladders", "Connect Four" — these are either genuinely public-domain classics or generic descriptive game names. We are not aware of any live trademark on them for game software.
