@@ -6,7 +6,7 @@ A successful run is not App Store submission approval.
 """
 from __future__ import annotations
 import os
-import sys
+import shutil
 from pathlib import Path
 
 import hashlib
@@ -91,7 +91,9 @@ def capture(device_name: str, w: int, h: int, scale: int):
 
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
-        browser = p.chromium.launch(executable_path="/usr/bin/google-chrome", headless=True)
+        # Prefer an installed Chromium; otherwise use Playwright's managed browser.
+        executable = shutil.which("google-chrome") or shutil.which("chromium")
+        browser = p.chromium.launch(executable_path=executable, headless=True)
         context = browser.new_context(
             viewport={"width": css_w, "height": css_h},
             device_scale_factor=scale,
