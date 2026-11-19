@@ -78,7 +78,10 @@ def login(page):
     page.locator("input[type='password']").fill(LOGIN_PASSWORD)
     page.locator("[data-testid='login-terms-checkbox']").check()
     page.locator("[data-testid='login-submit']").click()
-    page.wait_for_url(f"{BASE_URL}/", timeout=15000)
+    # The app routes successful default logins to /profile; an unrelated URL
+    # or a guest homepage must not count as an authenticated capture.
+    page.wait_for_url(f"{BASE_URL}/profile", wait_until="domcontentloaded", timeout=15000)
+    page.wait_for_selector("[data-testid='profile-name']", timeout=5000)
 
 
 
