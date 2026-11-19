@@ -35,7 +35,7 @@ let cachedProductCategory = null;
 let configurationGeneration = 0;
 let configurationQueue = Promise.resolve();
 
-function nativePlatform() {
+export function nativePlatform() {
   try {
     if (typeof window === "undefined" || !window.Capacitor?.isNativePlatform?.()) {
       return "";

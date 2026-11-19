@@ -12,7 +12,7 @@ import {
   disableDailyReminder,
   isReminderEnabled,
 } from "@/lib/notifications";
-import { purchaseFreezePack, restorePurchases, IAP_PRODUCTS } from "@/lib/iap";
+import { purchaseFreezePack, restorePurchases, IAP_PRODUCTS, nativePlatform } from "@/lib/iap";
 import { trackEvent } from "@/lib/analytics";
 
 import AccountRefreshNotice from "@/components/rmc/AccountRefreshNotice";
@@ -219,7 +219,8 @@ function ReminderToggle() {
 function FreezePackShop() {
   const { user, refresh } = useAuth();
   const [busy, setBusy] = useState(false);
-  const isIOSApp = typeof window !== "undefined" && !!window.Capacitor?.isNativePlatform?.();
+  const platform = nativePlatform();
+  const isNativeApp = platform === "ios" || platform === "android";
 
   const doPurchase = async () => {
     if (busy) return;
@@ -228,7 +229,7 @@ function FreezePackShop() {
     trackEvent("freeze_pack_checkout_started", {
       product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
       placement: "profile",
-      platform: "ios",
+      platform,
     });
     try {
       const res = await purchaseFreezePack();
@@ -236,7 +237,7 @@ function FreezePackShop() {
         trackEvent("freeze_pack_checkout_cancelled", {
           product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
           placement: "profile",
-          platform: "ios",
+          platform,
         });
         return;
       }
@@ -244,7 +245,7 @@ function FreezePackShop() {
         trackEvent("freeze_pack_checkout_failed", {
           product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
           placement: "profile",
-          platform: "ios",
+          platform,
           stage: "store",
         });
         toast.error(res.error || "Purchase failed");
@@ -254,7 +255,7 @@ function FreezePackShop() {
         trackEvent("freeze_pack_activation_pending", {
           product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
           placement: "profile",
-          platform: "ios",
+          platform,
         });
         toast.success(res.error || "Payment received. Your streak freezes are syncing.");
         return;
@@ -262,7 +263,7 @@ function FreezePackShop() {
       trackEvent("freeze_pack_purchase_completed", {
         product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
         placement: "profile",
-        platform: "ios",
+        platform,
         credited: res.credited > 0,
       });
       await refresh();
@@ -283,7 +284,7 @@ function FreezePackShop() {
     trackEvent("freeze_pack_restore_started", {
       product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
       placement: "profile",
-      platform: "ios",
+      platform,
     });
     try {
       const res = await restorePurchases();
@@ -291,7 +292,7 @@ function FreezePackShop() {
         trackEvent("freeze_pack_restore_failed", {
           product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
           placement: "profile",
-          platform: "ios",
+          platform,
         });
         toast.error(res.error || "Nothing to restore");
         return;
@@ -299,7 +300,7 @@ function FreezePackShop() {
       trackEvent("freeze_pack_restore_completed", {
         product_id: IAP_PRODUCTS.FREEZE_PACK_5.id,
         placement: "profile",
-        platform: "ios",
+        platform,
         credited: res.credited > 0,
       });
       await refresh();
@@ -329,7 +330,7 @@ function FreezePackShop() {
               </h3>
               <p className="mt-1 max-w-md text-sm text-[#a3a1c6]">
                 Life happens. Freeze up to 5 missed days without losing your streak. One-time
-                purchase, credited instantly.
+                purchase. Your balance updates after payment verification.
               </p>
               <p className="mt-2 font-pixel text-xs text-[#7a789e]">
                 Current balance:{" "}
@@ -344,18 +345,18 @@ function FreezePackShop() {
             <button
               type="button"
               onClick={doPurchase}
-              disabled={busy || !isIOSApp}
+              disabled={busy || !isNativeApp}
               data-testid="freeze-buy-btn"
               className="btn-arcade rounded-2xl px-4 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50"
-              title={isIOSApp ? "" : "Available in the iOS app"}
+              title={isNativeApp ? "" : "Available in the mobile app"}
             >
               <ShoppingBag className="mr-2 inline h-4 w-4" />
-              {isIOSApp ? `Buy · ${IAP_PRODUCTS.FREEZE_PACK_5.price}` : "iOS App Only · $0.99"}
+              {isNativeApp ? `Buy · ${IAP_PRODUCTS.FREEZE_PACK_5.price}` : "Mobile App Only"}
             </button>
             <button
               type="button"
               onClick={doRestore}
-              disabled={busy || !isIOSApp}
+              disabled={busy || !isNativeApp}
               data-testid="freeze-restore-btn"
               className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-[#a3a1c6] hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
