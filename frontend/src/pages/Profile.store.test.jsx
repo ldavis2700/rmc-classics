@@ -16,6 +16,7 @@ jest.mock("@/lib/sound", () => ({ sfx: { click: jest.fn() } }));
 jest.mock("@/lib/analytics", () => ({ trackEvent: jest.fn() }));
 jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 
+jest.mock("react-router-dom", () => ({ Link: () => null }));
 jest.mock("@/lib/games", () => ({ GAMES: [] }));
 jest.mock("@/lib/notifications", () => ({}));
 jest.mock("@/components/rmc/Badge", () => ({ BadgeShelf: () => null }));
