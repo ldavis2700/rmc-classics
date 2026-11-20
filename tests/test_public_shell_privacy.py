@@ -103,3 +103,62 @@ assert.doesNotThrow(() => context.initAnalytics());
 assert.doesNotThrow(() => context.trackEvent('ignored'));
 assert.doesNotThrow(() => context.trackPageview('/'));
 """, str(source)], check=True, capture_output=True, text=True)
+
+
+def test_posthog_filters_provider_urls_and_nested_properties():
+    # Exercise the actual send hook, including SDK-added fields that the React
+    # event helper never sees. Keep useful conversion/share fields and IDs.
+    subprocess.run(["node", "-e", r"""
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const html = fs.readFileSync(process.argv[1], 'utf8');
+const script = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)]
+  .map(m => m[1]).find(s => s.includes('posthog.init('));
+let options;
+const posthog = {__SV: 1, init: (_, config) => options = config, stopSessionRecording() {}};
+vm.runInNewContext(script, {document: {}, window: {posthog}, posthog});
+const sensitive = 'https://example.test/battle/private-table?invite=private#secret';
+const event = {event: 'freeze_pack_purchase_completed', timestamp: '2026-11-20T00:00:00Z',
+  properties: {
+    token: 'test-project', distinct_id: 'test-browser', $session_id: 'test-session',
+    $process_person_profile: false, $lib: 'web',
+    product_id: 'rmc.freeze.pack5', placement: 'profile', platform: 'ios', credited: true,
+    $current_url: sensitive, $pathname: '/battle/private-table', $referrer: sensitive,
+    $initial_current_url: sensitive, $initial_referrer: sensitive, $session_entry_url: sensitive,
+    utm_source: 'private-campaign', $initial_utm_source: 'private-campaign',
+    $set: {$current_url: sensitive}, $set_once: {$initial_current_url: sensitive},
+    unknown_future_sdk_property: sensitive, transaction_id: 'private-transaction',
+  }};
+const result = options.before_send(event);
+assert.equal(result.event, event.event);
+assert.equal(result.timestamp, event.timestamp);
+assert.equal(result.properties.distinct_id, 'test-browser');
+assert.equal(result.properties.$session_id, 'test-session');
+assert.equal(result.properties.$process_person_profile, false);
+assert.equal(result.properties.credited, true);
+assert.equal(result.properties.product_id, 'rmc.freeze.pack5');
+assert.equal(result.properties.placement, 'profile');
+assert.equal(result.properties.platform, 'ios');
+for (const key of Object.keys(event.properties).filter(k =>
+    !['token','distinct_id','$session_id','$process_person_profile','$lib',
+      'product_id','placement','platform','credited'].includes(k))) {
+  assert.equal(Object.hasOwn(result.properties, key), false, key);
+}
+assert.equal(event.properties.$current_url, sensitive); // no mutation of SDK state
+const share = options.before_send({event: 'game_share_completed', properties: {
+  game_id: 'spades', share_method: 'native_web_or_clipboard', referral_source: 'player_share',
+  partner: {url: sensitive}, channel: [sensitive], stage: Infinity,
+}});
+assert.equal(share.properties.game_id, 'spades');
+assert.equal(share.properties.share_method, 'native_web_or_clipboard');
+assert.equal(share.properties.referral_source, 'player_share');
+assert.equal(Object.hasOwn(share.properties, 'partner'), false);
+assert.equal(Object.hasOwn(share.properties, 'channel'), false);
+assert.equal(Object.hasOwn(share.properties, 'stage'), false);
+assert.equal(options.before_send(null), null);
+assert.equal(options.before_send({event: 'bad'}), null);
+const broken = {event: 'bad', properties: {}};
+Object.defineProperty(broken.properties, 'product_id', {get() {throw new Error('bad property');}});
+assert.equal(options.before_send(broken), null); // SDK hook errors cannot fall back to raw data
+""", str(PUBLIC_INDEX)], check=True, capture_output=True, text=True)

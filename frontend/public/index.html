@@ -178,6 +178,35 @@
                 capture_pageview: false,
                 capture_pageleave: false,
                 disable_session_recording: true,
+                // Explicit events still receive SDK URL/referrer/campaign metadata.
+                // Keep only reviewed scalar product fields and SDK routing/identity
+                // fields. Do not forward URLs, person updates, or nested payloads.
+                before_send: function (event) {
+                    try {
+                        if (!event || !event.properties || typeof event.properties !== "object") return null;
+                        var allowed = [
+                            "token", "distinct_id", "$device_id", "$session_id", "$window_id",
+                            "$lib", "$lib_version", "$process_person_profile", "$is_identified",
+                            "placement", "experiment", "cohort", "signed_in",
+                            "product_id", "platform", "stage", "credited",
+                            "preference", "ad_preference", "campaign_type", "inventory_status",
+                            "partner", "channel", "game_id", "share_method", "referral_source",
+                        ];
+                        var properties = {};
+                        allowed.forEach(function (key) {
+                            if (!Object.prototype.hasOwnProperty.call(event.properties, key)) return;
+                            var value = event.properties[key];
+                            if (typeof value === "string" || typeof value === "boolean" ||
+                                (typeof value === "number" && Number.isFinite(value))) {
+                                properties[key] = value;
+                            }
+                        });
+                        return Object.assign({}, event, { properties: properties });
+                    } catch (_) {
+                        // If filtering fails, drop telemetry instead of exposing raw data.
+                        return null;
+                    }
+                },
             });
             // Keep explicit product events; do not automatically capture interactions or replay.
             posthog.stopSessionRecording();
