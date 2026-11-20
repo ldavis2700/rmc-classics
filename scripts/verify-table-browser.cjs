@@ -295,6 +295,9 @@ async function clickMove(page, action) {
     ...(process.env.RMC_CHROMIUM_PATH ? { executablePath: process.env.RMC_CHROMIUM_PATH } : {}) });
   const pages = [];
   try {
+    if (process.env.RMC_VERIFY_CONFIGURED_ANALYTICS === "1") {
+      await require("./verify-configured-analytics.cjs").verifyConfiguredAnalytics(browser, base);
+    }
     const users = [];
     const stamp = Date.now();
     for (let i = 0; i < 4; i += 1) {

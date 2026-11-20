@@ -84,6 +84,8 @@ jobs:
         working-directory: frontend
         env:
           CI: 'false'
+          # Fixture only: browser acceptance intercepts every external request.
+          REACT_APP_GA_MEASUREMENT_ID: G-RMCCITEST0
         run: npm run build
 
       - name: Setup Python
@@ -118,6 +120,7 @@ jobs:
           RMC_APP_CAPTURE_DIR: ${{ runner.temp }}/rmc-app-captures
           RMC_CAPTURE_CANDIDATE: ${{ github.event.pull_request.head.sha || github.sha }}
           RMC_TEST_MONGO_URL: mongodb://127.0.0.1:27017/?serverSelectionTimeoutMS=5000
+          RMC_VERIFY_CONFIGURED_ANALYTICS: '1'
           RMC_PLAYWRIGHT_MODULE: ${{ runner.temp }}/rmc-browser/node_modules/playwright
         run: |
           npm install --prefix "$RUNNER_TEMP/rmc-browser" --no-save --no-audit --no-fund playwright@1.58.2
@@ -221,6 +224,9 @@ jobs:
             echo "run_id=$GITHUB_RUN_ID"
             echo "run_attempt=$GITHUB_RUN_ATTEMPT"
             echo 'backend_origin=same-origin'
+            echo 'ga_measurement_id=G-RMCCITEST0'
+            echo 'ga_scope=intercepted-ci-fixture-not-provider-validation'
+            echo 'deployable_without_rebuild=false'
             echo 'signed_device_validation=false'
             echo 'production_deployment_verified=false'
           } > "$RUNNER_TEMP/rmc-web-evidence/source-receipt.txt"
