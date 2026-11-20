@@ -107,10 +107,23 @@ jobs:
             xcodebuild -version
             shasum -a 256 "$APP/App"
           } > "$RUNNER_TEMP/ios-readiness.txt"
-      - name: Retain readiness receipt
+      - name: Package unsigned archive for independent verification
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          test -f RMC-readiness.xcarchive/Products/Applications/App.app/App
+          test -s ios-readiness.txt
+          tar -czf RMC-unsigned-readiness.tar.gz RMC-readiness.xcarchive
+          shasum -a 256 RMC-unsigned-readiness.tar.gz ios-readiness.txt > ios-readiness-SHA256SUMS
+          shasum -a 256 -c ios-readiness-SHA256SUMS
+      - name: Retain unsigned readiness evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ios-readiness-${{ github.event.pull_request.head.sha || github.sha }}
-          path: ${{ runner.temp }}/ios-readiness.txt
+          path: |
+            ${{ runner.temp }}/ios-readiness.txt
+            ${{ runner.temp }}/RMC-unsigned-readiness.tar.gz
+            ${{ runner.temp }}/ios-readiness-SHA256SUMS
+          compression-level: 0
           if-no-files-found: error
           retention-days: 14

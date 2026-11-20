@@ -1,6 +1,10 @@
 """Keep the native compile probe separate from signed distribution."""
 from pathlib import Path
 import unittest
+import os
+import subprocess
+import tempfile
+import tarfile
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,14 +31,20 @@ class IOSReadinessGuardTests(unittest.TestCase):
             self.assertIn(flag, archive)
         self.assertIn('Refusing signed output', archive)
 
-    def test_exact_source_and_receipt_only(self):
+    def test_exact_source_and_unsigned_evidence(self):
         checkout = self.steps[0]
         self.assertEqual(checkout['with']['ref'], '${{ env.SOURCE_COMMIT }}')
         self.assertFalse(checkout['with']['persist-credentials'])
         self.assertIn('git rev-parse HEAD', self.text)
         uploads = [s for s in self.steps if s.get('uses', '').startswith('actions/upload-artifact@')]
         self.assertEqual(len(uploads), 1)
-        self.assertEqual(uploads[0]['with']['path'], '${{ runner.temp }}/ios-readiness.txt')
+        self.assertEqual(set(uploads[0]['with']['path'].splitlines()), {
+            '${{ runner.temp }}/ios-readiness.txt',
+            '${{ runner.temp }}/RMC-unsigned-readiness.tar.gz',
+            '${{ runner.temp }}/ios-readiness-SHA256SUMS',
+        })
+        self.assertEqual(uploads[0]['with']['retention-days'], 14)
+        self.assertNotIn('if', uploads[0])  # never retain a failed signing guard's output
         self.assertEqual(uploads[0]['with']['if-no-files-found'], 'error')
         self.assertIn('signing_state=unsigned-readiness-only', self.text)
         self.assertIn('com.rmcclassics.app', self.text)
@@ -42,6 +52,31 @@ class IOSReadinessGuardTests(unittest.TestCase):
         for step in self.steps:
             if 'uses' in step:
                 self.assertRegex(step['uses'], r'@\w{40}$')
+
+    def test_archive_packaging_round_trip_and_tamper_detection(self):
+        command = next(s['run'] for s in self.steps
+                       if s.get('name') == 'Package unsigned archive for independent verification')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app = root / 'RMC-readiness.xcarchive/Products/Applications/App.app'
+            app.mkdir(parents=True)
+            binary = app / 'App'
+            binary.write_bytes(b'unsigned fixture, not a native build')
+            binary.chmod(0o755)
+            (root / 'ios-readiness.txt').write_text('signing_state=unsigned-readiness-only\n')
+            env = dict(os.environ, RUNNER_TEMP=directory)
+            subprocess.run(['bash', '-c', command], env=env, check=True, capture_output=True)
+            with tarfile.open(root / 'RMC-unsigned-readiness.tar.gz') as archive:
+                member = archive.getmember('RMC-readiness.xcarchive/Products/Applications/App.app/App')
+                self.assertEqual(archive.extractfile(member).read(), binary.read_bytes())
+                self.assertEqual(member.mode & 0o777, 0o755)
+            (root / 'ios-readiness.txt').write_text('tampered')
+            check = subprocess.run(['shasum', '-a', '256', '-c', 'ios-readiness-SHA256SUMS'],
+                                   cwd=root, capture_output=True)
+            self.assertNotEqual(check.returncode, 0)
+            binary.unlink()
+            missing = subprocess.run(['bash', '-c', command], env=env, capture_output=True)
+            self.assertNotEqual(missing.returncode, 0)
 
     def test_locked_install_and_explicit_origin(self):
         build = next(s for s in self.steps if s.get('working-directory') == 'frontend')
