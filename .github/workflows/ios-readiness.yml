@@ -81,6 +81,11 @@ jobs:
           plutil -lint "$APP/PrivacyInfo.xcprivacy"
           test "$(/usr/libexec/PlistBuddy -c 'Print :NSPrivacyAccessedAPITypes:0:NSPrivacyAccessedAPIType' "$APP/PrivacyInfo.xcprivacy")" = 'NSPrivacyAccessedAPICategoryUserDefaults'
           test "$(/usr/libexec/PlistBuddy -c 'Print :NSPrivacyAccessedAPITypes:0:NSPrivacyAccessedAPITypeReasons:0' "$APP/PrivacyInfo.xcprivacy")" = 'CA92.1'
+          # Required-reason APIs in a dynamic SDK cannot rely on the app manifest.
+          SDK_PRIVACY="$APP/Frameworks/CapacitorPreferences.framework/PrivacyInfo.xcprivacy"
+          plutil -lint "$SDK_PRIVACY"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSPrivacyAccessedAPITypes:0:NSPrivacyAccessedAPIType' "$SDK_PRIVACY")" = 'NSPrivacyAccessedAPICategoryUserDefaults'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSPrivacyAccessedAPITypes:0:NSPrivacyAccessedAPITypeReasons:0' "$SDK_PRIVACY")" = 'CA92.1'
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")" = 'com.rmcclassics.app'
           if codesign --verify "$APP" 2>/dev/null; then
             echo 'Refusing signed output in unsigned readiness workflow'
