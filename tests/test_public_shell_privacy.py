@@ -162,3 +162,48 @@ const broken = {event: 'bad', properties: {}};
 Object.defineProperty(broken.properties, 'product_id', {get() {throw new Error('bad property');}});
 assert.equal(options.before_send(broken), null); // SDK hook errors cannot fall back to raw data
 """, str(PUBLIC_INDEX)], check=True, capture_output=True, text=True)
+
+
+def test_ga_uses_screen_categories_without_private_navigation_data():
+    source = PUBLIC_INDEX.parents[1] / 'src/lib/analytics.js'
+    subprocess.run(['node', '-e', r"""
+const fs=require('node:fs'), vm=require('node:vm'), assert=require('node:assert/strict');
+const source=fs.readFileSync(process.argv[1],'utf8').replaceAll('export function','function');
+let loaded;
+const window={location:{pathname:'/battle/PRIVATE-ROOM',href:'https://private.test/battle/PRIVATE-ROOM?token=SECRET#SECRET'}};
+const context={window,process:{env:{REACT_APP_GA_MEASUREMENT_ID:'G-TEST'}},
+ document:{title:'PRIVATE NAME',referrer:'https://example.test/SECRET',createElement:()=>({}),
+ head:{appendChild(script){loaded=script;assert.equal(window.dataLayer.length,2);}}}};
+vm.createContext(context);vm.runInContext(source,context);context.initAnalytics();
+assert.equal(loaded.referrerPolicy,'no-referrer');
+let calls=window.dataLayer.map(args=>Array.from(args));
+assert.equal(calls[1][2].send_page_view,false);
+assert.equal(calls[1][2].page_location,'https://rmcclassics.com/battle');
+assert.equal(calls[1][2].page_referrer,'');
+assert.equal(calls[1][2].page_title,'RMC CLASSICS');
+assert.equal(calls.filter(c=>c[0]==='event').length,0);
+for(const [path,expected] of [
+ ['/battle/PRIVATE-ROOM?token=SECRET#SECRET','/battle'],
+ ['/play/spades?ref=SECRET','/play'],['/profile#SECRET','/profile'],
+ ['/PRIVATE-EMAIL','/'],['//private.test/SECRET','/'],
+ ['https://private.test/SECRET','/'],['/%62attle/SECRET','/'],[null,'/'],
+]){
+ window.dataLayer=[];context.trackPageview(path);
+ calls=window.dataLayer.map(args=>Array.from(args));assert.equal(calls.length,2);
+ assert.equal(calls[0][2].send_page_view,false);
+ assert.equal(calls[1][0],'event');assert.equal(calls[1][1],'page_view');
+ assert.equal(calls[1][2].page_location,'https://rmcclassics.com'+expected);
+ assert.equal(calls[1][2].page_referrer,'');
+ assert.ok(!JSON.stringify(calls).includes('SECRET'));
+}
+window.dataLayer=[];
+let posthogPayload;
+window.posthog={capture:(_,params)=>posthogPayload=params};
+const product={product_id:'rmc.freeze.pack5',credited:true,page_location:'SECRET',page_referrer:'SECRET',page_title:'SECRET',page_path:'SECRET'};
+context.trackEvent('freeze_pack_purchase_completed',product);
+calls=window.dataLayer.map(args=>Array.from(args));
+assert.equal(calls[0][2].product_id,'rmc.freeze.pack5');assert.equal(calls[0][2].credited,true);
+assert.equal(calls[0][2].page_location,'https://rmcclassics.com/battle');
+assert.ok(!JSON.stringify(calls).includes('SECRET'));assert.ok(!JSON.stringify(calls).includes('PRIVATE'));
+assert.equal(product.page_location,'SECRET');assert.equal(posthogPayload,product);
+""", str(source)], check=True, capture_output=True, text=True)

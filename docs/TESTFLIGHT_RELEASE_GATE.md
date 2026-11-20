@@ -240,3 +240,22 @@ of the actual provider/store configuration. Complete privacy questionnaire and
 signed-device acceptance remain separate release gates. Do not infer no data
 collection, no tracking, or Apple approval from successful compilation or the
 absence of an API name in a binary-string search.
+
+### Google Analytics navigation acceptance — November 20, 2026
+
+The optional GA helper now supplies category-only reporting URLs, an empty
+referrer and a fixed title on initialization, explicit events and manual pageviews.
+It queues configuration before loading the SDK and disables config-triggered
+pageviews. These are source safeguards, not proof of actual provider traffic.
+
+Before enabling GA on a release candidate, inspect the exact web data stream and
+verify Enhanced Measurement history-based pageviews are disabled. Google's
+[pageview documentation](https://developers.google.com/analytics/devguides/collection/ga4/views)
+explicitly says `send_page_view: false` does not disable those history events.
+In an authorized isolated environment, inspect actual outbound requests after
+initial navigation, history changes, purchase/restore events and sharing using
+synthetic room IDs, query strings, fragments and referrers. Confirm private values
+are absent and each intended pageview is counted once. Record stream settings,
+candidate SHA, SDK version and sanitized request evidence; do not send real user
+information or treat local SDK stubs as transport verification. Browser identifiers,
+consent behavior and other provider-added metadata need their own review.
