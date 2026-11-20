@@ -6,7 +6,14 @@
 **Privacy URL:** `https://rmcclassics.com/privacy`
 **Terms URL:** `https://rmcclassics.com/terms`
 
-> Everything below has been prepared. Steps marked ⚠️ require your action on a Mac with Xcode.
+> Historical preparation notes, not current release evidence. Do not follow the
+> old enrollment, build, screenshot-upload or owner-task instructions without
+> checking the current release gates in [TESTFLIGHT_RELEASE_GATE](../docs/TESTFLIGHT_RELEASE_GATE.md)
+> and [Apple review remediation](../docs/APPLE_REVIEW_2026-08-20.md).
+> Existing browser screenshots do not prove the signed release candidate.
+> The screenshot helper now requires an explicit authorized test origin/account
+> and a new output directory; failures stop capture and leave no completion receipt.
+> A successful capture is labeled browser-reference only, never resubmission-ready.
 
 ---
 
