@@ -49,6 +49,7 @@ async function captureActualApp(browser, user) {
     viewport: { width: 428, height: 926 }, deviceScaleFactor: 3,
     isMobile: true, hasTouch: true,
   });
+  let tabletContext;
   // Captures obey the same isolation boundary as the gameplay acceptance.
   await context.route("**/*", (route) => new URL(route.request().url()).origin === new URL(base).origin
     ? route.continue() : route.abort());
@@ -82,11 +83,49 @@ async function captureActualApp(browser, user) {
       await page.getByTestId(ready).waitFor();
       await page.evaluate(() => document.fonts.ready);
       await page.waitForTimeout(1200); // Finish entrance animations.
+      assert(await page.locator("html").evaluate((el) => el.scrollWidth <= window.innerWidth),
+        `Horizontal overflow in phone capture ${name}`);
       const bytes = await page.screenshot({ type: "png", fullPage: false, animations: "disabled" });
       assert.equal(bytes.readUInt32BE(16), 1284);
       assert.equal(bytes.readUInt32BE(20), 2778);
       fs.writeFileSync(path.join(output, name + ".png"), bytes);
       files[name + ".png"] = crypto.createHash("sha256").update(bytes).digest("hex");
+    }
+    // Tablet-sized Chromium evidence is layout coverage, not an iPad/native capture.
+    tabletContext = await browser.newContext({
+      viewport: { width: 1032, height: 1376 }, deviceScaleFactor: 2,
+      isMobile: true, hasTouch: true,
+    });
+    await tabletContext.route("**/*", (route) => new URL(route.request().url()).origin === new URL(base).origin
+      ? route.continue() : route.abort());
+    const tablet = await tabletContext.newPage();
+    tablet.on("pageerror", (error) => errors.push(error.message));
+    await tablet.goto(`${base}/login`);
+    await signIn(tablet, user.email);
+    await tablet.waitForURL(`${base}/profile`);
+    await tablet.getByTestId("profile-email").filter({ hasText: user.email }).waitFor();
+    fs.mkdirSync(path.join(output, "tablet"));
+    const tabletFiles = {};
+    for (const [route, name, ready] of screens) {
+      const response = await tablet.goto(`${base}${route}`);
+      assert(response.ok(), "Tablet capture route must respond successfully");
+      const destination = new URL(tablet.url());
+      assert.equal(destination.origin, new URL(base).origin);
+      assert([route, route === "/" ? "/" : `${route}/`].includes(destination.pathname),
+        `Unexpected tablet capture route: ${destination.pathname}`);
+      assert.equal(destination.search, "");
+      assert.equal(destination.hash, "");
+      await tablet.getByTestId(ready).waitFor();
+      await tablet.evaluate(() => document.fonts.ready);
+      await tablet.waitForTimeout(1200);
+      assert(await tablet.locator("html").evaluate((el) => el.scrollWidth <= window.innerWidth),
+        `Horizontal overflow in tablet capture ${name}`);
+      const bytes = await tablet.screenshot({ type: "png", fullPage: false, animations: "disabled" });
+      assert.equal(bytes.readUInt32BE(16), 2064);
+      assert.equal(bytes.readUInt32BE(20), 2752);
+      const file = `tablet/${name}.png`;
+      fs.writeFileSync(path.join(output, file), bytes);
+      tabletFiles[file] = crypto.createHash("sha256").update(bytes).digest("hex");
     }
     assert.equal(Object.keys(tableCaptures).length, 3, "Require all online table states");
     const tableFiles = {};
@@ -111,9 +150,13 @@ async function captureActualApp(browser, user) {
       web_manifest_sha256: crypto.createHash("sha256").update(manifest).digest("hex"),
       signed_device_validation: false, production_deployment_verified: false,
       resubmission_ready: false, files_sha256: files, table_captures: tableFiles, store_fixture: storeFixture,
+      tablet_captures: { scope: "tablet-sized-chromium-layout-only", width: 2064, height: 2752,
+        viewport_width: 1032, viewport_height: 1376, device_scale_factor: 2,
+        actual_ipad_validated: false, files_sha256: tabletFiles },
     }, null, 2) + "\n");
-    console.log("PASS: eight app views, three online tables and one simulated store capture; dimensions and hashes; disposable CI only");
+    console.log("PASS: eight phone and eight tablet-sized app views, three online tables and one simulated store capture; dimensions and hashes; disposable CI only");
   } finally {
+    if (tabletContext) await tabletContext.close();
     await context.close();
   }
 }
