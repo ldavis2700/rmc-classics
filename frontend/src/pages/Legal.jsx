@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 const LAST_UPDATED = "August 27, 2026";
 const CONTACT_EMAIL = "hello@rmcclassics.com";
 
-function Shell({ eyebrow, title, children }) {
+function Shell({ eyebrow, title, children, lastUpdated = LAST_UPDATED }) {
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-8 md:px-8 md:pt-14">
       <p className="font-pixel text-xs text-neon-cyan">// {eyebrow}</p>
@@ -14,7 +14,7 @@ function Shell({ eyebrow, title, children }) {
       >
         {title}
       </h1>
-      <p className="mt-2 text-xs text-[#7a789e]">Last updated: {LAST_UPDATED}</p>
+      <p className="mt-2 text-xs text-[#7a789e]">Last updated: {lastUpdated}</p>
       <div className="prose prose-invert mt-8 max-w-none text-sm leading-relaxed text-[#c9c7e6] [&_h2]:mt-8 [&_h2]:font-display [&_h2]:text-lg [&_h2]:font-bold [&_h2]:uppercase [&_h2]:tracking-tight [&_h2]:text-white [&_a]:text-neon-cyan [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-1">
         {children}
         <p className="mt-10 text-xs text-[#7a789e]">
@@ -29,7 +29,7 @@ function Shell({ eyebrow, title, children }) {
 
 export function Privacy() {
   return (
-    <Shell eyebrow="PRIVACY POLICY" title="Your data, in plain English">
+    <Shell eyebrow="PRIVACY POLICY" title="Your data, in plain English" lastUpdated="November 20, 2026">
       <p>
         RMC CLASSICS ("we", "us") builds a nostalgic collection of classic games at{" "}
         <a href="https://rmcclassics.com">rmcclassics.com</a>. This policy explains what we collect,
@@ -67,6 +67,11 @@ export function Privacy() {
         </li>
       </ul>
 
+      <h2>Purchase information</h2>
+      <p>
+        When you use in-app purchases, we share your stable RMC account ID with RevenueCat to associate purchases with your account. We use product and transaction information to verify purchases, credit freeze packs, prevent duplicate credits, and synchronize your balance when you use Restore Purchases. Transaction IDs are recorded with your RMC account, so this purchase information is linked to your account.
+      </p>
+
       <h2>What we do NOT collect</h2>
       <ul>
         <li>We do not collect location, contacts, camera, microphone, or health data.</li>
@@ -86,7 +91,7 @@ export function Privacy() {
 
       <h2>Data storage & security</h2>
       <p>
-        Your data is stored in MongoDB with encryption at rest and in transit (HTTPS/TLS 1.2+).
+        The app uses MongoDB to store account and gameplay data.
         Passwords are hashed with bcrypt. We use industry-standard JWT for session tokens.
       </p>
 
@@ -112,8 +117,7 @@ export function Privacy() {
 
       <h2>Third-party services</h2>
       <ul>
-        <li>MongoDB Atlas (data storage)</li>
-        <li>Cloudflare (CDN + DDoS protection)</li>
+        <li>MongoDB (account and gameplay data storage)</li>
         <li>Apple App Store / Google Play (distribution)</li>
         <li>RevenueCat (in-app purchase processing)</li>
         <li>Approved sponsors and affiliate partners, when a clearly labeled offer is active</li>
