@@ -173,9 +173,13 @@
             })(document, window.posthog || []);
             posthog.init("phc_DbsPb39SRc8z3EiQ6Dhj6ikv4H4rTKcht9d4sZSesceP", {
                 api_host: "https://us.i.posthog.com",
-                person_profiles: "identified_only",
+                person_profiles: "never",
+                autocapture: false,
+                capture_pageview: false,
+                capture_pageleave: false,
+                disable_session_recording: true,
             });
-            // Keep aggregate product analytics without recording player sessions.
+            // Keep explicit product events; do not automatically capture interactions or replay.
             posthog.stopSessionRecording();
         </script>
     </body>

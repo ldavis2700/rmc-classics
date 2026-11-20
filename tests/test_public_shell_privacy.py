@@ -1,4 +1,6 @@
 from pathlib import Path
+import re
+import subprocess
 
 
 PUBLIC_INDEX = Path(__file__).resolve().parents[1] / "frontend" / "public" / "index.html"
@@ -33,4 +35,30 @@ def test_session_recording_is_explicitly_disabled():
 
     assert 'api_host: "https://us.i.posthog.com"' in html
     assert "posthog.stopSessionRecording();" in html
-    assert "session_recording:" not in html
+    assert not re.search(r"^\s*session_recording\s*:", html, re.MULTILINE)
+
+
+def test_analytics_initialization_disables_automatic_capture():
+    # Execute the actual inline initializer with a loaded SDK stub. No network
+    # requests are made; this checks the options delivered before stopRecording.
+    subprocess.run(["node", "-e", r"""
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const html = fs.readFileSync(process.argv[1], 'utf8');
+const scripts = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+const script = scripts.find(s => s.includes('posthog.init('));
+let calls = [];
+const posthog = { __SV: 1,
+  init: (key, options) => calls.push(options),
+  stopSessionRecording: () => calls.push('stop'),
+};
+vm.runInNewContext(script, {document: {}, window: {posthog}, posthog});
+assert.equal(calls.length, 2);
+for (const key of ['autocapture', 'capture_pageview', 'capture_pageleave']) {
+  assert.equal(calls[0][key], false, key);
+}
+assert.equal(calls[0].disable_session_recording, true);
+assert.equal(calls[0].person_profiles, 'never');
+assert.equal(calls[1], 'stop');
+""", str(PUBLIC_INDEX)], check=True, capture_output=True, text=True)

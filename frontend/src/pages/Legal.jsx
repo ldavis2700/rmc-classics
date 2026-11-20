@@ -57,9 +57,8 @@ export function Privacy() {
           <b>Device data:</b> anonymous device type and screen size for responsive rendering.
         </li>
         <li>
-          <b>Analytics:</b> aggregated, non-identifying usage counts (page views, game starts,
-          voluntary share completions, and visits from player-shared game links) via
-          privacy-friendly analytics. We do not record who receives a shared link.
+          <b>Analytics:</b> We use PostHog for usage events and Google Analytics when configured. Events help us understand feature use, purchase flows, and app reliability. Analytics providers may receive browser, device, and network metadata and use browser identifiers; these events are not necessarily anonymous. PostHog automatic interaction capture, automatic page views, and session recording are disabled. Google Analytics may record page views when enabled. Events include voluntary share completions
+          and visits from player-shared game links. We do not record who receives a shared link.
         </li>
         <li>
           <b>Advertising preference:</b> whether you selected contextual or personalized advertising.
@@ -84,7 +83,7 @@ export function Privacy() {
       <ul>
         <li>To power leaderboards, friend battles, and daily challenges.</li>
         <li>To save your progress so you can log in on any device.</li>
-        <li>To improve the app and fix bugs (aggregated only).</li>
+        <li>To improve the app and fix bugs using usage events.</li>
         <li>To show contextual sponsor or affiliate offers.</li>
         <li>Only with your opt-in, to personalize offers using activity inside RMC CLASSICS.</li>
       </ul>
@@ -120,6 +119,7 @@ export function Privacy() {
         <li>MongoDB (account and gameplay data storage)</li>
         <li>Apple App Store / Google Play (distribution)</li>
         <li>RevenueCat (in-app purchase processing)</li>
+        <li>PostHog and, when configured, Google Analytics (usage analytics)</li>
         <li>Approved sponsors and affiliate partners, when a clearly labeled offer is active</li>
       </ul>
 
