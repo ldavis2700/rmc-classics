@@ -5,6 +5,7 @@ import os
 import subprocess
 import tempfile
 import tarfile
+import plistlib
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -77,6 +78,21 @@ class IOSReadinessGuardTests(unittest.TestCase):
             binary.unlink()
             missing = subprocess.run(['bash', '-c', command], env=env, capture_output=True)
             self.assertNotEqual(missing.returncode, 0)
+
+    def test_app_preferences_privacy_manifest_is_bundled(self):
+        manifest = ROOT / 'frontend/ios/App/App/PrivacyInfo.xcprivacy'
+        data = plistlib.loads(manifest.read_bytes())
+        self.assertEqual(data['NSPrivacyAccessedAPITypes'], [{
+            'NSPrivacyAccessedAPIType': 'NSPrivacyAccessedAPICategoryUserDefaults',
+            'NSPrivacyAccessedAPITypeReasons': ['CA92.1'],
+        }])
+        project = (ROOT / 'frontend/ios/App/App.xcodeproj/project.pbxproj').read_text()
+        resource_phase = project.split('/* Begin PBXResourcesBuildPhase section */')[1].split('/* End PBXResourcesBuildPhase section */')[0]
+        self.assertIn('A71200012026111900000001 /* PrivacyInfo.xcprivacy in Resources */', resource_phase)
+        self.assertIn('fileRef = A71200012026111900000002', project)
+        self.assertIn('path = PrivacyInfo.xcprivacy;', project)
+        self.assertIn('plutil -lint "$APP/PrivacyInfo.xcprivacy"', self.text)
+        self.assertIn('Print :NSPrivacyAccessedAPITypes:0:NSPrivacyAccessedAPITypeReasons:0', self.text)
 
     def test_locked_install_and_explicit_origin(self):
         build = next(s for s in self.steps if s.get('working-directory') == 'frontend')
