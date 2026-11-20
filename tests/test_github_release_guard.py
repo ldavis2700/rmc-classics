@@ -2,6 +2,9 @@
 
 import os
 from pathlib import Path
+import shutil
+import re
+import sys
 import subprocess
 import tempfile
 import textwrap
@@ -14,6 +17,7 @@ PR_WORKFLOW = (ROOT / ".github/workflows/pr-validation.yml").read_text()
 ANDROID_WORKFLOW = (ROOT / ".github/workflows/android-build.yml").read_text()
 FASTFILE = (ROOT / "frontend/ios/App/fastlane/Fastfile").read_text()
 CODEMAGIC = (ROOT / "codemagic.yaml").read_text()
+FASTLANE_INSTALLER = (ROOT / "scripts/install_fastlane_toolchain.sh").read_text()
 RELEASE_GATE = (ROOT / "docs/TESTFLIGHT_RELEASE_GATE.md").read_text()
 
 
@@ -25,10 +29,77 @@ def step_script(name):
 
 SOURCE_SCRIPT = step_script("Verify release source is current main")
 CONFIG_SCRIPT = step_script("Validate release configuration")
+NATIVE_SCRIPT = step_script("Verify native toolchain")
 CLEANUP_SCRIPT = step_script("Remove temporary signing material")
 
 
 class GitHubReleaseGuardTests(unittest.TestCase):
+    def test_signed_and_unsigned_builds_use_same_native_toolchain(self):
+        unsigned = (ROOT / ".github/workflows/ios-readiness.yml").read_text()
+        for setting in ("runs-on: macos-26",
+                        "DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer",
+                        "COCOAPODS_VERSION: 1.16.2"):
+            self.assertIn(setting, WORKFLOW)
+            self.assertIn(setting, unsigned)
+        self.assertLess(WORKFLOW.index("Verify deployed release endpoints"),
+                        WORKFLOW.index("Verify native toolchain"))
+        self.assertLess(WORKFLOW.index("Verify native toolchain"),
+                        WORKFLOW.index("Sync Capacitor iOS"))
+        self.assertIn('>> "$GITHUB_PATH"', NATIVE_SCRIPT)
+
+    def test_wrong_xcode_stops_before_installing_native_dependencies(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for name, script in {
+                "xcodebuild": "printf 'Xcode 16.4\\nBuild version fixture\\n'",
+                "gem": 'touch "$RUNNER_TEMP/gem-invoked"',
+            }.items():
+                executable = root / name
+                executable.write_text("#!/bin/sh\n" + script + "\n")
+                executable.chmod(0o755)
+            result = subprocess.run(["bash", "-c", NATIVE_SCRIPT],
+                                    env={**os.environ, "PATH": f"{root}:{os.environ['PATH']}",
+                                         "RUNNER_TEMP": temp},
+                                    capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse((root / "gem-invoked").exists())
+
+    @unittest.skipUnless(shutil.which("ruby"), "Ruby is required for gem activation regression")
+    def test_pod_wrapper_activates_pinned_library_with_newer_gem_installed(self):
+        # Exercise the actual generated wrapper against two isolated fixture gems.
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            gem_home = root / "gems"
+            (gem_home / "specifications").mkdir(parents=True)
+            for version in ("1.16.2", "1.17.0"):
+                package = gem_home / "gems" / f"cocoapods-{version}"
+                (package / "lib").mkdir(parents=True)
+                (package / "bin").mkdir()
+                (package / "lib/cocoapods.rb").write_text(f'puts "{version}"\n')
+                (package / "bin/pod").write_text('require "cocoapods"\n')
+                (gem_home / "specifications" / f"cocoapods-{version}.gemspec").write_text(
+                    'Gem::Specification.new do |s|\n'
+                    f'  s.name = "cocoapods"; s.version = "{version}"\n'
+                    '  s.summary = "fixture"; s.authors = ["fixture"]\n'
+                    '  s.files = ["lib/cocoapods.rb", "bin/pod"]\n'
+                    '  s.executables = ["pod"]\nend\n')
+            for name, script in {
+                "xcodebuild": "printf 'Xcode 26.5\\nBuild version fixture\\n'",
+                "gem": "exit 0",
+            }.items():
+                executable = root / name
+                executable.write_text("#!/bin/sh\n" + script + "\n")
+                executable.chmod(0o755)
+            result = subprocess.run(["bash", "-c", NATIVE_SCRIPT],
+                                    env={**os.environ, "PATH": f"{root}:{os.environ['PATH']}",
+                                         "RUNNER_TEMP": temp, "GITHUB_PATH": str(root / "path"),
+                                         "GEM_HOME": str(gem_home), "GEM_PATH": str(gem_home),
+                                         "COCOAPODS_VERSION": "1.16.2"},
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("1.16.2", result.stdout)
+            self.assertNotIn("1.17.0", result.stdout)
+
     def test_cocoapods_toolchain_is_exactly_pinned(self):
         self.assertIn("COCOAPODS_VERSION: 1.16.2", WORKFLOW)
         self.assertIn(
@@ -43,16 +114,18 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         self.assertNotIn("cocoapods: default", CODEMAGIC)
 
     def test_fastlane_toolchain_is_exactly_pinned_and_verified(self):
-        self.assertIn("FASTLANE_VERSION: 2.222.0", WORKFLOW)
-        self.assertIn(
-            'gem install fastlane --no-document --version "$FASTLANE_VERSION"',
-            WORKFLOW,
-        )
-        self.assertIn(
-            'Fastlane::VERSION == ENV.fetch("FASTLANE_VERSION")',
-            WORKFLOW,
-        )
-        self.assertNotIn("gem install fastlane -N -v 2.222", WORKFLOW)
+        unsigned = (ROOT / ".github/workflows/ios-readiness.yml").read_text()
+        for workflow in (WORKFLOW, unsigned):
+            self.assertIn("FASTLANE_VERSION: 2.222.0", workflow)
+            self.assertIn("run: bash scripts/install_fastlane_toolchain.sh", workflow)
+        self.assertIn('gem install fastlane --no-document --version "$FASTLANE_VERSION"', FASTLANE_INSTALLER)
+        self.assertIn('Fastlane::VERSION == ENV.fetch("FASTLANE_VERSION")', FASTLANE_INSTALLER)
+        self.assertLess(FASTLANE_INSTALLER.index('gem "fastlane",'),
+                        FASTLANE_INSTALLER.index('load Gem.bin_path'))
+        self.assertIn('>> "$GITHUB_PATH"', FASTLANE_INSTALLER)
+        self.assertIn('fastlane --version', FASTLANE_INSTALLER)
+        self.assertNotIn('fastlane testflight', FASTLANE_INSTALLER)
+        self.assertNotIn('ASC_', FASTLANE_INSTALLER)
 
     def test_github_release_actions_are_immutable_commit_pins(self):
         expected = {
@@ -75,7 +148,7 @@ class GitHubReleaseGuardTests(unittest.TestCase):
             },
         }
         uses = [
-            line.split("uses:", 1)[1].strip().split()[0]
+            line.strip().split("uses:", 1)[1].strip().split()[0]
             for workflow in (WORKFLOW, PR_WORKFLOW, ANDROID_WORKFLOW)
             for line in workflow.splitlines()
             if line.strip().startswith(("- uses:", "uses:"))
@@ -260,6 +333,37 @@ class GitHubReleaseGuardTests(unittest.TestCase):
         build = WORKFLOW.split("      - name: Build web bundle\n", 1)[1]
         build = build.split("      - name:", 1)[0]
         self.assertIn("REACT_APP_REVENUECAT_IOS_KEY: ${{ secrets.REACT_APP_REVENUECAT_IOS_KEY }}", build)
+
+    def test_fastlane_verification_uses_scoped_temporary_extraction(self):
+        self.assertIn('Dir.mktmpdir("rmc-ipa-verify-") do |verify_dir|', FASTFILE)
+        scope = FASTFILE.index('    rmc_with_ipa_verification do |verify_dir|')
+        self.assertLess(scope, FASTFILE.index('sh("unzip -q'))
+        self.assertLess(scope, FASTFILE.index('upload_to_testflight('))
+        self.assertNotIn('verify_dir = paths[:verify]', FASTFILE)
+        self.assertNotIn('FileUtils.mkdir_p(verify_dir)', FASTFILE)
+        self.assertIn('receipt_path = paths[:receipt]', FASTFILE)
+        self.assertIn('ipa_path = paths[:ipa]', FASTFILE)
+
+    def test_fastlane_certificate_helper_resolves_before_provider_actions(self):
+        match = re.search(
+            r'certificate_verifier = File\.expand_path\(\s*"([^"]+)", (__dir__)\s*\)',
+            FASTFILE,
+        )
+        self.assertIsNotNone(match, "Verifier must resolve relative to the Fastfile")
+        fastfile_dir = ROOT / "frontend/ios/App/fastlane"
+        helper = (fastfile_dir / match.group(1)).resolve()
+        self.assertEqual(helper, ROOT / "scripts/verify_ios_profile_certificate.py")
+        self.assertTrue(helper.is_file())
+        # Exercise the actual helper entry point from an unrelated working directory.
+        with tempfile.TemporaryDirectory() as temp:
+            result = subprocess.run([sys.executable, str(helper), "--help"],
+                                    cwd=temp, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--profile", result.stdout)
+        self.assertIn("--certificate", result.stdout)
+        guard = FASTFILE.index('File.file?(certificate_verifier)')
+        self.assertLess(guard, FASTFILE.index('app_store_connect_api_key('))
+        self.assertLess(guard, FASTFILE.index('build_app('))
 
     def test_fastlane_verifies_profile_identity_and_expiry_before_upload(self):
         profile = FASTFILE.index(

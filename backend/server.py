@@ -25,8 +25,13 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 try:
     from .game_tables import mount_table_routes
+    from .release_identity import backend_source_fingerprint
 except ImportError:
     from game_tables import mount_table_routes
+    from release_identity import backend_source_fingerprint
+
+# Capture at process startup; editing files cannot relabel an already running process.
+BACKEND_SOURCE_FINGERPRINT = backend_source_fingerprint()
 
 # ---------- Config ----------
 JWT_ALGORITHM = "HS256"
@@ -1396,6 +1401,12 @@ async def root():
     return {"app": "RMC CLASSICS", "status": "ok"}
 
 
+@api.get("/release")
+async def release_identity():
+    return {"app": "RMC CLASSICS", "backend_source_sha256": BACKEND_SOURCE_FINGERPRINT,
+            "scope": "source-fingerprint-only"}
+
+
 # ---------- In-App Purchases (RevenueCat) ----------
 FREEZE_PACK_5_ID = "rmc.freeze.pack5"
 FREEZE_PACK_5_QTY = 5
@@ -1546,8 +1557,21 @@ async def iap_webhook(request: Request):
 
 
 # ---------- Startup ----------
+def validate_startup_configuration():
+    # Reject unusable authentication before any startup database mutations.
+    if not os.environ.get("JWT_SECRET", "").strip():
+        raise RuntimeError("JWT_SECRET must be configured and nonblank")
+    admin_email = os.environ.get("ADMIN_EMAIL", "").lower().strip()
+    admin_password = os.environ.get("ADMIN_PASSWORD", "")
+    if bool(admin_email) != bool(admin_password):
+        raise RuntimeError("ADMIN_EMAIL and ADMIN_PASSWORD must be configured together")
+    if admin_email and len(admin_password) < 12:
+        raise RuntimeError("ADMIN_PASSWORD must be at least 12 characters")
+
+
 @app.on_event("startup")
 async def startup():
+    validate_startup_configuration()
     await table_service.indexes()
     await db.users.create_index("email", unique=True)
     await db.users.create_index("total_wins")
@@ -1560,10 +1584,6 @@ async def startup():
     # Operator provisioning is opt-in and must never fall back to public credentials.
     admin_email = os.environ.get("ADMIN_EMAIL", "").lower().strip()
     admin_password = os.environ.get("ADMIN_PASSWORD", "")
-    if bool(admin_email) != bool(admin_password):
-        raise RuntimeError("ADMIN_EMAIL and ADMIN_PASSWORD must be configured together")
-    if admin_email and len(admin_password) < 12:
-        raise RuntimeError("ADMIN_PASSWORD must be at least 12 characters")
 
     if admin_email:
         existing = await db.users.find_one({"email": admin_email})

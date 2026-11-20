@@ -9,10 +9,12 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const authAttempt = useRef(0);
+  const [refreshError, setRefreshError] = useState(null);
 
   const refresh = useCallback(async () => {
     const token = localStorage.getItem("rmc_token");
     if (!token) {
+      setRefreshError(null);
       suspendIAP();
       setUser(null);
       setLoading(false);
@@ -22,13 +24,21 @@ export function AuthProvider({ children }) {
       const { data } = await api.get("/auth/me");
       // Ignore responses belonging to an account that has since signed out or changed.
       if (localStorage.getItem("rmc_token") !== token) return;
+      setRefreshError(null);
       setUser(data.user);
       await configureIAP(data.user?.id);
     } catch (e) {
       if (localStorage.getItem("rmc_token") !== token) return;
-      localStorage.removeItem("rmc_token");
-      suspendIAP();
-      setUser(null);
+      if (e.response?.status === 401 || e.response?.status === 403) {
+        // Invalid credentials or required terms acceptance need a fresh sign-in.
+        setRefreshError(null);
+        localStorage.removeItem("rmc_token");
+        suspendIAP();
+        setUser(null);
+      } else {
+        // Connectivity/server failures do not establish that credentials expired.
+        setRefreshError("Unable to refresh your account. Check your connection and try again.");
+      }
     } finally {
       if (localStorage.getItem("rmc_token") === token || !localStorage.getItem("rmc_token")) setLoading(false);
     }
@@ -49,6 +59,7 @@ export function AuthProvider({ children }) {
       });
       if (attempt !== authAttempt.current) return { ok: false, error: "Sign-in attempt superseded." };
       localStorage.setItem("rmc_token", data.token);
+      setRefreshError(null);
       setUser(data.user);
       // Finish the fail-closed provider setup before reporting auth success so
       // an immediate paid action cannot race an unconfigured IAP client.
@@ -71,6 +82,7 @@ export function AuthProvider({ children }) {
       });
       if (attempt !== authAttempt.current) return { ok: false, error: "Sign-in attempt superseded." };
       localStorage.setItem("rmc_token", data.token);
+      setRefreshError(null);
       setUser(data.user);
       // Finish the fail-closed provider setup before reporting auth success so
       // an immediate paid action cannot race an unconfigured IAP client.
@@ -84,6 +96,7 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     authAttempt.current += 1;
+    setRefreshError(null);
     localStorage.removeItem("rmc_token");
     suspendIAP();
     setUser(null);
@@ -99,6 +112,7 @@ export function AuthProvider({ children }) {
       }
       // Deletion signs out just like logout, including in-flight auth attempts.
       authAttempt.current += 1;
+      setRefreshError(null);
       localStorage.removeItem("rmc_token");
       suspendIAP();
       setUser(null);
@@ -116,6 +130,7 @@ export function AuthProvider({ children }) {
       if (localStorage.getItem("rmc_token") !== token) {
         return { ok: false, error: "Account changed before the score result arrived." };
       }
+      setRefreshError(null);
       setUser(data.user);
       if (payload?.game_id && typeof payload?.score === "number") {
         submitLeaderboardScore(payload.game_id, payload.score);
@@ -134,7 +149,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, deleteAccount, refresh, submitScore }}>
+    <AuthContext.Provider value={{ user, loading, refreshError, login, register, logout, deleteAccount, refresh, submitScore }}>
       {children}
     </AuthContext.Provider>
   );

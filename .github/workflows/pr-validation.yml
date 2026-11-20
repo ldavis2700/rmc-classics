@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   validate:
-    # Playwright 1.58.2 does not publish chromium for ubuntu-26.04 yet.
+    # Keep the browser toolchain on its supported Ubuntu image.
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
@@ -55,12 +55,30 @@ jobs:
           npm install --global npm@10.9.4
           test "$(npm --version)" = "10.9.4"
 
-      - name: Verify account lifecycle race guards
-        run: node --test tests/test_auth_refresh_runtime.cjs tests/test_auth_attempts_runtime.cjs tests/test_account_actions_runtime.cjs
+      - name: Verify return paths and sharing fallback behavior
+        run: node --test tests/test_return_paths.mjs tests/test_share_runtime.mjs tests/test_auth_refresh_runtime.cjs tests/test_account_actions_runtime.cjs tests/test_auth_attempts_runtime.cjs
 
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+
+      - name: Verify rendered native store price states
+        working-directory: frontend
+        env:
+          CI: 'true'
+        run: npm test -- --watchAll=false --runInBand --testPathPattern=Profile.store.test.jsx
+
+      - name: Verify API request timeout
+        working-directory: frontend
+        run: node scripts/verify-api-timeout.mjs
+
+      - name: Verify API session identity at dispatch
+        working-directory: frontend
+        run: node scripts/verify-api-session.mjs
+
+      - name: Verify SVG loader compatibility
+        working-directory: frontend
+        run: node scripts/verify-svg-loader.cjs
 
       - name: Build frontend
         working-directory: frontend
@@ -76,16 +94,20 @@ jobs:
       - name: Validate backend syntax and focused release regressions
         run: |
           python -m py_compile backend/server.py
-          python -m pip install --disable-pip-version-check pytest==8.3.5
-          python -m pytest -q tests backend/tests/test_iap_idempotency_unit.py backend/tests/test_username_safety_unit.py backend/tests/test_block_visibility_unit.py backend/tests/test_safety_moderation_unit.py backend/tests/test_account_deletion_unit.py backend/tests/test_terms_consent_unit.py backend/tests/test_battle_invite_unit.py backend/tests/test_battle_join_unit.py backend/tests/test_battle_rematch_unit.py
+          python -m pip install --disable-pip-version-check pytest==8.3.5 PyYAML==6.0.2 playwright==1.62.0
+          python -m pytest -q backend/tests/test_iap_idempotency_unit.py backend/tests/test_username_safety_unit.py backend/tests/test_block_visibility_unit.py backend/tests/test_safety_moderation_unit.py backend/tests/test_account_deletion_unit.py backend/tests/test_terms_consent_unit.py backend/tests/test_battle_invite_unit.py backend/tests/test_battle_join_unit.py backend/tests/test_battle_rematch_unit.py tests/test_public_shell_privacy.py tests/test_route_metadata.py tests/test_iap_session_runtime.py
 
       - name: Test battle WebSocket input recovery
         # WebSocket protocol tests use only the standard library and fake I/O.
         # They exercise the real handler without live accounts or sockets.
-        run: python -m unittest discover -s backend/tests -p 'test_battle_websocket_unit.py' -v
+        run: |
+          python -m unittest discover -s backend/tests -p 'test_battle_websocket_unit.py' -v
+          python -m unittest discover -s backend/tests -p 'test_startup_configuration_unit.py' -v
 
       - name: Verify Dominoes and Spades rules, privacy, concurrency, and persistence
         env:
+          RMC_APP_CAPTURE_DIR: ${{ runner.temp }}/rmc-app-captures
+          RMC_CAPTURE_CANDIDATE: ${{ github.event.pull_request.head.sha || github.sha }}
           RMC_TEST_MONGO_URL: mongodb://127.0.0.1:27017/?serverSelectionTimeoutMS=5000
         run: |
           python -m pip install fastapi==0.110.1 motor==3.3.1 pymongo==4.6.3 httpx==0.27.2 mongomock-motor==0.0.36 uvicorn==0.25.0 bcrypt==4.1.3 PyJWT==2.15.1 python-dotenv==1.2.4 email-validator==2.3.0
@@ -93,6 +115,8 @@ jobs:
 
       - name: Verify production bundle through real API and disposable MongoDB
         env:
+          RMC_APP_CAPTURE_DIR: ${{ runner.temp }}/rmc-app-captures
+          RMC_CAPTURE_CANDIDATE: ${{ github.event.pull_request.head.sha || github.sha }}
           RMC_TEST_MONGO_URL: mongodb://127.0.0.1:27017/?serverSelectionTimeoutMS=5000
           RMC_PLAYWRIGHT_MODULE: ${{ runner.temp }}/rmc-browser/node_modules/playwright
         run: |
@@ -102,6 +126,8 @@ jobs:
 
       - name: Protect Apple Review remediation
         run: |
+          python tests/test_accessible_loading_state.py
+          python tests/test_reviewer_credentials_guard.py
           # Guideline 1.2: consent plus developer-visible Report and Block controls.
           grep -q 'accepted_terms: bool = False' backend/server.py
           grep -q 'TERMS_VERSION = "2026-08-20"' backend/server.py
@@ -151,7 +177,9 @@ jobs:
           test -d frontend/ios/App
 
       - name: Validate Fastlane lane syntax
-        run: ruby -c frontend/ios/App/fastlane/Fastfile
+        run: |
+          ruby -c frontend/ios/App/fastlane/Fastfile
+          ruby tests/test_fastlane_paths.rb
 
       - name: Validate Codemagic monetization release gate
         run: |
@@ -161,8 +189,57 @@ jobs:
           grep -q 'APP_STORE_APPLE_ID must be the real numeric App Store Connect Apple ID' codemagic.yaml
           grep -q 'REACT_APP_REVENUECAT_IOS_KEY must be a protected public iOS SDK key beginning with appl_' codemagic.yaml
           grep -q 'Verify release source is current main' codemagic.yaml
+          python -m unittest discover -s tests -p 'test_release_endpoint_guard.py'
+          python -m unittest discover -s tests -p 'test_frontend_release_guard.py'
+          python -m unittest discover -s tests -p 'test_ios_profile_certificate.py'
           python tests/test_release_source_guard.py
           python tests/test_release_configuration_guard.py
           python tests/test_github_release_guard.py
           python tests/test_ios_build_number_guard.py
+          python tests/test_ios_readiness_guard.py
+          python tests/test_screenshot_capture_guard.py
+          python tests/test_screenshot_capture_browser.py
           grep -q 'release-source.txt' codemagic.yaml
+
+      - name: Package tested web bundle and source receipt
+        env:
+          CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -eu
+          checkout_commit="$(git rev-parse --verify HEAD^{commit})"
+          checkout_tree="$(git rev-parse --verify HEAD^{tree})"
+          test -s frontend/build/rmc-release.json
+          mkdir -p "$RUNNER_TEMP/rmc-web-evidence"
+          tar -czf "$RUNNER_TEMP/rmc-web-evidence/frontend-build.tar.gz" -C frontend/build .
+          cp frontend/build/rmc-release.json "$RUNNER_TEMP/rmc-web-evidence/"
+          {
+            echo 'scope=isolated-ci-web-build-only'
+            echo "repository=$GITHUB_REPOSITORY"
+            echo "candidate_commit=$CANDIDATE_COMMIT"
+            echo "checkout_commit=$checkout_commit"
+            echo "checkout_tree=$checkout_tree"
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "run_attempt=$GITHUB_RUN_ATTEMPT"
+            echo 'backend_origin=same-origin'
+            echo 'signed_device_validation=false'
+            echo 'production_deployment_verified=false'
+          } > "$RUNNER_TEMP/rmc-web-evidence/source-receipt.txt"
+          cd "$RUNNER_TEMP/rmc-web-evidence"
+          sha256sum frontend-build.tar.gz rmc-release.json source-receipt.txt > SHA256SUMS
+          sha256sum -c SHA256SUMS
+
+      - name: Retain tested web build evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rmc-web-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/rmc-web-evidence/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Retain actual-app browser captures after acceptance
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rmc-ci-browser-captures-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/rmc-app-captures/
+          if-no-files-found: error
+          retention-days: 14

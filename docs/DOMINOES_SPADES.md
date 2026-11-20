@@ -56,11 +56,14 @@ online XP or update the profile leaderboard for table matches.
 
 ## Build and verification
 
-The release integration combines the feature with PR #57's native purchase,
-signing and Android safeguards. Install with npm 10.9.4 (the lockfile's version).
-See `docs/DOMINOES_SPADES_RELEASE_2026-10-21.md` for the source revisions,
-production-target evidence and remaining gates. The integration also pins
-`follow-redirects` to the patched 1.16.1 release in both package-manager overrides.
+The candidate includes the release-hardening history from
+`integration/rmc-release-hardening-54-56`, including native purchase, signing and
+Android changes. PR #57 head `70e48dc78e687c27373ec62d205a9094a5472201` is an
+ancestor of candidate `4ca9a4b28774ff3028f4cc69c6dc5e56858b48fa`; it does not need
+to be reapplied. Install with npm 10.9.4 (the lockfile's version). Incorporation
+of source does not satisfy the signing, deployed-service or device release gates.
+See `docs/TESTFLIGHT_RELEASE_GATE.md` for dated native evidence and the release
+sequence.
 
 ```sh
 cd frontend
@@ -82,18 +85,19 @@ against a disposable local backend serving `frontend/build`. It refuses remote
 targets. Install Playwright separately to run it; it creates only test accounts
 in the supplied disposable database.
 
-The reproducible full-stack wrapper creates and cleans up its own database and
-signing secret, and verifies synthetic pre-existing account, progress and purchase
-records survive startup and game activity:
+The full-stack wrapper creates and cleans up a disposable loopback MongoDB
+database and verifies seeded account, progress and purchase records survive
+startup and gameplay. It blocks browser requests to other origins.
 
 ```sh
 RMC_TEST_MONGO_URL=mongodb://127.0.0.1:27017 python scripts/run_table_browser_test.py
 ```
 
-Build the web bundle with `REACT_APP_BACKEND_URL` unset for this loopback test.
-The PR workflow installs the pinned browser and backend test dependencies. Local
-runners may specify `RMC_PLAYWRIGHT_MODULE` and `RMC_CHROMIUM_PATH` for installed
-test tools. This does not change the application dependencies or hosted targets.
+Build the web bundle with `REACT_APP_BACKEND_URL` unset. The PR workflow installs
+pinned browser/backend test tools separately from application dependencies.
+Local runners can set `RMC_PLAYWRIGHT_MODULE` and `RMC_CHROMIUM_PATH`.
+Passing this test establishes local integration, not production, signed-device,
+or App Store acceptance.
 
 ## Release boundary
 

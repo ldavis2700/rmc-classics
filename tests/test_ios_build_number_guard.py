@@ -12,7 +12,7 @@ CODEMAGIC = (ROOT / "codemagic.yaml").read_text()
 class IOSBuildNumberGuardTests(unittest.TestCase):
     def test_fastlane_reads_marketing_version_from_xcode_project(self):
         self.assertIn("app_version = get_version_number(", FASTFILE)
-        self.assertIn('xcodeproj: "App.xcodeproj"', FASTFILE)
+        self.assertIn('xcodeproj: paths[:project]', FASTFILE)
         self.assertIn('target: "App"', FASTFILE)
         self.assertIn("version: app_version", FASTFILE)
         self.assertNotIn('version: "1.0"', FASTFILE)

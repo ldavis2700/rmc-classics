@@ -19,7 +19,8 @@ class ReviewerNotesSafetyTests(unittest.TestCase):
             r"|^\s*-\s*(Username|Password):\s*(.*?)\s*$",
             text, re.MULTILINE | re.IGNORECASE,
         )
-        self.assertGreaterEqual(len(fields), 4)
+        self.assertIn("Never put reviewer passwords in this repository", text)
+        self.assertIn("App Store Connect’s private fields".replace("’", "'"), text)
         for table_field, table_value, list_field, list_value in fields:
             value = (table_value or list_value).strip()
             self.assertTrue(
@@ -32,10 +33,10 @@ class ReviewerNotesSafetyTests(unittest.TestCase):
 
     def test_review_copy_matches_fifteen_game_candidate(self):
         text = NOTES.read_text(encoding="utf-8")
-        self.assertIn("15 timeless childhood games", text)
+        self.assertIn("The catalog contains 15 games", text)
         self.assertIn("Dominoes, Spades, Go Fish", text)
-        self.assertIn("All 15 games appear in the Library", text)
-        self.assertIn("verify production availability independently", text.lower())
+        self.assertIn("not ready to paste or submit", text)
+        self.assertIn("founding-pilot preview is insufficient", text)
 
 
 if __name__ == "__main__":

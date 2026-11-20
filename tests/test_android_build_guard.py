@@ -315,13 +315,13 @@ class AndroidBuildGuardTests(unittest.TestCase):
             self.assertIn(safe_log, IAP)
 
     def test_iap_switches_provider_identity_between_local_accounts(self):
-        configure = IAP[
+        configure_request = IAP[
             IAP.index("async function configureIAPRequest"):
-            IAP.index("/** Configure RevenueCat with")
+            IAP.index("/** Configure RevenueCat with the logged-in user's stable ID.")
         ]
-        switch = configure[
-            configure.index("if (configured) {"):
-            configure.index("  try {\n    await Purchases.configure")
+        switch = configure_request[
+            configure_request.index("if (configured) {"):
+            configure_request.index("  try {\n    await Purchases.configure")
         ]
         self.assertIn(
             "await Purchases.logIn({ appUserID: normalizedUserId })",
@@ -384,33 +384,37 @@ class AndroidBuildGuardTests(unittest.TestCase):
         self.assertIn("Purchases are temporarily unavailable.", restore)
 
     def test_iap_requires_configured_stable_user_before_store_calls(self):
-        configure = IAP[
-            IAP.index("async function configureIAPRequest"):
-            IAP.index("/** Buy the 5-pack")
+        normalizer = IAP[
+            IAP.index("function normalizedIAPUserId"):
+            IAP.index("/** Configure one serialized RevenueCat identity request.")
         ]
         self.assertIn(
-            'const normalizedUserId = normalizedIAPUserId(userId);',
-            configure,
+            'if (typeof userId !== "string") return "";',
+            normalizer,
         )
-        identity = IAP.split("function normalizedIAPUserId(userId)", 1)[1].split(
-            "/** Configure one serialized", 1
-        )[0]
-        self.assertIn('if (typeof userId !== "string") return "";', identity)
-        self.assertIn('const hasOuterWhitespace = value !== userId;', identity)
-        self.assertIn('|| hasOuterWhitespace', identity)
-        self.assertIn("!normalizedUserId", configure)
-        self.assertIn("appUserID: normalizedUserId", configure)
+        self.assertIn("const value = userId.trim();", normalizer)
+        configure_request = IAP[
+            IAP.index("async function configureIAPRequest"):
+            IAP.index("/** Configure RevenueCat with the logged-in user's stable ID.")
+        ]
+        configure = IAP[
+            IAP.index("export async function configureIAP"):
+            IAP.index("/** Buy the 5-pack")
+        ]
+        self.assertIn("!normalizedUserId", configure_request)
+        self.assertIn("appUserID: normalizedUserId", configure_request)
         self.assertIn('let configuredUserId = "";', IAP)
-        self.assertIn("configuredUserId === normalizedUserId", configure)
+        self.assertIn("configuredUserId === normalizedUserId", configure_request)
+        self.assertIn("configuredUserId !== normalizedUserId", configure)
         self.assertIn('configuredUserId = "";', configure)
-        self.assertIn("configuredUserId = normalizedUserId", configure)
-        missing_identity_gate = configure.index(
+        self.assertIn("configuredUserId = normalizedUserId", configure_request)
+        missing_identity_gate = configure_request.index(
             "if (!normalizedUserId || !revenueCatKey) {"
         )
-        clear_identity = configure.index(
+        clear_identity = configure_request.index(
             'configuredUserId = "";', missing_identity_gate
         )
-        reject_configuration = configure.index(
+        reject_configuration = configure_request.index(
             "return false;", clear_identity
         )
         self.assertLess(missing_identity_gate, clear_identity)

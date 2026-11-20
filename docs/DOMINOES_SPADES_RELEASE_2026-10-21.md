@@ -1,3 +1,5 @@
+> Historical October 21 checkpoint. Current candidate evidence and blockers are recorded in PR #59 and HAE-12; the revisions and dependency pins below are historical, not release approval.
+
 # Dominoes and Spades release integration — October 21, 2026
 
 ## Source and integration

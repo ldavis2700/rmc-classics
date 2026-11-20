@@ -15,6 +15,7 @@ function harness(provider) {
     authAttempt: { current: 0 },
     api: { delete: () => { const gate = deferred(); deletions.push(gate); return gate.promise; }, post: () => { const gate = deferred(); requests.push(gate); return gate.promise; } },
     localStorage: { getItem: () => state.token, setItem: (_, token) => { state.token = token; }, removeItem: () => { state.token = null; } },
+    setRefreshError: error => { state.refreshError = error; },
     setUser: user => { state.user = user; },
     configureIAP: async id => { configured.push(id); if (provider) await provider.promise; },
     suspendIAP: () => configured.push('suspend'),

@@ -7,6 +7,8 @@ on:
     paths:
       - 'frontend/**'
       - '.github/workflows/ios-readiness.yml'
+      - 'tests/test_ios_readiness_guard.py'
+      - 'scripts/install_fastlane_toolchain.sh'
 
 permissions:
   contents: read
@@ -22,7 +24,8 @@ jobs:
     env:
       SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
       DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
-      COCOAPODS_VERSION: 1.17.0
+      COCOAPODS_VERSION: 1.16.2
+      FASTLANE_VERSION: 2.222.0
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
@@ -40,11 +43,19 @@ jobs:
           xcodebuild -version
           test "$(xcodebuild -version | head -1)" = "Xcode 26.5"
           gem install cocoapods --no-document --version "$COCOAPODS_VERSION"
-          # Verify the exact installed CLI rather than silently accepting future runner drift.
+          # Activate the pinned gem before its executable requires CocoaPods.
+          # Resolving bin_path alone can still load a newer installed library.
+          mkdir -p "$RUNNER_TEMP/rmc-bin"
+          printf '%s\n' '#!/usr/bin/env ruby' 'gem "cocoapods", ENV.fetch("COCOAPODS_VERSION")' 'load Gem.bin_path("cocoapods", "pod", ENV.fetch("COCOAPODS_VERSION"))' > "$RUNNER_TEMP/rmc-bin/pod"
+          chmod +x "$RUNNER_TEMP/rmc-bin/pod"
+          export PATH="$RUNNER_TEMP/rmc-bin:$PATH"
+          echo "$RUNNER_TEMP/rmc-bin" >> "$GITHUB_PATH"
           pod --version
           test "$(pod --version)" = "$COCOAPODS_VERSION"
           npm install --global npm@10.9.4
           test "$(npm --version)" = "10.9.4"
+      - name: Verify release tool startup without credentials
+        run: bash scripts/install_fastlane_toolchain.sh
       - name: Build and sync locked frontend
         working-directory: frontend
         env:
@@ -63,7 +74,7 @@ jobs:
           xcodebuild -workspace App.xcworkspace -scheme App \
             -configuration Release -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/RMC-readiness.xcarchive" \
-            CODE_SIGNING_ALLOWED=NO archive
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" archive
           APP="$RUNNER_TEMP/RMC-readiness.xcarchive/Products/Applications/App.app"
           test -d "$APP"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")" = 'com.rmcclassics.app'
@@ -71,8 +82,26 @@ jobs:
             echo 'Refusing signed output in unsigned readiness workflow'
             exit 1
           fi
+          MARKETING_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")"
+          BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")"
+          test -n "$MARKETING_VERSION"
+          test -n "$BUILD_NUMBER"
           {
+            echo "repository=$GITHUB_REPOSITORY"
             echo "commit=$SOURCE_COMMIT"
+            echo "checkout_tree=$(git rev-parse HEAD^{tree})"
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "run_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "version=$MARKETING_VERSION"
+            echo "build_number=$BUILD_NUMBER"
+            echo "cocoapods_version=$(pod --version)"
+            echo "node_version=$(node --version)"
+            echo "npm_version=$(npm --version)"
+            echo "fastlane_version=$FASTLANE_VERSION"
+            echo 'backend_origin=https://rmcclassics.com'
+            echo 'production_deployment_verified=false'
+            echo 'signed_device_validation=false'
+            echo 'testflight_uploaded=false'
             echo 'bundle_id=com.rmcclassics.app'
             echo 'signing_state=unsigned-readiness-only'
             xcodebuild -version

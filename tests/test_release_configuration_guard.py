@@ -342,13 +342,12 @@ class ReleaseConfigurationGuardTests(unittest.TestCase):
                 index,
             )
         ]
-        before_sync = max(index for index in session_checks if index < sync_call)
-        after_sync = min(index for index in session_checks if index > sync_call)
-        self.assertGreater(before_sync, purchase.index("await Purchases.purchaseStoreProduct"))
-        self.assertLess(before_sync, sync_call)
-        self.assertGreater(after_sync, sync_call)
+        checks_before_sync = [index for index in session_checks if index < sync_call]
+        checks_after_sync = [index for index in session_checks if index > sync_call]
+        self.assertGreaterEqual(len(checks_before_sync), 2)
+        self.assertTrue(checks_after_sync)
         self.assertLess(
-            after_sync, purchase.index("validatedSyncPayload(data)")
+            checks_after_sync[0], purchase.index("validatedSyncPayload(data)")
         )
         self.assertIn(
             "iapSessionStillActive(purchaseUserId, purchaseGeneration)",

@@ -17,6 +17,7 @@ function harness(token = 'original-token') {
     authAttempt: { current: 0 },
     localStorage: { getItem: () => state.token, removeItem: () => { state.token = null; calls.push('remove'); } },
     api: { delete: () => { calls.push('request'); return pending; }, post: () => { calls.push('request'); return pending; } },
+    setRefreshError: error => { state.refreshError = error; },
     setUser: (user) => { state.user = user; calls.push('user'); },
     suspendIAP: () => calls.push('suspend'),
     submitLeaderboardScore: () => calls.push('leaderboard'),

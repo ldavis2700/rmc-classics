@@ -58,7 +58,8 @@ Before a signed build can continue, the workflow verifies:
 2. the App Store app ID is a valid non-placeholder number
 3. the RevenueCat iOS public SDK key is present
 4. signing files can be fetched from the configured App Store Connect integration
-5. the web bundle, Capacitor sync, CocoaPods install, and signed IPA build succeed
+5. the deployed release endpoints pass `scripts/verify_release_endpoints.py --match-backend-source`
+6. the web bundle, Capacitor sync, CocoaPods install, and signed IPA build succeed
 
 The current-main comparison runs first, followed by release-configuration validation, before dependency installation or the scripted signing/upload steps. Missing configuration reports variable names and the `rmc_release` group without printing values. Codemagic may perform its own signing setup before custom scripts.
 
@@ -66,13 +67,143 @@ If configuration validation fails, open the RMC Classics app's Codemagic environ
 
 ## Release sequence
 
-1. Merge all intended corrections into `main`.
-2. Wait for GitHub validation and the Vercel deployment check to pass.
-3. Manually select current `main` in Codemagic and start `ios-testflight`; repository pushes and tags are intentionally ignored for this signed workflow.
-4. Confirm **Verify release source is current main** succeeds.
-5. Confirm the remaining Codemagic steps succeed and the build appears in TestFlight.
-6. Retain the generated `release-source.txt`, `release-ipa-metadata.txt`, and `release-ipa-metadata.txt.sha256` artifacts from the same run.
-7. Verify the receipt sidecar with the exact command above and bind every recorded identity field to the release candidate.
-8. Smoke-test that exact TestFlight build before App Store submission.
+1. Confirm the candidate incorporates all intended corrections and passes hosted
+   PR, Android and unsigned iOS checks; then merge under the applicable review gates.
+2. Identify the actual main-game hosting projects and database binding. Record
+   compatible frontend/backend revisions, data-preservation/backup evidence and
+   rollback identifiers; deploy the compatible pair using the verified provider.
+   A founding-pilot Vercel preview or deployment check is insufficient.
+3. Verify the deployed API/game metadata and direct privacy/terms/support routes.
+   Run `python3 scripts/verify_release_endpoints.py --origin https://rmcclassics.com --match-backend-source`.
+   This verifies availability and matching backend source, not provider provenance
+   or signed-device functionality.
+   Do not proceed through signing while the deployed endpoint gate fails.
+4. With signed-build/upload authorization and verified App Store configuration,
+   manually select current `main` in Codemagic and start `ios-testflight`;
+   repository pushes and tags are intentionally ignored for this workflow.
+5. Confirm **Verify release source is current main** and every remaining step
+   succeeds, and independently confirm the processed build appears in TestFlight.
+6. Retain `release-source.txt`, `release-ipa-metadata.txt`, and
+   `release-ipa-metadata.txt.sha256` from the same run. Verify the receipt sidecar
+   and bind every recorded identity field to the candidate and App Store record.
+7. Test that exact signed build against the recorded deployed backend: login,
+   invitations, concurrent rematch, native sharing, privacy routing, Game Center,
+   safety/account deletion, sandbox purchase and restore. Record actual device
+   results, candidate screenshots/recording and IAP/version association.
+8. Assess resubmission readiness from those receipts. Submission to Apple remains
+   a separate authorized action; preparing this checklist does not submit the app.
+
+## Native integration evidence — November 18, 2026
+
+PR #57 head `70e48dc78e687c27373ec62d205a9094a5472201` is an ancestor of PR #58
+candidate `4ca9a4b28774ff3028f4cc69c6dc5e56858b48fa`. Verify with:
+
+```sh
+git merge-base --is-ancestor 70e48dc78e687c27373ec62d205a9094a5472201 4ca9a4b28774ff3028f4cc69c6dc5e56858b48fa
+```
+
+The candidate retains the current-main/configuration checks, RevenueCat key
+injection, lockfile, Android setup and native signing verification. Later changes
+add deployed-endpoint gating and pinned Xcode/CocoaPods/Fastlane startup checks.
+Do not reapply an older native branch over these later safeguards.
+
+Exact-candidate hosted results:
+
+- [PR validation](https://github.com/ldavis2700/rmc-classics/actions/runs/44357078561): passed, including production-bundle/API/MongoDB browser checks.
+- [Android readiness](https://github.com/ldavis2700/rmc-classics/actions/runs/44357078357): passed.
+- [iOS readiness](https://github.com/ldavis2700/rmc-classics/actions/runs/44357078505): passed, including locked frontend sync, tool startup and unsigned native archive.
+
+The unsigned readiness receipt records the compiled app's version/build number,
+source tree, workflow run/attempt, bundle identifier, toolchain versions and
+native API origin. Versions come from the archived app's Info.plist, not a
+planned App Store version. Its executable checksum is a build record only:
+the unsigned archive is not retained for distribution. Production, signed-device
+and TestFlight flags remain false; a configured API origin is not a live check.
+
+The iOS workflow explicitly sets `CODE_SIGNING_ALLOWED=NO` and rejects signed
+output. Its readiness receipt is not a signed IPA, TestFlight upload, device test
+or App Store approval. These results apply to the named commit; rerun applicable
+checks after candidate changes. Production rollout and signed-device evidence
+remain separate gates.
 
 A stale manual selection must be replaced with current `main`; it must not be forced past the gate.
+
+## Backend source identity
+
+### Frontend artifact verification
+
+`npm run build` also writes `frontend/build/rmc-release.json`, recording SHA-256
+hashes of the completed HTML, JavaScript and CSS assets. Retain this manifest
+with the exact web deployment artifact and its provider deployment/commit record.
+Successful PR validation retains `rmc-web-evidence-<candidate>` for 14 days:
+the tested `frontend-build.tar.gz`, `rmc-release.json`, source receipt and
+`SHA256SUMS`. Verify `sha256sum -c SHA256SUMS` before using the downloaded files.
+The receipt records both candidate and actual checkout/tree because pull-request
+CI can test a synthetic merge commit. This artifact uses same-origin API routing
+and is isolated CI evidence, not a signed native build or approved production
+deployment. Check the recorded source tree, runtime configuration and full
+deployment/rollback gates before any use beyond validation. Preserve the artifact
+through the actual deployment provider when releasing; CI retention is finite.
+After deploying that artifact, run:
+
+```sh
+python3 scripts/verify_frontend_release.py --origin https://rmcclassics.com --manifest frontend/build/rmc-release.json
+```
+
+The verifier compares the deployed manifest and independently downloads/hashes
+every listed asset. Missing/stale assets, pilot HTML fallbacks, unsafe paths,
+redirects and unavailable responses cannot pass. Use the retained deployed-web
+artifact manifest, not a rebuild with different native/web configuration.
+This complements the backend source check; it does not prove provider provenance,
+database health, runtime configuration correctness, or signed-device acceptance.
+Images/media are outside this manifest's scope and still require visual checks.
+
+Both signed-build lanes require `/api/release` to return the same SHA-256
+fingerprint as the candidate checkout. The API captures its fingerprint at process
+startup from runtime Python files and `requirements.txt`; it excludes tests,
+bytecode, `.env`, database contents and credentials. Missing identity, an older
+backend, HTML fallback or a mismatched digest blocks signing. A documentation-only
+commit does not require redeploying identical backend source.
+
+The digest is a diagnostic source match, not a signed attestation. Independently
+record provider deployment IDs/commits, frontend artifact identity, installed
+dependencies, database binding, backup and rollback before release. The endpoint
+does not establish database health, frontend compatibility, signing, purchases or
+device acceptance. Keep `resubmission_ready` and `provider_provenance_verified`
+false until those separate evidence gates are satisfied.
+
+## Overlapping release jobs and retries
+
+The GitHub concurrency group serializes only this repository's GitHub signed
+workflow. It does not lock Codemagic, local uploads or App Store Connect.
+Both release paths read a latest build number and select the next number.
+The existing `reserved_build_number` receipt field and
+`reserved-build-number.txt` are records of that local selection, **not an atomic
+provider reservation**. Two jobs that read N before either upload becomes visible
+can both select N+1. No collision was observed in production; this is a verified
+gap in the source-level coordination.
+
+Before any authorized signed release, the connected operator must:
+
+1. Inspect both providers' current queued/running signed jobs and unresolved
+   upload attempts for this app. Use one release provider for the attempt and
+   record its run ID, source commit and chosen number in the canonical receipt.
+   If either provider's state is inaccessible, do not infer that it is idle.
+2. Do not start the fallback while Codemagic is queued/running, uploading or
+   awaiting reconciliation, or vice versa. The same applies to overlapping
+   Codemagic starts. Do not cancel an upload merely to switch providers.
+3. After a timeout, cancellation or ambiguous upload result, inspect App Store
+   Connect for the app/version/build and processing state before retrying.
+   A successful transport response alone does not prove processed TestFlight
+   availability. A failed client response does not prove Apple received nothing.
+4. If that exact build is already present, reconcile its candidate/receipt and
+   processing state. Do not upload it again or label it successful without that
+   evidence. If a new authorized build is necessary, reread the latest provider
+   state and rebuild with the newly selected number; never edit an existing IPA
+   or its receipt to relabel it.
+
+These are release-operation checks, not new owner-only work. They reduce
+operational overlap but do not create a distributed lock. Automated concurrent
+signed releases remain unsupported until a shared atomic allocator/lock is
+implemented and tested across both providers. A late pre-upload read alone would
+still have a race and must not be described as a fix.

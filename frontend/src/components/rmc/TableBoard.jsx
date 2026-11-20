@@ -84,8 +84,18 @@ export default function TableBoard({ state, seat = 0, members, onAction, busy = 
         <legend className="mb-2 text-sm text-white">Your bid (0 = nil)</legend>
         <div className="flex flex-wrap gap-2">{actions.map((a) => <button type="button" key={a.bid} onClick={() => act(a)} disabled={busy} className={actionButton} aria-label={`Bid ${a.bid === 0 ? "nil" : a.bid}`}>{a.bid === 0 ? "Nil" : a.bid}</button>)}</div>
       </fieldset>}
-      {(state.phase === "round_end" || ended) && state.last_round.length > 0 && <div className="my-4 overflow-x-auto">
-        <table className="w-full text-left text-sm text-[#c9c8e2]"><caption className="mb-2 text-white">Last hand scoring</caption>
+      {(state.phase === "round_end" || ended) && state.last_round.length > 0 && <div className="my-4">
+        <section className="space-y-3 sm:hidden" aria-label="Last hand scoring" data-testid="spades-mobile-scoring">
+          <h3 className="text-center text-sm text-white">Last hand scoring</h3>
+          {state.last_round.map((r, i) => <div key={i} className="rounded-xl border border-white/10 p-3">
+            <h4 className="mb-2 font-semibold text-white">{i === myTeam ? "Your team" : "Other team"}</h4>
+            <dl className="grid grid-cols-3 gap-3 text-sm">
+              {[["Bid", r.contract], ["Tricks*", r.taken], ["Nil", r.nil], ["Bags", r.over], ["Penalty", r.penalty], ["Points", `${r.delta > 0 ? "+" : ""}${r.delta}`]].map(([label, value]) =>
+                <div key={label}><dt className="text-[#a3a1c6]">{label}</dt><dd className="font-semibold text-white" data-testid={label === "Points" ? "spades-mobile-points" : undefined}>{value}</dd></div>)}
+            </dl>
+          </div>)}
+        </section>
+        <table className="hidden w-full text-left text-sm text-[#c9c8e2] sm:table"><caption className="mb-2 text-white">Last hand scoring</caption>
           <thead><tr>{["Team", "Bid", "Tricks*", "Nil", "Bags", "Penalty", "Points"].map((t) => <th key={t} className="p-2">{t}</th>)}</tr></thead>
           <tbody>{state.last_round.map((r, i) => <tr key={i}>{[i === myTeam ? "Yours" : "Other", r.contract, r.taken, r.nil, r.over, r.penalty, `${r.delta > 0 ? "+" : ""}${r.delta}`].map((v, j) => <td key={j} className="border-t border-white/10 p-2">{v}</td>)}</tr>)}</tbody>
         </table><p className="mt-2 text-xs text-[#a3a1c6]">*Excludes tricks taken by nil bidders.</p>
