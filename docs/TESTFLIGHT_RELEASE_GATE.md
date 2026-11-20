@@ -116,8 +116,9 @@ Exact-candidate hosted results:
 The unsigned readiness receipt records the compiled app's version/build number,
 source tree, workflow run/attempt, bundle identifier, toolchain versions and
 native API origin. Versions come from the archived app's Info.plist, not a
-planned App Store version. Its executable checksum is a build record only:
-the unsigned archive is not retained for distribution. Production, signed-device
+planned App Store version. This historical run retained only the executable checksum. Later candidate
+`29de5ea8bf86eadd9463d3375d47e265fb730fce` retains the unsigned archive for
+inspection (see the privacy evidence below), not signed distribution. Production, signed-device
 and TestFlight flags remain false; a configured API origin is not a live check.
 
 The iOS workflow explicitly sets `CODE_SIGNING_ALLOWED=NO` and rejects signed
@@ -207,3 +208,35 @@ operational overlap but do not create a distributed lock. Automated concurrent
 signed releases remain unsupported until a shared atomic allocator/lock is
 implemented and tested across both providers. A late pre-upload read alone would
 still have a race and must not be described as a fix.
+
+
+## Privacy disclosure reconciliation — November 19, 2026
+
+Source audited: `29de5ea8bf86eadd9463d3375d47e265fb730fce`.
+This is a source and retained-artifact audit, not a live data-flow measurement
+or a completed App Store privacy questionnaire.
+
+The three hosted checks for that candidate passed:
+[PR validation](https://github.com/ldavis2700/rmc-classics/actions/runs/44687479958),
+[iOS readiness](https://github.com/ldavis2700/rmc-classics/actions/runs/44687480157),
+and [Android readiness](https://github.com/ldavis2700/rmc-classics/actions/runs/44687480063).
+The [independent archive receipt](https://github.com/ldavis2700/rmc-classics/pull/59#issuecomment-7032376901)
+confirms the app and CapacitorPreferences framework both contain the
+UserDefaults/CA92.1 declaration. Artifact `14607397177` expires December 4,
+2026 at 06:29:14 UTC. Provider ZIP SHA-256:
+`4c33f2cc87e6d4cd466a7869c0ce404fc038395f3f845447cf913f9a9933c557`.
+Preserve this distinction: required-reason declarations explain API use;
+they do not establish complete app data-collection disclosures.
+
+| Source evidence | Remaining release acceptance |
+| --- | --- |
+| `frontend/src/lib/iap.js` configures RevenueCat and calls logIn with the signed-in user's stable appUserID. `backend/server.py` queries the subscriber by that ID and records transaction IDs in the user's processed_iap field. | Reconcile account-linked identifiers and purchase history in the app-level privacy disclosures and actual App Store Connect answers. Do not copy a vendor manifest's unlinked-data flag as proof that this app's purchase data is unlinked. Verify provider configuration and runtime behavior before finalizing answers. |
+| `frontend/src/pages/Legal.jsx` names RevenueCat but does not explicitly list the account-linked purchase/transaction data in What we collect. | Add an accurate, source-supported explanation of purchase verification and account linkage to the canonical policy, then verify the deployed and native views show that policy. No store answer has been changed by this audit. |
+| `frontend/public/privacy.html` is a separate static policy mentioning possible Firebase analytics; `frontend/src/App.js` renders Legal.jsx at /privacy. The static file lacks the detailed account deletion, online-table and purchase-provider content in Legal.jsx. | Determine which URLs are used by the actual hosting provider and App Store record. Reconcile the static and routed policies, retaining a usable direct public route. Do not infer the deployed response from source files alone. |
+| Legal.jsx asserts MongoDB encryption at rest and names MongoDB Atlas and Cloudflare. Current main-game provider/database provenance is unverified. | Verify those infrastructure claims against the actual main-game configuration before publication. Repository assertions and the founding-pilot preview are not evidence of production encryption or provider identity. |
+
+Next independent work is policy-content/routing reconciliation and verification
+of the actual provider/store configuration. Complete privacy questionnaire and
+signed-device acceptance remain separate release gates. Do not infer no data
+collection, no tracking, or Apple approval from successful compilation or the
+absence of an API name in a binary-string search.
