@@ -14,6 +14,12 @@ const NOTIFICATION_MINUTE = 0;
 
 let cachedPlugin = null;
 async function getPlugin() {
+  // A test-only Android bridge or partially installed native shell may report
+  // "native" without registering LocalNotifications. Do not invoke the plugin
+  // proxy in that state: it can emit an uncaught "not implemented" exception.
+  if (!isNative() || window.Capacitor?.isPluginAvailable?.("LocalNotifications") !== true) {
+    return null;
+  }
   if (cachedPlugin) return cachedPlugin;
   try {
     const mod = await import("@capacitor/local-notifications");
