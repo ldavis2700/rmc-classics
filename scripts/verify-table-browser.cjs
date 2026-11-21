@@ -219,6 +219,47 @@ async function verifyUnavailableStore(browser, user) {
     console.log("PASS: unavailable native-store fixture permits price retry, reports restore failure, preserves balance and never requests purchase credits");
   } finally { await context.close(); }
 }
+
+async function verifyLandscapeLayouts(browser, user) {
+  // Browser viewport resizing is not physical-device rotation or safe-area validation.
+  const context = await browser.newContext();
+  await context.route("**/*", (route) => new URL(route.request().url()).origin === new URL(base).origin
+    ? route.continue() : route.abort());
+  const page = await context.newPage();
+  page.on("pageerror", (error) => errors.push(error.message));
+  try {
+    await page.goto(`${base}/login`);
+    await signIn(page, user.email);
+    await page.waitForURL(`${base}/profile`);
+    for (const [width, height] of [[844, 390], [667, 375], [1376, 1032]]) {
+      await page.setViewportSize({ width, height });
+      for (const [route, ready] of [["/", "hero-tag"], ["/library", "game-card-chess"],
+        ["/privacy", "legal-title"], ["/profile", "profile-name"]]) {
+        const response = await page.goto(`${base}${route}`);
+        assert(response.ok(), "Landscape route must respond");
+        assert.equal(new URL(page.url()).pathname.replace(/\/$/, "") || "/", route);
+        await page.getByTestId(ready).waitFor();
+        await page.evaluate(() => document.fonts.ready);
+        assert(await page.locator("html").evaluate((el) => el.scrollWidth <= innerWidth),
+          `Horizontal overflow on ${route} at ${width}x${height}`);
+        // Trial clicks scroll and perform Playwright's visibility/stability/hit checks
+        // without triggering purchases, notifications or other side effects.
+        if (route === "/library") await page.getByTestId("game-card-chess").click({ trial: true });
+        if (route === "/profile") {
+          assert.equal(await page.getByTestId("profile-email").textContent(), user.email);
+          await page.getByTestId("reminder-toggle").click({ trial: true });
+        }
+        await page.evaluate(() => scrollTo(0, 0));
+        const profileNav = page.locator('[data-testid="mobile-nav-profile"]:visible, [data-testid="nav-profile"]:visible').first();
+        await profileNav.click();
+        await page.waitForURL(`${base}/profile`);
+        await page.getByTestId("profile-email").filter({ hasText: user.email }).waitFor();
+      }
+    }
+    console.log("PASS: landscape home/library/privacy/profile at 844x390, 667x375 and 1376x1032; no horizontal overflow; primary controls actionable and profile navigation preserves session; browser-only");
+  } finally { await context.close(); }
+}
+
 async function verifyMobileNavigation(page) {
   const items = ["home", "library", "battles", "friends", "leaderboard", "profile"];
   // Check actual rendered labels: document width alone misses clipped fixed nav.
@@ -564,6 +605,7 @@ async function clickMove(page, action) {
     assert.equal((await api("/tables/current", users[0].token)).room, null);
     assert.equal((await api("/tables/current", users[1].token)).room, null);
     await verifyUnavailableStore(browser, users[0]);
+    await verifyLandscapeLayouts(browser, users[0]);
     await captureActualApp(browser, users[0]);
     const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${users[0].token}` }, body: JSON.stringify({ password }) });
