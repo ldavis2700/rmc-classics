@@ -187,7 +187,7 @@ export default function Layout({ children }) {
 
       {/* Bottom nav - mobile only */}
       <nav
-        className="glass fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-white/10 px-2 py-2 md:hidden"
+        className="glass fixed bottom-0 left-0 right-0 z-40 grid grid-cols-6 items-center border-t border-white/10 px-2 py-2 md:hidden"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 8px)" }}
       >
         {navItems.map((n) => {
@@ -199,7 +199,7 @@ export default function Layout({ children }) {
               data-testid={`mobile-${n.id}`}
               onClick={() => sfx.click()}
               className={({ isActive }) =>
-                `flex flex-1 flex-col items-center gap-1 rounded-xl px-2 py-1.5 text-[10px] font-semibold uppercase tracking-widest transition-colors ${
+                `flex min-h-[44px] min-w-0 flex-col items-center gap-1 rounded-xl px-0.5 py-1.5 text-[9px] font-semibold uppercase tracking-wide transition-colors ${
                   isActive ? "text-neon-pink" : "text-[#a3a1c6]"
                 }`
               }

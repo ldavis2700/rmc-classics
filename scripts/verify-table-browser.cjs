@@ -219,6 +219,39 @@ async function verifyUnavailableStore(browser, user) {
     console.log("PASS: unavailable native-store fixture permits price retry, reports restore failure, preserves balance and never requests purchase credits");
   } finally { await context.close(); }
 }
+async function verifyMobileNavigation(page) {
+  const items = ["home", "library", "battles", "friends", "leaderboard", "profile"];
+  // Check actual rendered labels: document width alone misses clipped fixed nav.
+  for (const width of [320, 360, 390, 428]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.evaluate(() => document.fonts.ready);
+    const links = page.locator('nav [data-testid^="mobile-nav-"]');
+    assert.equal(await links.count(), items.length);
+    let previousRight = 0;
+    for (const link of await links.all()) {
+      const box = await link.boundingBox();
+      assert(box && box.x >= -0.5 && box.x + box.width <= width + 0.5,
+        `Mobile tab outside ${width}px viewport`);
+      assert(box.width >= 44 && box.height >= 44, "Mobile tab touch target must be at least 44px");
+      assert(box.x >= previousRight - 0.5, "Mobile tabs must not overlap");
+      previousRight = box.x + box.width;
+      const visible = await link.evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        const text = [...el.childNodes].filter((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+        const labelsFit = text.every((node) => {
+          const range = document.createRange(); range.selectNodeContents(node);
+          const rect = range.getBoundingClientRect();
+          return rect.left >= box.left - 0.5 && rect.right <= box.right + 0.5;
+        });
+        const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+        return labelsFit && (hit === el || el.contains(hit));
+      });
+      assert(visible, `Mobile tab label clipped or target obscured at ${width}px`);
+    }
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  console.log("PASS: all six mobile navigation labels and touch targets fit 320/360/390/428px");
+}
 async function verifyRefreshRecovery(page, user) {
   await page.setViewportSize({ width: 1280, height: 900 });
   let failureStatus = 503;
@@ -370,6 +403,7 @@ async function clickMove(page, action) {
     await first.getByTestId("login-terms-checkbox").check();
     await first.getByTestId("login-submit").click();
     await first.waitForURL("**/tables?game=spades");
+    await verifyMobileNavigation(first);
     await verifyStaleProfile(first, users);
     await verifyRefreshRecovery(first, users[0]);
     await first.getByRole("button", { name: "Create private table", exact: true }).click();
