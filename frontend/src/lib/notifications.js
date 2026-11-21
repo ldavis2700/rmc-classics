@@ -4,8 +4,8 @@
  *
  * Behaviour:
  *   - Once permission is granted, schedule a repeating notification every day at 19:00 local time.
- *   - If the user already completed today's challenge, no reminder fires (checked server-side by title).
- *   - Safe no-op on web - falls back to Notification API when possible.
+ *   - Reminders are device-local and continue until explicitly disabled.
+ *   - Web has no background scheduler: do not request permission or claim a reminder.
  */
 
 const NOTIFICATION_ID = 4242;
@@ -68,43 +68,36 @@ export async function enableDailyReminder() {
     }
     return "granted";
   }
-  // Web fallback (works when app is installed as PWA on Android)
-  if (typeof Notification !== "undefined") {
-    const perm = await Notification.requestPermission();
-    if (perm === "granted") {
-      localStorage.setItem("reminderEnabled", "1");
-      return "granted";
-    }
-    return "denied";
-  }
   return "unsupported";
 }
 
 export async function disableDailyReminder() {
   if (isNative()) {
     const plugin = await getPlugin();
-    if (!plugin) return;
+    if (!plugin) throw new Error("Reminder service unavailable");
+    // Cancellation must succeed before the UI reports that reminders are off.
+    await plugin.cancel({ notifications: [{ id: NOTIFICATION_ID }] });
     try {
-      await plugin.cancel({ notifications: [{ id: NOTIFICATION_ID }] });
       const { Preferences } = await import("@capacitor/preferences");
       await Preferences.remove({ key: "reminderEnabled" });
     } catch {
-      /* no-op */
+      /* Actual pending notifications, not this legacy marker, determine state. */
     }
     return;
   }
-  localStorage.removeItem("reminderEnabled");
+  try { localStorage.removeItem("reminderEnabled"); } catch { /* optional legacy cleanup */ }
 }
 
 export async function isReminderEnabled() {
-  if (isNative()) {
-    try {
-      const { Preferences } = await import("@capacitor/preferences");
-      const { value } = await Preferences.get({ key: "reminderEnabled" });
-      return value === "1";
-    } catch {
-      return false;
-    }
+  if (!isNative()) return false;
+  try {
+    const plugin = await getPlugin();
+    if (!plugin) return false;
+    const permission = await plugin.checkPermissions();
+    if (permission.display !== "granted") return false;
+    const pending = await plugin.getPending();
+    return pending.notifications.some((notification) => notification.id === NOTIFICATION_ID);
+  } catch {
+    return false;
   }
-  return localStorage.getItem("reminderEnabled") === "1";
 }

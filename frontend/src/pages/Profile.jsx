@@ -177,9 +177,11 @@ function ReminderToggle() {
         } else if (result === "denied") {
           toast.error("Notifications blocked — enable them in Settings");
         } else {
-          toast.error("Not supported on this device");
+          toast.error("Daily reminders are available in the mobile app");
         }
       }
+    } catch {
+      toast.error("Could not update your reminder. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -194,7 +196,7 @@ function ReminderToggle() {
             Keep the streak alive
           </h3>
           <p className="mt-1 text-sm text-[#a3a1c6]">
-            One tap-friendly ping at 7&nbsp;pm your time. Silent by default. Off any time.
+            In the mobile app, get a silent reminder at 7&nbsp;pm your time. Turn it off any time.
           </p>
         </div>
         <button
