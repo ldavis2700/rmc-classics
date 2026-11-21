@@ -79,7 +79,7 @@ export default function Layout({ children }) {
           </Link>
 
           {/* Desktop nav */}
-          <nav className="hidden items-center gap-1 md:flex">
+          <nav className="hidden items-center gap-1 lg:flex">
             {navItems.map((n) => (
               <NavLink
                 key={n.to}
@@ -111,7 +111,7 @@ export default function Layout({ children }) {
               {sound ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             </button>
             {user ? (
-              <div className="hidden items-center gap-2 md:flex">
+              <div className="hidden items-center gap-2 lg:flex">
                 <Link
                   to="/profile"
                   data-testid="profile-chip"
@@ -143,10 +143,10 @@ export default function Layout({ children }) {
         </div>
       </header>
 
-      <main className="relative z-10 pb-28 md:pb-16">{children}</main>
+      <main className="relative z-10 pb-28 lg:pb-16">{children}</main>
 
       {/* Legal footer - required for App Store review */}
-      <footer className="relative z-10 border-t border-white/10 bg-black/30 px-4 py-6 pb-32 md:px-8 md:pb-8">
+      <footer className="relative z-10 border-t border-white/10 bg-black/30 px-4 py-6 pb-32 md:px-8 lg:pb-8">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 text-[11px] uppercase tracking-widest text-[#7a789e] md:flex-row">
           <div className="flex items-center gap-4">
             <span data-testid="footer-copyright">© 2026 RMC CLASSICS</span>
@@ -187,7 +187,7 @@ export default function Layout({ children }) {
 
       {/* Bottom nav - mobile only */}
       <nav
-        className="glass fixed bottom-0 left-0 right-0 z-40 grid grid-cols-6 items-center border-t border-white/10 px-2 py-2 md:hidden"
+        className="glass fixed bottom-0 left-0 right-0 z-40 grid grid-cols-6 items-center border-t border-white/10 px-2 py-2 lg:hidden"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 8px)" }}
       >
         {navItems.map((n) => {
