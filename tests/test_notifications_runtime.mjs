@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 const source = await readFile(new URL("../frontend/src/lib/notifications.js", import.meta.url), "utf8");
-function fixture({ native = true, permission = "granted", pending = [], failure } = {}) {
+function fixture({ native = true, pluginAvailable = true, permission = "granted", pending = [], failure } = {}) {
   const calls = [];
   const plugin = {
     requestPermissions: async () => { calls.push("request"); return { display: permission }; },
@@ -17,7 +17,8 @@ function fixture({ native = true, permission = "granted", pending = [], failure 
     .replaceAll('import("@capacitor/preferences")', 'Promise.resolve({ Preferences: preferences })');
   const api = new Function("window", "Notification", "localStorage", "plugin", "preferences",
     code + "; return { enableDailyReminder, disableDailyReminder, isReminderEnabled };")(
-    { Capacitor: { isNativePlatform: () => native } },
+    { Capacitor: { isNativePlatform: () => native,
+      isPluginAvailable: (name) => { assert.equal(name, "LocalNotifications"); return pluginAvailable; } } },
     { requestPermission: () => assert.fail("Web must not request unschedulable permission") },
     { getItem: () => "1", setItem: () => assert.fail("No false web preference"), removeItem: () => calls.push("legacy-remove") },
     plugin, preferences);
@@ -29,6 +30,13 @@ test("web neither requests permission nor claims a scheduled reminder, including
   assert.equal(await f.isReminderEnabled(), false);
   await f.disableDailyReminder();
   assert.deepEqual(f.calls, ["legacy-remove"]);
+});
+test("native bridge without the actual notifications plugin avoids unhandled proxy calls", async () => {
+  const f = fixture({ native: true, pluginAvailable: false });
+  assert.equal(await f.enableDailyReminder(), "unsupported");
+  assert.equal(await f.isReminderEnabled(), false);
+  await assert.rejects(f.disableDailyReminder(), /Reminder service unavailable/);
+  assert.deepEqual(f.calls, []);
 });
 test("native denial never schedules or persists opt-in", async () => {
   const f = fixture({ permission: "denied" });
