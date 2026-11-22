@@ -10,9 +10,11 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const authAttempt = useRef(0);
   const scoreBatch = useRef(null);
+  const refreshAttempt = useRef(0);
   const [refreshError, setRefreshError] = useState(null);
 
   const refresh = useCallback(async (isCurrent = () => true) => {
+    const attempt = ++refreshAttempt.current;
     const stillCurrent = typeof isCurrent === "function" ? isCurrent : () => true;
     const token = localStorage.getItem("rmc_token");
     if (!token) {
@@ -25,12 +27,12 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await api.get("/auth/me");
       // Ignore responses belonging to an account that has since signed out or changed.
-      if (localStorage.getItem("rmc_token") !== token || !stillCurrent()) return;
+      if (attempt !== refreshAttempt.current || localStorage.getItem("rmc_token") !== token || !stillCurrent()) return;
       setRefreshError(null);
       setUser(data.user);
       await configureIAP(data.user?.id);
     } catch (e) {
-      if (localStorage.getItem("rmc_token") !== token || !stillCurrent()) return;
+      if (attempt !== refreshAttempt.current || localStorage.getItem("rmc_token") !== token || !stillCurrent()) return;
       if (e.response?.status === 401 || e.response?.status === 403) {
         // Invalid credentials or required terms acceptance need a fresh sign-in.
         setRefreshError(null);
@@ -42,7 +44,8 @@ export function AuthProvider({ children }) {
         setRefreshError("Unable to refresh your account. Check your connection and try again.");
       }
     } finally {
-      if (localStorage.getItem("rmc_token") === token || !localStorage.getItem("rmc_token")) setLoading(false);
+      if (attempt === refreshAttempt.current && stillCurrent() &&
+          (localStorage.getItem("rmc_token") === token || !localStorage.getItem("rmc_token"))) setLoading(false);
     }
   }, []);
 

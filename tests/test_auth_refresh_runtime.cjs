@@ -16,7 +16,7 @@ function harness(token = 'old-token') {
   const calls = [];
   const state = { token, user: null, loading: true };
   const context = {
-    useCallback: (fn) => fn,
+    useCallback: (fn) => fn, refreshAttempt: { current: 0 },
     localStorage: { getItem: () => state.token, removeItem: () => { state.token = null; calls.push('remove'); } },
     api: { get: (url) => { assert.equal(url, '/auth/me'); return pending; } },
     setRefreshError: error => { state.refreshError = error; },
@@ -79,4 +79,36 @@ test('terms rejection clears session instead of allowing stale access', async ()
   const pending = h.refresh(); h.reject({response:{status:403}}); await pending;
   assert.equal(h.state.token, null); assert.equal(h.state.user, null);
   assert.equal(h.state.refreshError, null);
+});
+
+for (const outcome of ['success', '401', '503']) {
+  test(`superseded same-account refresh ${outcome} cannot undo newer success`, async () => {
+    const h = harness(), pending = [];
+    h.api.get = () => new Promise((resolve, reject) => pending.push({resolve,reject}));
+    const old = h.refresh(), latest = h.refresh();
+    pending[1].resolve({data:{user:{id:'current',xp:40}}}); await latest;
+    if (outcome === 'success') pending[0].resolve({data:{user:{id:'current',xp:20}}});
+    else pending[0].reject({response:{status:Number(outcome)}});
+    await old;
+    assert.equal(h.state.user?.xp,40);assert.equal(h.state.token,'old-token');
+    assert.equal(h.state.refreshError,null);
+    assert.deepEqual(h.calls,['user','configure:current']);
+  });
+}
+test('older completion cannot finish loading while latest refresh is pending', async () => {
+  const h=harness(), pending=[];
+  h.api.get=()=>new Promise(resolve=>pending.push(resolve));
+  const old=h.refresh(), latest=h.refresh();
+  pending[0]({data:{user:{id:'old'}}});await old;
+  assert.equal(h.state.loading,true);assert.equal(h.state.user,null);
+  pending[1]({data:{user:{id:'current'}}});await latest;
+  assert.equal(h.state.loading,false);assert.equal(h.state.user.id,'current');
+});
+test('older success cannot clear the latest refresh failure', async () => {
+  const h=harness(), pending=[];
+  h.api.get=()=>new Promise((resolve,reject)=>pending.push({resolve,reject}));
+  const old=h.refresh(), latest=h.refresh();
+  pending[1].reject({response:{status:503}});await latest;
+  pending[0].resolve({data:{user:{id:'stale'}}});await old;
+  assert.match(h.state.refreshError,/try again/);assert.equal(h.state.user,null);
 });

@@ -92,7 +92,7 @@ function overlappingHarness() {
   const refreshStart = source.indexOf('  const refresh = useCallback');
   const refreshEnd = source.indexOf('\n  useEffect(', refreshStart);
   const actions = vm.runInNewContext(`${source.slice(refreshStart, refreshEnd)}\n${source.slice(start, end)}\n({submitScore})`, {
-    useCallback: fn => fn, scoreBatch: { current: null },
+    useCallback: fn => fn, scoreBatch: { current: null }, refreshAttempt: { current: 0 },
     localStorage: { getItem: () => state.token },
     api: {
       post: () => new Promise((resolve, reject) => posts.push({resolve, reject})),
