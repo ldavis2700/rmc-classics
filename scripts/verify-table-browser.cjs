@@ -230,6 +230,83 @@ async function verifyUnavailableStore(browser, user) {
   } finally { await context.close(); }
 }
 
+async function verifyAnonymousOnboarding(browser) {
+  // No injected token: guest play must remain available before account creation.
+  for (const [width, height] of [[844, 390], [667, 375]]) {
+    const context = await browser.newContext({ viewport: { width, height }, hasTouch: true });
+    await context.route("**/*", (route) => new URL(route.request().url()).origin === new URL(base).origin
+      ? route.continue() : route.abort());
+    const page = await context.newPage();
+    page.on("pageerror", (error) => errors.push(error.message));
+    let token;
+    try {
+      await page.goto(base);
+      await page.getByTestId("hero-tag").waitFor();
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(700);
+      assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), null);
+      const nav = await page.locator('nav [data-testid="mobile-nav-home"]').boundingBox();
+      for (const id of ["hero-play-btn", "hero-secondary-btn"]) {
+        const control = page.getByTestId(id);
+        const box = await control.boundingBox();
+        assert(box && nav && box.y >= 0 && box.y + box.height <= nav.y && box.height >= 44,
+          `Guest ${id} must fit above bottom navigation at ${width}x${height}`);
+        await control.click({ trial: true });
+      }
+      assert.equal((await page.getByTestId("hero-secondary-btn").textContent()).trim(), "Create account");
+      await page.getByTestId("hero-play-btn").click();
+      await page.waitForURL(`${base}/library`);
+      await page.getByTestId("game-card-spades").click();
+      await page.waitForURL(`${base}/play/spades`);
+      await page.getByTestId("spades-board").waitFor();
+      await page.getByRole("button", { name: "Bid 3", exact: true }).click();
+      // A legal hand interaction proves this is playable, not just a visible board.
+      await page.getByTestId("spades-hand").locator("button:enabled").first().click();
+      assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), null);
+
+      await page.goto(base);
+      await page.getByTestId("hero-secondary-btn").click();
+      await page.waitForURL(`${base}/register`);
+      const email = `guest-${Date.now()}-${width}@example.com`;
+      await page.getByTestId("register-name").fill("Disposable Guest");
+      await page.getByTestId("register-email").fill(email);
+      await page.getByTestId("register-password").fill(password);
+      assert.equal(await page.getByTestId("register-submit").isEnabled(), false,
+        "Account creation requires explicit consent");
+      const popupPromise = page.waitForEvent("popup");
+      await page.locator("form").getByRole("link", { name: "Privacy Policy", exact: true }).click();
+      const privacy = await popupPromise;
+      await privacy.waitForURL(`${base}/privacy`);
+      await privacy.getByTestId("legal-title").waitFor();
+      await privacy.close();
+      assert.equal(await page.getByTestId("register-email").inputValue(), email,
+        "Reading privacy policy must preserve the registration form");
+      await page.getByTestId("register-terms-checkbox").check();
+      assert(await page.locator("html").evaluate((el) => el.scrollWidth <= innerWidth),
+        "Landscape registration must not overflow horizontally");
+      const response = page.waitForResponse((r) => r.url().endsWith("/auth/register") && r.request().method() === "POST");
+      await page.getByTestId("register-submit").click();
+      const registered = await response;
+      assert.equal(registered.status(), 200);
+      token = (await registered.json()).token;
+      assert(token, "Registration returns a disposable authenticated session");
+      await page.waitForURL(`${base}/library`);
+      await page.getByTestId("game-card-spades").waitFor();
+      await page.goto(`${base}/profile`);
+      await page.getByTestId("profile-email").filter({ hasText: email }).waitFor();
+    } finally {
+      if (token) {
+        const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ password }) });
+        assert.equal(deleted.status, 200, "Disposable guest account cleanup");
+      }
+      await context.close();
+    }
+  }
+  console.log("PASS: anonymous Home-to-Library-to-Spades play, landscape primary/secondary controls, registration consent/privacy/form preservation, Library return, profile session and account cleanup at 844x390 and 667x375; browser-only");
+}
+
 async function verifyLandscapeLayouts(browser, user) {
   // Browser viewport resizing is not physical-device rotation or safe-area validation.
   const context = await browser.newContext();
@@ -451,6 +528,7 @@ async function clickMove(page, action) {
     if (process.env.RMC_VERIFY_CONFIGURED_ANALYTICS === "1") {
       await require("./verify-configured-analytics.cjs").verifyConfiguredAnalytics(browser, base);
     }
+    await verifyAnonymousOnboarding(browser);
     const users = [];
     const stamp = Date.now();
     for (let i = 0; i < 4; i += 1) {
@@ -458,7 +536,7 @@ async function clickMove(page, action) {
       // Player 3 must create the account through the real invitation UI below.
       const registered = i === 2 ? {} : await api("/auth/register", null, { name: `Test Player ${i + 1}`, email, password, accepted_terms: true });
       users.push({ ...registered, email });
-      const context = await browser.newContext({ viewport: i === 0 ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
+      const context = await browser.newContext({ viewport: i === 0 ? { width: 390, height: 844 } : i === 2 ? { width: 667, height: 375 } : { width: 1280, height: 900 } });
       // A mistakenly production-bound bundle must fail locally, never call a live API.
       // External fonts/analytics are also unnecessary for this disposable test.
       await context.route("**/*", (route) => new URL(route.request().url()).origin === new URL(base).origin
