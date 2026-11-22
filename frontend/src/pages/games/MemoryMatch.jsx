@@ -25,12 +25,16 @@ export default function MemoryMatch() {
   const [shareOpen, setShareOpen] = useState(false);
   const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
 
+  const roundGeneration = useRef(0);
   const resolutionTimer = useRef(null);
   const cancelResolution = () => {
     clearTimeout(resolutionTimer.current);
     resolutionTimer.current = null;
   };
-  useEffect(() => () => clearTimeout(resolutionTimer.current), []);
+  useEffect(() => () => {
+    clearTimeout(resolutionTimer.current);
+    roundGeneration.current += 1;
+  }, []);
 
   const won = useMemo(() => deck.every((c) => c.matched), [deck]);
 
@@ -40,8 +44,14 @@ export default function MemoryMatch() {
       toast.success(`Cleared in ${moves} moves!`);
       setSubmitted(true);
       if (user) {
+        const completedRound = roundGeneration.current;
         submitScore({ game_id: "memory", won: true, score: moves }).then((res) => {
+          if (completedRound !== roundGeneration.current) return;
           if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
+          setShareOpen(true);
+        }).catch(() => {
+          if (completedRound !== roundGeneration.current) return;
+          // Keep the local result available without claiming a saved award.
           setShareOpen(true);
         });
       } else {
@@ -81,6 +91,7 @@ export default function MemoryMatch() {
   };
 
   const reset = () => {
+    roundGeneration.current += 1;
     cancelResolution();
     setDeck(makeDeck());
     setFlipped([]);
@@ -88,6 +99,7 @@ export default function MemoryMatch() {
     setLocked(false);
     setSubmitted(false);
     setShareOpen(false);
+    setXpInfo({ xp: 0, done: false });
   };
 
   return (
