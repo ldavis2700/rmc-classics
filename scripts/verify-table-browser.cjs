@@ -236,10 +236,15 @@ async function verifyMemoryScoreResponses(browser) {
     name: "Disposable Memory Player", email, password, accepted_terms: true,
   });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
-  const pending = [], routeErrors = [];
+  const pending = [], routeErrors = [], blockedProfileRefreshes = [];
+  let holdProfileRefresh = false;
   await context.route("**/*", async (route) => {
     const request = route.request(), url = new URL(request.url());
     if (url.origin !== new URL(base).origin) return route.abort();
+    if (holdProfileRefresh && url.pathname === "/api/auth/me" && request.method() === "GET") {
+      blockedProfileRefreshes.push(route);
+      return; // Do not let Profile's mount refresh repair stale context before the assertion.
+    }
     if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
     try {
       assert.equal(request.postDataJSON().game_id, "memory");
@@ -319,9 +324,20 @@ async function verifyMemoryScoreResponses(browser) {
     assert.equal(await modal.count(), 0, "Old round must not reopen the dismissed current result");
     assert.equal(pending.length, 2, "No duplicate score submission after old response");
     await page.getByText("// CLEARED", { exact: true }).waitFor();
+    // Navigate through the SPA so AuthContext survives. A full reload would mask the bug.
+    holdProfileRefresh = true;
+    await page.getByTestId("mobile-nav-profile").click();
+    await page.waitForURL(`${base}/profile`);
+    await page.getByTestId("profile-email").filter({ hasText: email }).waitFor();
+    for (let i = 0; i < 100 && !blockedProfileRefreshes.length; i++) await page.waitForTimeout(20);
+    assert(blockedProfileRefreshes.length > 0, "Profile mount refresh was intercepted");
+    const visibleXP = page.getByText("XP", { exact: true }).locator("..").locator("div").first();
+    assert.equal((await visibleXP.textContent()).trim(), String(pending[1].data.user.xp),
+      "Visible profile XP must already be reconciled before mount refresh responds");
     assert.deepEqual(routeErrors, []);
-    console.log("PASS: two compiled Memory rounds, Reset, real score processing with reversed response delivery, current award, authoritative profile reconciliation and no stale result reopening or duplicate submissions; disposable browser only");
+    console.log("PASS: two compiled Memory rounds, Reset, real score processing with reversed response delivery, current award, authoritative profile reconciliation, visible XP with mount refresh held and no stale result reopening or duplicate submissions; disposable browser only");
   } finally {
+    for (const route of blockedProfileRefreshes) await route.abort().catch(() => {});
     for (const item of pending) if (!item.released) await item.route.abort().catch(() => {});
     await context.close();
     const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
