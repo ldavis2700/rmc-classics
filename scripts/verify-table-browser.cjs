@@ -10,6 +10,7 @@ assert(["127.0.0.1", "localhost"].includes(new URL(base).hostname), "Use only a 
 const password = "DisposableTableTest-2026!";
 const errors = [];
 const tableCaptures = {};
+const landscapeCaptures = {};
 let unavailableStoreCapture = null;
 async function captureTableState(page, name) {
   if (!process.env.RMC_APP_CAPTURE_DIR) return;
@@ -141,6 +142,15 @@ async function captureActualApp(browser, user) {
       sha256: crypto.createHash("sha256").update(unavailableStoreCapture).digest("hex"),
       width: 390, height: 844, scope: "simulated-android-store-unavailable-browser-only",
       real_store_validated: false };
+    assert.equal(Object.keys(landscapeCaptures).length, 12, "Require all landscape routes and viewports");
+    fs.mkdirSync(path.join(output, "landscape"));
+    const landscapeFiles = {};
+    for (const [name, { bytes, width, height, route }] of Object.entries(landscapeCaptures)) {
+      fs.writeFileSync(path.join(output, name), bytes);
+      landscapeFiles[name] = { sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
+        width, height, route, scope: "landscape-chromium-layout-only",
+        physical_device_rotation_validated: false };
+    }
     const manifest = fs.readFileSync("frontend/build/rmc-release.json");
     fs.writeFileSync(path.join(output, "capture-receipt.json"), JSON.stringify({
       scope: "actual-app-disposable-ci-browser-only", candidate_commit: candidate,
@@ -149,12 +159,12 @@ async function captureActualApp(browser, user) {
       account_type: "synthetic-disposable-test-account",
       web_manifest_sha256: crypto.createHash("sha256").update(manifest).digest("hex"),
       signed_device_validation: false, production_deployment_verified: false,
-      resubmission_ready: false, files_sha256: files, table_captures: tableFiles, store_fixture: storeFixture,
+      resubmission_ready: false, landscape_captures: landscapeFiles, files_sha256: files, table_captures: tableFiles, store_fixture: storeFixture,
       tablet_captures: { scope: "tablet-sized-chromium-layout-only", width: 2064, height: 2752,
         viewport_width: 1032, viewport_height: 1376, device_scale_factor: 2,
         actual_ipad_validated: false, files_sha256: tabletFiles },
     }, null, 2) + "\n");
-    console.log("PASS: eight phone and eight tablet-sized app views, three online tables and one simulated store capture; dimensions and hashes; disposable CI only");
+    console.log("PASS: eight phone and eight tablet-sized app views, three online tables, one simulated store and twelve landscape captures; dimensions and hashes; disposable CI only");
   } finally {
     if (tabletContext) await tabletContext.close();
     await context.close();
@@ -250,6 +260,13 @@ async function verifyLandscapeLayouts(browser, user) {
           await page.getByTestId("reminder-toggle").click({ trial: true });
         }
         await page.evaluate(() => scrollTo(0, 0));
+        if (process.env.RMC_APP_CAPTURE_DIR) {
+          const bytes = await page.screenshot({ type: "png", fullPage: false, animations: "disabled" });
+          assert.equal(bytes.readUInt32BE(16), width);
+          assert.equal(bytes.readUInt32BE(20), height);
+          const name = `landscape/${width}x${height}-${route === "/" ? "home" : route.slice(1)}.png`;
+          landscapeCaptures[name] = { bytes, width, height, route };
+        }
         const profileNav = page.locator('[data-testid="mobile-nav-profile"]:visible, [data-testid="nav-profile"]:visible').first();
         await profileNav.click();
         await page.waitForURL(`${base}/profile`);
