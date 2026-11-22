@@ -230,6 +230,102 @@ async function verifyUnavailableStore(browser, user) {
   } finally { await context.close(); }
 }
 
+async function verifyMemoryScoreResponses(browser) {
+  const email = `memory-${crypto.randomUUID()}@example.com`;
+  const registered = await api("/auth/register", null, {
+    name: "Disposable Memory Player", email, password, accepted_terms: true,
+  });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const pending = [], routeErrors = [];
+  await context.route("**/*", async (route) => {
+    const request = route.request(), url = new URL(request.url());
+    if (url.origin !== new URL(base).origin) return route.abort();
+    if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
+    try {
+      assert.equal(request.postDataJSON().game_id, "memory");
+      // The real disposable API processes each score once. Delay delivery only.
+      const response = await route.fetch();
+      assert.equal(response.status(), 200);
+      const data = await response.json();
+      pending.push({ route, response, data, released: false });
+    } catch (error) { routeErrors.push(error.message); await route.abort(); }
+  });
+  await context.addInitScript(() => {
+    const timeout = window.setTimeout.bind(window);
+    // Accelerate pair animation only; preserve real clicks, state and API calls.
+    window.setTimeout = (fn, delay, ...args) => timeout(fn, delay === 350 || delay === 800 ? 100 : delay, ...args);
+  });
+  const page = await context.newPage();
+  page.on("pageerror", (error) => errors.push(error.message));
+  const waitPending = async count => {
+    for (let i = 0; i < 100 && pending.length < count && !routeErrors.length; i++) await page.waitForTimeout(50);
+    assert.deepEqual(routeErrors, []);
+    assert.equal(pending.length, count, "One score request per completed round");
+  };
+  const release = async index => {
+    const item = pending[index];
+    item.released = true;
+    const delivered = page.waitForResponse(r => r.url().endsWith("/games/submit") && r.request().method() === "POST");
+    await item.route.fulfill({ response: item.response });
+    await delivered;
+    await page.waitForTimeout(150); // Let the response promise update React state.
+  };
+  const finishRound = async () => {
+    const symbols = [], matched = new Set();
+    // Learn the shuffled deck using visible card faces, without reading React state.
+    for (let i = 0; i < 16; i += 2) {
+      await page.getByTestId(`memory-card-${i}`).click();
+      symbols[i] = await page.getByTestId(`memory-card-${i}`).textContent();
+      await page.getByTestId(`memory-card-${i + 1}`).click();
+      symbols[i + 1] = await page.getByTestId(`memory-card-${i + 1}`).textContent();
+      if (symbols[i] === symbols[i + 1]) { matched.add(i); matched.add(i + 1); }
+      await page.waitForTimeout(150);
+    }
+    for (let i = 0; i < 16; i++) {
+      if (matched.has(i)) continue;
+      const j = symbols.findIndex((symbol, index) => index !== i && !matched.has(index) && symbol === symbols[i]);
+      assert(j >= 0 && symbols[i] !== "?", "Every visible symbol has a pair");
+      await page.getByTestId(`memory-card-${i}`).click();
+      await page.getByTestId(`memory-card-${j}`).click();
+      matched.add(i); matched.add(j);
+      await page.waitForTimeout(150);
+    }
+    await page.getByText("// CLEARED", { exact: true }).waitFor();
+  };
+  try {
+    await page.goto(`${base}/login`);
+    await signIn(page, email); await page.waitForURL(`${base}/profile`);
+    await page.goto(`${base}/play/memory`);
+    await finishRound(); await waitPending(1);
+    assert.equal(await page.getByTestId("share-card-modal").count(), 0);
+    await page.getByTestId("game-reset").click();
+    assert.equal(await page.getByTestId("memory-board").getByRole("button", { name: "?", exact: true }).count(), 16);
+    await finishRound(); await waitPending(2);
+    await release(1);
+    const modal = page.getByTestId("share-card-modal");
+    await modal.waitFor();
+    assert((await modal.textContent()).includes("Victory!"));
+    if (pending[1].data.xp_gained) {
+      assert(await modal.getByText(`+${pending[1].data.xp_gained}`, { exact: true }).isVisible());
+    }
+    await page.getByTestId("share-close-btn").click();
+    await modal.waitFor({ state: "hidden" });
+    await release(0);
+    assert.equal(await modal.count(), 0, "Old round must not reopen the dismissed current result");
+    assert.equal(pending.length, 2, "No duplicate score submission after old response");
+    await page.getByText("// CLEARED", { exact: true }).waitFor();
+    assert.deepEqual(routeErrors, []);
+    console.log("PASS: two compiled Memory rounds, Reset, real score processing with reversed response delivery, current award and no stale result reopening or duplicate submissions; disposable browser only");
+  } finally {
+    for (const item of pending) if (!item.released) await item.route.abort().catch(() => {});
+    await context.close();
+    const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${registered.token}` },
+      body: JSON.stringify({ password }) });
+    assert.equal(deleted.status, 200, "Disposable Memory account cleanup");
+  }
+}
+
 async function verifyGameHeaderControls(browser) {
   const context = await browser.newContext({ hasTouch: true });
   await context.route("**/*", (route) => new URL(route.request().url()).origin === new URL(base).origin
@@ -566,6 +662,7 @@ async function clickMove(page, action) {
       await require("./verify-configured-analytics.cjs").verifyConfiguredAnalytics(browser, base);
     }
     await verifyGameHeaderControls(browser);
+    await verifyMemoryScoreResponses(browser);
     await verifyAnonymousOnboarding(browser);
     const users = [];
     const stamp = Date.now();
