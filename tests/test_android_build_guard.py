@@ -101,7 +101,19 @@ class AndroidBuildGuardTests(unittest.TestCase):
 
     def test_android_shell_and_bundle_are_built_from_locked_frontend(self):
         self.assertIn("uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5", WORKFLOW)
-        self.assertNotIn("cache: gradle", WORKFLOW)
+        self.assertIn("cache: gradle", WORKFLOW)
+        for cache_input in (
+            "frontend/android/**/*.gradle*",
+            "frontend/android/**/gradle-wrapper.properties",
+            "frontend/package-lock.json",
+            ".github/workflows/android-build.yml",
+        ):
+            self.assertIn(cache_input, WORKFLOW)
+        shell = WORKFLOW.index("- name: Generate and sync isolated Capacitor Android shell")
+        java = WORKFLOW.index("- name: Setup Java 21")
+        compile_bundle = WORKFLOW.index("- name: Compile non-publishing Android App Bundle")
+        self.assertLess(shell, java)
+        self.assertLess(java, compile_bundle)
         self.assertIn("npm install --global npm@10.9.4", WORKFLOW)
         self.assertIn(
             'test "$(npm --version)" = "10.9.4"', WORKFLOW)

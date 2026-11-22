@@ -44,12 +44,6 @@ jobs:
           npm install --global npm@10.9.4
           test "$(npm --version)" = "10.9.4"
 
-      - name: Setup Java 21
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
-        with:
-          distribution: temurin
-          java-version: '21'
-
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
@@ -78,6 +72,19 @@ jobs:
           grep -Eq '^[[:space:]]*compileSdkVersion[[:space:]]*=[[:space:]]*36$' android/variables.gradle
           grep -Eq '^[[:space:]]*targetSdkVersion[[:space:]]*=[[:space:]]*36$' android/variables.gradle
           grep -q 'applicationId "com.rmcclassics.app"' android/app/build.gradle
+
+      - name: Setup Java 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          # Generate the shell first so its real Gradle inputs enter the cache key.
+          cache: gradle
+          cache-dependency-path: |
+            frontend/android/**/*.gradle*
+            frontend/android/**/gradle-wrapper.properties
+            frontend/package-lock.json
+            .github/workflows/android-build.yml
 
       - name: Compile non-publishing Android App Bundle
         working-directory: frontend/android
