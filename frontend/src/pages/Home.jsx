@@ -276,7 +276,7 @@ export default function Home() {
               Support RMC Classics
             </h3>
             <p className="mt-2 max-w-2xl text-sm text-[#a3a1c6]">
-              Explore optional ways to support the arcade, including the live iOS Streak Freeze Pack,
+              Explore optional ways to support the arcade, including the in-app Streak Freeze Pack where available,
               the Founding Member pilot, sponsorships, and partnerships. Core games stay playable without paying.
             </p>
           </div>
