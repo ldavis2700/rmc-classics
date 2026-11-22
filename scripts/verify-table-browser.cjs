@@ -310,12 +310,17 @@ async function verifyMemoryScoreResponses(browser) {
     }
     await page.getByTestId("share-close-btn").click();
     await modal.waitFor({ state: "hidden" });
+    const reconciled = page.waitForResponse(r => r.url().endsWith("/auth/me") && r.request().method() === "GET");
     await release(0);
+    const profileResponse = await reconciled;
+    assert.equal(profileResponse.status(), 200);
+    assert.equal((await profileResponse.json()).user.xp, pending[1].data.user.xp,
+      "Settled overlapping scores reconcile authoritative profile totals");
     assert.equal(await modal.count(), 0, "Old round must not reopen the dismissed current result");
     assert.equal(pending.length, 2, "No duplicate score submission after old response");
     await page.getByText("// CLEARED", { exact: true }).waitFor();
     assert.deepEqual(routeErrors, []);
-    console.log("PASS: two compiled Memory rounds, Reset, real score processing with reversed response delivery, current award and no stale result reopening or duplicate submissions; disposable browser only");
+    console.log("PASS: two compiled Memory rounds, Reset, real score processing with reversed response delivery, current award, authoritative profile reconciliation and no stale result reopening or duplicate submissions; disposable browser only");
   } finally {
     for (const item of pending) if (!item.released) await item.route.abort().catch(() => {});
     await context.close();

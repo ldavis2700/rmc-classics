@@ -9,9 +9,11 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const authAttempt = useRef(0);
+  const scoreBatch = useRef(null);
   const [refreshError, setRefreshError] = useState(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (isCurrent = () => true) => {
+    const stillCurrent = typeof isCurrent === "function" ? isCurrent : () => true;
     const token = localStorage.getItem("rmc_token");
     if (!token) {
       setRefreshError(null);
@@ -23,12 +25,12 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await api.get("/auth/me");
       // Ignore responses belonging to an account that has since signed out or changed.
-      if (localStorage.getItem("rmc_token") !== token) return;
+      if (localStorage.getItem("rmc_token") !== token || !stillCurrent()) return;
       setRefreshError(null);
       setUser(data.user);
       await configureIAP(data.user?.id);
     } catch (e) {
-      if (localStorage.getItem("rmc_token") !== token) return;
+      if (localStorage.getItem("rmc_token") !== token || !stillCurrent()) return;
       if (e.response?.status === 401 || e.response?.status === 403) {
         // Invalid credentials or required terms acceptance need a fresh sign-in.
         setRefreshError(null);
@@ -125,13 +127,21 @@ export function AuthProvider({ children }) {
   const submitScore = async (payload) => {
     const token = localStorage.getItem("rmc_token");
     if (!token) return { ok: false, error: "Please sign in first." };
+    if (!scoreBatch.current || scoreBatch.current.token !== token || scoreBatch.current.pending === 0) {
+      scoreBatch.current = { token, pending: 0, overlap: false };
+    }
+    const batch = scoreBatch.current;
+    batch.pending += 1;
+    if (batch.pending > 1) batch.overlap = true;
     try {
       const { data } = await api.post("/games/submit", payload);
       if (localStorage.getItem("rmc_token") !== token) {
         return { ok: false, error: "Account changed before the score result arrived." };
       }
       setRefreshError(null);
-      setUser(data.user);
+      // Concurrent responses are snapshots with no server revision ordering.
+      // Reconcile the profile once the batch settles instead of guessing by arrival.
+      if (!batch.overlap) setUser(data.user);
       if (payload?.game_id && typeof payload?.score === "number") {
         submitLeaderboardScore(payload.game_id, payload.score);
       }
@@ -145,6 +155,11 @@ export function AuthProvider({ children }) {
       };
     } catch (e) {
       return { ok: false, error: formatApiErrorDetail(e.response?.data?.detail) };
+    } finally {
+      batch.pending -= 1;
+      if (batch.overlap && batch.pending === 0 && localStorage.getItem("rmc_token") === token) {
+        await refresh(() => scoreBatch.current === batch && batch.pending === 0);
+      }
     }
   };
 
