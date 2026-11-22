@@ -560,6 +560,84 @@ async function verifyMobileNavigation(page) {
   await page.setViewportSize({ width: 390, height: 844 });
   console.log("PASS: all six mobile navigation labels and touch targets fit 320/360/390/428px");
 }
+
+async function verifyProfileRefreshOrdering(browser) {
+  const email = `refresh-order-${crypto.randomUUID()}@example.com`;
+  const registered = await api("/auth/register", null, {
+    name: "Disposable Refresh Player", email, password, accepted_terms: true,
+  });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const pending = [], routeErrors = [];
+  let holdRefresh = false;
+  await context.route("**/*", async route => {
+    const request = route.request(), url = new URL(request.url());
+    if (url.origin !== new URL(base).origin) return route.abort();
+    if (!holdRefresh || url.pathname !== "/api/auth/me" || request.method() !== "GET") return route.continue();
+    try {
+      const response = await route.fetch();
+      assert.equal(response.status(), 200);
+      pending.push({ route, response, data: await response.json(), released: false });
+    } catch (error) { routeErrors.push(error.message); await route.abort(); }
+  });
+  const page = await context.newPage();
+  page.on("pageerror", error => errors.push(error.message));
+  const waitPending = async count => {
+    for (let i = 0; i < 100 && pending.length < count && !routeErrors.length; i++) await page.waitForTimeout(20);
+    assert.deepEqual(routeErrors, []);
+    assert.equal(pending.length, count, "Exactly one profile refresh per SPA mount");
+  };
+  const release = async (item, status) => {
+    const delivered = page.waitForResponse(r => r.url().endsWith("/auth/me") && r.request().method() === "GET");
+    item.released = true;
+    await item.route.fulfill(status === 200 ? { response: item.response } : {
+      status, contentType: "application/json", body: JSON.stringify({ detail: "Disposable stale-response fixture" }),
+    });
+    await delivered;
+    await page.waitForTimeout(150);
+  };
+  try {
+    await page.goto(`${base}/login`);
+    await signIn(page, email); await page.waitForURL(`${base}/profile`);
+    await page.getByTestId("profile-email").filter({ hasText: email }).waitFor();
+    await page.waitForTimeout(150);
+    const token = await page.evaluate(() => localStorage.getItem("rmc_token"));
+    for (const staleStatus of [200, 401, 503]) {
+      await page.getByTestId("mobile-nav-library").click();
+      holdRefresh = true;
+      const offset = pending.length;
+      await page.getByTestId("mobile-nav-profile").click();
+      await waitPending(offset + 1);
+      // Advance only this disposable account through the real score API.
+      const score = await api("/games/submit", token, { game_id: "memory", won: true, score: 100 });
+      assert(score.user.xp > pending[offset].data.user.xp, "New profile must have distinguishable real progress");
+      await page.getByTestId("mobile-nav-library").click();
+      await page.getByTestId("mobile-nav-profile").click();
+      await waitPending(offset + 2);
+      const latest = pending[offset + 1];
+      assert.equal(latest.data.user.xp, score.user.xp);
+      await release(latest, 200);
+      const xp = page.getByText("XP", { exact: true }).locator("..").locator("div").first();
+      assert.equal(await xp.textContent(), String(score.user.xp));
+      await release(pending[offset], staleStatus);
+      assert.equal(new URL(page.url()).pathname, "/profile");
+      assert.equal(await page.getByTestId("profile-email").textContent(), email);
+      assert.equal(await xp.textContent(), String(score.user.xp), "Stale refresh cannot roll visible XP back");
+      assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), token, "Stale 401 cannot remove the current session");
+      assert.equal(await page.getByTestId("account-refresh-error").count(), 0, "Stale failure cannot replace successful refresh");
+      assert.deepEqual(routeErrors, []);
+      holdRefresh = false;
+    }
+    console.log("PASS: newer profile refresh survives delayed old success, 401 and 503 with current visible XP and session");
+  } finally {
+    for (const item of pending.filter(item => !item.released)) await item.route.abort().catch(() => {});
+    await context.close();
+    const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${registered.token}` },
+      body: JSON.stringify({ password }) });
+    assert.equal(deleted.status, 200, "Disposable refresh-order account cleanup");
+  }
+}
+
 async function verifyRefreshRecovery(page, user) {
   await page.setViewportSize({ width: 1280, height: 900 });
   let failureStatus = 503;
@@ -684,6 +762,7 @@ async function clickMove(page, action) {
     }
     await verifyGameHeaderControls(browser);
     await verifyMemoryScoreResponses(browser);
+    await verifyProfileRefreshOrdering(browser);
     await verifyAnonymousOnboarding(browser);
     const users = [];
     const stamp = Date.now();
