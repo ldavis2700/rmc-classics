@@ -88,7 +88,7 @@ export default function Home() {
               Remembering My Childhood
             </span>
             <h1 className="rmc-home-title mt-4 font-display text-4xl font-black uppercase leading-[0.95] tracking-tighter text-white sm:text-5xl lg:text-6xl">
-              The <span className="text-neon-pink">arcade</span> that
+              The <span className="text-neon-pink">arcade</span> that{" "}
               <br />
               raised us — <span className="text-neon-cyan">reborn.</span>
             </h1>
