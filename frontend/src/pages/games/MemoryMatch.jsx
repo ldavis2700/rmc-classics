@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import GameShell from "@/components/rmc/GameShell";
 import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
@@ -24,6 +24,13 @@ export default function MemoryMatch() {
   const [submitted, setSubmitted] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
+
+  const resolutionTimer = useRef(null);
+  const cancelResolution = () => {
+    clearTimeout(resolutionTimer.current);
+    resolutionTimer.current = null;
+  };
+  useEffect(() => () => clearTimeout(resolutionTimer.current), []);
 
   const won = useMemo(() => deck.every((c) => c.matched), [deck]);
 
@@ -54,15 +61,18 @@ export default function MemoryMatch() {
     if (next.length === 2) {
       setMoves((m) => m + 1);
       const [a, b] = next;
+      setLocked(true);
       if (deck[a].symbol === deck[b].symbol) {
-        setTimeout(() => {
+        resolutionTimer.current = setTimeout(() => {
+          resolutionTimer.current = null;
           setDeck((d) => d.map((c, i) => (i === a || i === b ? { ...c, matched: true } : c)));
           setFlipped([]);
+          setLocked(false);
           sfx.match();
         }, 350);
       } else {
-        setLocked(true);
-        setTimeout(() => {
+        resolutionTimer.current = setTimeout(() => {
+          resolutionTimer.current = null;
           setFlipped([]);
           setLocked(false);
         }, 800);
@@ -71,6 +81,7 @@ export default function MemoryMatch() {
   };
 
   const reset = () => {
+    cancelResolution();
     setDeck(makeDeck());
     setFlipped([]);
     setMoves(0);
