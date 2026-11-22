@@ -561,6 +561,107 @@ async function verifyMobileNavigation(page) {
   console.log("PASS: all six mobile navigation labels and touch targets fit 320/360/390/428px");
 }
 
+
+async function verifyResetScoreLifecycles(browser) {
+  for (const game of ["rps", "connect4"]) {
+    const email = `lifecycle-${game}-${crypto.randomUUID()}@example.com`;
+    const registered = await api("/auth/register", null, {
+      name: "Disposable Lifecycle Player", email, password, accepted_terms: true,
+    });
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const pending = [], routeErrors = [];
+    await context.route("**/*", async route => {
+      const request = route.request(), url = new URL(request.url());
+      if (url.origin !== new URL(base).origin) return route.abort();
+      if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
+      try {
+        assert.equal(request.postDataJSON().game_id, game);
+        const response = await route.fetch();
+        assert.equal(response.status(), 200);
+        pending.push({ route, response, data: await response.json(), released: false });
+      } catch (error) { routeErrors.push(error.message); await route.abort(); }
+    });
+    const page = await context.newPage();
+    page.on("pageerror", error => errors.push(error.message));
+    const waitPending = async count => {
+      for (let i = 0; i < 100 && pending.length < count && !routeErrors.length; i++) await page.waitForTimeout(20);
+      assert.deepEqual(routeErrors, []);
+      assert.equal(pending.length, count, "One real score submission per completed game");
+    };
+    const release = async index => {
+      const item = pending[index];
+      const delivered = page.waitForResponse(r => r.url().endsWith("/games/submit") && r.request().method() === "POST");
+      item.released = true;
+      await item.route.fulfill({ response: item.response });
+      await delivered; await page.waitForTimeout(150);
+    };
+    const finish = async () => {
+      if (game === "rps") {
+        for (let i = 0; i < 3; i++) {
+          await page.getByTestId("rps-paper").click();
+          await page.waitForTimeout(750);
+        }
+        await page.getByTestId("rps-finished").filter({ hasText: "You dominated!" }).waitFor();
+      } else {
+        for (const col of [0, 1, 0, 1]) {
+          await page.getByTestId(`c4-drop-${col}`).click();
+          await page.waitForTimeout(550);
+        }
+        await page.getByTestId("c4-turn").filter({ hasText: "CPU won" }).waitFor();
+      }
+    };
+    try {
+      await page.goto(`${base}/login`);
+      await signIn(page, email); await page.waitForURL(`${base}/profile`);
+      await page.goto(`${base}/play/${game}`);
+      // Deterministic CPU choices only in this isolated RPS test document.
+      if (game === "rps") await page.evaluate(() => { Math.random = () => 0; });
+      await page.getByTestId(game === "rps" ? "rps-paper" : "c4-drop-0").click();
+      await page.getByTestId("game-reset").click();
+      await page.waitForTimeout(850);
+      if (game === "rps") {
+        assert.equal(await page.getByTestId("rps-round").textContent(), "Round 1");
+        assert.equal(await page.getByTestId("rps-finished").count(), 0);
+        assert(await page.getByTestId("rps-paper").isEnabled());
+      } else {
+        assert.equal(await page.getByTestId("c4-cell-you").count(), 0);
+        assert.equal(await page.getByTestId("c4-cell-cpu").count(), 0);
+        assert.equal(await page.getByTestId("c4-turn").textContent(), "Your turn");
+      }
+      assert.equal(pending.length, 0);
+      await finish(); await waitPending(1);
+      assert.equal(await page.getByTestId("share-card-modal").count(), 0);
+      await page.getByTestId("game-reset").click();
+      await finish(); await waitPending(2);
+      await release(1);
+      const modal = page.getByTestId("share-card-modal");
+      await modal.waitFor();
+      if (pending[1].data.xp_gained) assert(await modal.getByText(`+${pending[1].data.xp_gained}`, { exact: true }).isVisible());
+      await page.getByTestId("share-close-btn").click();
+      await modal.waitFor({ state: "detached" });
+      await release(0);
+      assert.equal(await modal.count(), 0, "Older game response cannot reopen a closed current result");
+      await waitPending(2);
+      // A third completed game's pending response must also remain silent after SPA exit.
+      await page.getByTestId("game-reset").click();
+      await finish(); await waitPending(3);
+      await page.getByTestId("mobile-nav-library").click();
+      await page.waitForURL(`${base}/library`);
+      await release(2);
+      assert.equal(await modal.count(), 0);
+      await waitPending(3);
+      console.log(`PASS: compiled ${game} reset during pending timer, three real games, reversed score delivery, current award, no obsolete result after reset/SPA exit, no duplicate scores`);
+    } finally {
+      for (const item of pending.filter(item => !item.released)) await item.route.abort().catch(() => {});
+      await context.close();
+      const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${registered.token}` },
+        body: JSON.stringify({ password }) });
+      assert.equal(deleted.status, 200, "Disposable lifecycle account cleanup");
+    }
+  }
+}
+
 async function verifyProfileRefreshOrdering(browser) {
   const email = `refresh-order-${crypto.randomUUID()}@example.com`;
   const registered = await api("/auth/register", null, {
@@ -762,6 +863,7 @@ async function clickMove(page, action) {
     }
     await verifyGameHeaderControls(browser);
     await verifyMemoryScoreResponses(browser);
+    await verifyResetScoreLifecycles(browser);
     await verifyProfileRefreshOrdering(browser);
     await verifyAnonymousOnboarding(browser);
     const users = [];
