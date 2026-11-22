@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import GameShell from "@/components/rmc/GameShell";
 import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
@@ -24,6 +24,27 @@ export default function MemoryMatch() {
   const [submitted, setSubmitted] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
+  // Pending turn resolution must never mutate a new game after Reset.
+  const pendingResolutions = useRef(new Set());
+  const gameEpoch = useRef(0);
+
+  useEffect(() => {
+    const timers = pendingResolutions.current;
+    return () => {
+      gameEpoch.current += 1;
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
+
+  const scheduleResolution = (callback, delay) => {
+    const epoch = gameEpoch.current;
+    const timer = setTimeout(() => {
+      pendingResolutions.current.delete(timer);
+      if (epoch === gameEpoch.current) callback();
+    }, delay);
+    pendingResolutions.current.add(timer);
+  };
 
   const won = useMemo(() => deck.every((c) => c.matched), [deck]);
 
@@ -33,7 +54,9 @@ export default function MemoryMatch() {
       toast.success(`Cleared in ${moves} moves!`);
       setSubmitted(true);
       if (user) {
+        const epoch = gameEpoch.current;
         submitScore({ game_id: "memory", won: true, score: moves }).then((res) => {
+          if (epoch !== gameEpoch.current) return; // A previous game's response.
           if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
           setShareOpen(true);
         });
@@ -55,14 +78,14 @@ export default function MemoryMatch() {
       setMoves((m) => m + 1);
       const [a, b] = next;
       if (deck[a].symbol === deck[b].symbol) {
-        setTimeout(() => {
+        scheduleResolution(() => {
           setDeck((d) => d.map((c, i) => (i === a || i === b ? { ...c, matched: true } : c)));
           setFlipped([]);
           sfx.match();
         }, 350);
       } else {
         setLocked(true);
-        setTimeout(() => {
+        scheduleResolution(() => {
           setFlipped([]);
           setLocked(false);
         }, 800);
@@ -71,12 +94,16 @@ export default function MemoryMatch() {
   };
 
   const reset = () => {
+    gameEpoch.current += 1;
+    for (const timer of pendingResolutions.current) clearTimeout(timer);
+    pendingResolutions.current.clear();
     setDeck(makeDeck());
     setFlipped([]);
     setMoves(0);
     setLocked(false);
     setSubmitted(false);
     setShareOpen(false);
+    setXpInfo({ xp: 0, done: false });
   };
 
   return (
