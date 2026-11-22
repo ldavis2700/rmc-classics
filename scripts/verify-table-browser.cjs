@@ -258,7 +258,7 @@ async function verifyLandscapeLayouts(browser, user) {
           const nav = await page.locator('nav [data-testid="mobile-nav-home"]').boundingBox();
           const box = await play.boundingBox();
           assert(box && nav && box.y >= 0 && box.y + box.height <= nav.y,
-            "Landscape play action must be above bottom navigation without scrolling");
+            `Landscape play action must be above bottom navigation without scrolling: ${width}x${height} play=${JSON.stringify(box)} nav=${JSON.stringify(nav)}`);
           assert(box.height >= 44, "Play action retains a 44px touch target");
           assert(await play.evaluate((el) => {
             const r = el.getBoundingClientRect();
