@@ -230,6 +230,42 @@ async function verifyUnavailableStore(browser, user) {
   } finally { await context.close(); }
 }
 
+async function verifyGameHeaderControls(browser) {
+  const context = await browser.newContext({ hasTouch: true });
+  await context.route("**/*", (route) => new URL(route.request().url()).origin === new URL(base).origin
+    ? route.continue() : route.abort());
+  const page = await context.newPage();
+  page.on("pageerror", (error) => errors.push(error.message));
+  try {
+    for (const [width, height] of [[320, 844], [844, 390], [667, 375]]) {
+      await page.setViewportSize({ width, height });
+      await page.goto(`${base}/play/memory`);
+      await page.getByTestId("memory-board").waitFor();
+      await page.evaluate(() => document.fonts.ready);
+      assert(await page.locator("html").evaluate((el) => el.scrollWidth <= innerWidth),
+        `Game header must fit ${width}x${height}`);
+      for (const id of ["game-back", "game-share", "game-reset"]) {
+        const control = page.getByTestId(id);
+        await control.click({ trial: true });
+        const box = await control.boundingBox();
+        assert(box && box.width >= 44 && box.height >= 44,
+          `${id} touch target must be at least 44px at ${width}x${height}`);
+      }
+      await page.getByTestId("memory-card-0").click();
+      await page.getByTestId("memory-card-1").click();
+      assert.equal((await page.getByTestId("memory-moves").textContent()).trim(), "Moves: 1");
+      await page.waitForTimeout(850); // Finish the game's pair-resolution animation.
+      await page.getByTestId("game-reset").click();
+      assert.equal((await page.getByTestId("memory-moves").textContent()).trim(), "Moves: 0");
+      assert.equal(await page.getByTestId("memory-board").getByRole("button", { name: "?", exact: true }).count(), 16);
+      await page.getByTestId("game-back").click();
+      await page.waitForURL(`${base}/library`);
+      await page.getByTestId("game-card-memory").waitFor();
+    }
+    console.log("PASS: game Back/Share/Reset 44px targets, no horizontal overflow, real Memory reset and Library return at 320x844, 844x390 and 667x375; share actionability only, no external share");
+  } finally { await context.close(); }
+}
+
 async function verifyAnonymousOnboarding(browser) {
   // No injected token: guest play must remain available before account creation.
   for (const [width, height] of [[844, 390], [667, 375]]) {
@@ -529,6 +565,7 @@ async function clickMove(page, action) {
     if (process.env.RMC_VERIFY_CONFIGURED_ANALYTICS === "1") {
       await require("./verify-configured-analytics.cjs").verifyConfiguredAnalytics(browser, base);
     }
+    await verifyGameHeaderControls(browser);
     await verifyAnonymousOnboarding(browser);
     const users = [];
     const stamp = Date.now();
