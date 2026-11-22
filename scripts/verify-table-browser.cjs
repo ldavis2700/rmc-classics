@@ -276,7 +276,8 @@ async function verifyAnonymousOnboarding(browser) {
       const popupPromise = page.waitForEvent("popup");
       await page.locator("form").getByRole("link", { name: "Privacy Policy", exact: true }).click();
       const privacy = await popupPromise;
-      await privacy.waitForURL(`${base}/privacy`);
+      await privacy.waitForURL((url) => url.origin === new URL(base).origin &&
+        ["/privacy", "/privacy/"].includes(url.pathname) && !url.search && !url.hash);
       await privacy.getByTestId("legal-title").waitFor();
       await privacy.close();
       assert.equal(await page.getByTestId("register-email").inputValue(), email,
