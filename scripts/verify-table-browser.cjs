@@ -252,6 +252,20 @@ async function verifyLandscapeLayouts(browser, user) {
         await page.evaluate(() => document.fonts.ready);
         assert(await page.locator("html").evaluate((el) => el.scrollWidth <= innerWidth),
           `Horizontal overflow on ${route} at ${width}x${height}`);
+        if (route === "/" && height <= 500) {
+          await page.waitForTimeout(700); // Let the hero entrance finish before measuring.
+          const play = page.getByTestId("hero-play-btn");
+          const nav = await page.locator('nav [data-testid="mobile-nav-home"]').boundingBox();
+          const box = await play.boundingBox();
+          assert(box && nav && box.y >= 0 && box.y + box.height <= nav.y,
+            "Landscape play action must be above bottom navigation without scrolling");
+          assert(box.height >= 44, "Play action retains a 44px touch target");
+          assert(await play.evaluate((el) => {
+            const r = el.getBoundingClientRect();
+            const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+            return hit === el || el.contains(hit);
+          }), "Landscape play action must not be covered");
+        }
         // Trial clicks scroll and perform Playwright's visibility/stability/hit checks
         // without triggering purchases, notifications or other side effects.
         if (route === "/library") await page.getByTestId("game-card-chess").click({ trial: true });
@@ -266,6 +280,11 @@ async function verifyLandscapeLayouts(browser, user) {
           assert.equal(bytes.readUInt32BE(20), height);
           const name = `landscape/${width}x${height}-${route === "/" ? "home" : route.slice(1)}.png`;
           landscapeCaptures[name] = { bytes, width, height, route };
+        }
+        if (route === "/" && height <= 500) {
+          await page.getByTestId("hero-play-btn").click();
+          await page.waitForURL(`${base}/library`);
+          await page.getByTestId("game-card-chess").waitFor();
         }
         const profileNav = page.locator('[data-testid="mobile-nav-profile"]:visible, [data-testid="nav-profile"]:visible').first();
         await profileNav.click();

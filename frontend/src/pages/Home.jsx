@@ -63,9 +63,9 @@ export default function Home() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 pt-8 md:px-8 md:pt-14">
+    <div className="rmc-home mx-auto max-w-7xl px-4 pt-8 md:px-8 md:pt-14">
       {/* HERO */}
-      <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#16152b] p-6 sm:p-10">
+      <section className="rmc-home-hero relative overflow-hidden rounded-3xl border border-white/10 bg-[#16152b] p-6 sm:p-10">
         <div className="pointer-events-none absolute inset-0 rmc-scanlines opacity-40" />
         <div
           className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full blur-3xl"
@@ -76,7 +76,7 @@ export default function Home() {
           style={{ backgroundColor: "rgba(0,240,255,0.28)" }}
         />
 
-        <div className="relative grid gap-8 md:grid-cols-12">
+        <div className="rmc-home-hero-grid relative grid gap-8 md:grid-cols-12">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -87,18 +87,18 @@ export default function Home() {
               <Sparkles className="h-3.5 w-3.5 text-neon-pink" />
               Remembering My Childhood
             </span>
-            <h1 className="mt-4 font-display text-4xl font-black uppercase leading-[0.95] tracking-tighter text-white sm:text-5xl lg:text-6xl">
+            <h1 className="rmc-home-title mt-4 font-display text-4xl font-black uppercase leading-[0.95] tracking-tighter text-white sm:text-5xl lg:text-6xl">
               The <span className="text-neon-pink">arcade</span> that
               <br />
               raised us — <span className="text-neon-cyan">reborn.</span>
             </h1>
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-[#c9c8e2]">
+            <p className="rmc-home-description mt-5 max-w-xl text-base leading-relaxed text-[#c9c8e2]">
               RMC CLASSICS is a pocket-sized shrine to the games that filled every
               rainy afternoon and family road trip. Fifteen timeless classics, real-time
               friend battles, and one global leaderboard — zero downloads.
             </p>
 
-            <div className="mt-8 flex flex-wrap items-center gap-3">
+            <div className="rmc-home-actions mt-8 flex flex-wrap items-center gap-3">
               <Link
                 to="/library"
                 data-testid="hero-play-btn"
