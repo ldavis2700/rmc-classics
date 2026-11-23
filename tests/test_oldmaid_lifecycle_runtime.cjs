@@ -7,14 +7,20 @@ const source=fs.readFileSync(path.join(__dirname,'../frontend/src/pages/games/Ol
 const start=source.indexOf('export default function OldMaid() {');
 const end=source.indexOf('  if (!state) return null;',start);
 assert(start>0&&end>start);
-function harness(authenticated=false){
+function seededRandom(seed){
+  return ()=>{
+    seed=(Math.imul(1664525,seed)+1013904223)>>>0;
+    return seed / 2**32;
+  };
+}
+function harness(authenticated=false, random=seededRandom(1)){
   const slots=[],effects=[],callbacks=[],timers=new Map(),requests=[];
   let mounted=true,afterUnmountWrites=0;
   const user=authenticated?{id:"test-player"}:null;
   const submitScore=payload=>new Promise((resolve,reject)=>requests.push({payload,resolve,reject}));
   let cursor=0,ec=0,cc=0,queued=[],dirty=false,nextTimer=0;
   const run=vm.runInNewContext(source.slice(source.indexOf('const RANKS'),start)+'\n(function(){'+source.slice(start+'export default function OldMaid() {'.length,end)+'\nreturn {drawFromCpu,init,state,turn,winner,shareOpen,xpInfo};})',{
-    Math:Object.assign(Object.create(Math),{random:()=>0}),
+    Math:Object.assign(Object.create(Math),{random}),
     useAuth:()=>({user,submitScore}),
     useRef:initial=>{const i=cursor++;return slots[i]||(slots[i]={current:initial});},
     useState:initial=>{const i=cursor++;if(!(i in slots))slots[i]=initial;return [slots[i],v=>{if(!mounted)afterUnmountWrites++;const next=typeof v==='function'?v(slots[i]):v;if(!Object.is(next,slots[i])){slots[i]=next;dirty=true;}}];},
@@ -45,3 +51,27 @@ test('reset clears previous award and modal',async()=>{const h=harness(true);fin
 
 test('rejected save preserves local result and remains silent after leaving',async()=>{for(const leave of [null,'reset','unmount']){const h=harness(true);finish(h);if(leave)h[leave]();h.requests[0].reject(new Error('offline'));await settle();assert.equal(h.result.shareOpen,!leave);assert.equal(h.result.xpInfo.xp,0);assert.equal(h.afterUnmountWrites,0);}});
 test('reset during CPU turn cancels move and card flash timer',()=>{const h=harness();h.draw(0);h.reset();const before=JSON.stringify(h.render().state);h.tick();assert.equal(JSON.stringify(h.render().state),before);assert.equal(h.render().winner,null);});
+
+test('a legal opening deal with an empty player hand wins immediately on every round',async()=>{
+  let random=seededRandom(21);
+  const h=harness(true,()=>random());
+  for(let round=0;round<2;round++){
+    if(round>0){
+      random=seededRandom(21);
+      h.reset();
+    }
+    const result=h.render();
+    assert.equal(result.state.you.length,0);
+    assert.equal(result.state.cpu.length,1);
+    assert.equal(result.state.cpu[0].rank,'Q');
+    assert.equal(result.winner,'you');
+    assert.equal(h.requests.length,round+1);
+    assert.equal(h.requests[round].payload.game_id,'oldmaid');
+    assert.equal(h.requests[round].payload.won,true);
+    assert.equal(h.requests[round].payload.score,1);
+    h.requests[round].resolve(award);
+    await settle();
+    h.render();
+    assert.equal(h.result.shareOpen,true);
+  }
+});
