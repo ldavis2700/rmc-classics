@@ -632,11 +632,11 @@ async function verifyChessCheckersTurnCleanup(browser) {
 }
 
 // Legal game from the standard board against the first legal CPU move.
-async function finishCheckersBrowserGame(page) {
-  const moves = [[[5,2],[4,1]],[[5,6],[4,5]],[[6,3],[4,1]],[[4,5],[3,4]],[[7,4],[5,2]],[[5,2],[4,3]],[[6,5],[5,4]],[[7,2],[6,3]],[[4,3],[3,2]],[[3,2],[2,1]],[[7,6],[6,5]],[[6,7],[4,5]],[[5,0],[4,1]],[[4,5],[3,4]],[[7,0],[6,1]]];
+async function finishCheckersBrowserGame(page, won = false) {
+  const moves = won ? [[[5,0],[4,1]],[[5,4],[4,3]],[[5,6],[4,7]],[[6,1],[5,0]],[[4,3],[2,1]],[[6,7],[5,6]],[[7,2],[6,1]],[[5,6],[4,5]],[[4,5],[2,3]],[[6,5],[5,4]],[[0,1],[1,2]],[[4,1],[2,3]],[[7,6],[6,7]],[[4,7],[2,5]],[[0,5],[2,7]],[[2,5],[0,7]]] : [[[5,2],[4,1]],[[5,6],[4,5]],[[6,3],[4,1]],[[4,5],[3,4]],[[7,4],[5,2]],[[5,2],[4,3]],[[6,5],[5,4]],[[7,2],[6,3]],[[4,3],[3,2]],[[3,2],[2,1]],[[7,6],[6,5]],[[6,7],[4,5]],[[5,0],[4,1]],[[4,5],[3,4]],[[7,0],[6,1]]];
   for (let i = 0; i < moves.length; i++) {
     for (const square of moves[i]) await page.getByTestId(`checkers-cell-${square.join("-")}`).click();
-    await page.getByTestId("checkers-turn").filter({ hasText: i === moves.length - 1 ? "CPU won" : "Your turn" }).waitFor();
+    await page.getByTestId("checkers-turn").filter({ hasText: i === moves.length - 1 ? (won ? "You won" : "CPU won") : "Your turn" }).waitFor();
   }
 }
 
@@ -798,14 +798,17 @@ async function verifyCheckersGuestCompletion(browser) {
     await page.goto(`${base}/play/checkers`);
     await page.getByTestId("checkers-board").waitFor();
     await page.evaluate(() => { Math.random = () => 0; });
-    await finishCheckersBrowserGame(page);
+    for (const won of [false, true]) {
+    await finishCheckersBrowserGame(page, won);
     await page.getByTestId("share-card-modal").waitFor();
     assert.equal(scores, 0, "Guest completion never submits a score");
+    assert(await page.getByTestId("share-card-modal").getByText(won ? "WIN" : "PLAYED", { exact: true }).isVisible());
     await page.getByTestId("share-close-btn").click();
     await page.getByTestId("game-reset").click();
     assert.equal(await page.getByTestId("share-card-modal").count(), 0);
     assert.equal(await page.getByTestId("checkers-turn").textContent(), "Your turn");
-    console.log("PASS: compiled Checkers guest completes legal game, receives local result, submits no score and resets");
+    }
+    console.log("PASS: compiled Checkers guest completes legal loss and win, receives correct local result, submits no score and resets");
   } finally { await context.close(); }
 }
 
@@ -818,13 +821,14 @@ async function verifyResetScoreLifecycles(browser) {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const pending = [], routeErrors = [];
     let completedChessGames = 0;
+    let completedCheckersGames = 0;
     await context.route("**/*", async route => {
       const request = route.request(), url = new URL(request.url());
       if (url.origin !== new URL(base).origin) return route.abort();
       if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
       try {
         assert.equal(request.postDataJSON().game_id, game);
-        if (game === "chess") {
+        if (game === "chess" || game === "checkers") {
           assert.equal(request.postDataJSON().won, pending.length > 0);
           assert.equal(request.postDataJSON().score, pending.length > 0 ? 1 : 0);
         }
@@ -857,7 +861,7 @@ async function verifyResetScoreLifecycles(browser) {
       } else if (game === "chess") {
         await finishChessBrowserGame(page, completedChessGames++ > 0);
       } else if (game === "checkers") {
-        await finishCheckersBrowserGame(page);
+        await finishCheckersBrowserGame(page, completedCheckersGames++ > 0);
       } else {
         for (const col of [0, 1, 0, 1]) {
           await page.getByTestId(`c4-drop-${col}`).click();
@@ -902,7 +906,7 @@ async function verifyResetScoreLifecycles(browser) {
       await release(1);
       const modal = page.getByTestId("share-card-modal");
       await modal.waitFor();
-      if (game === "chess") assert(await modal.getByText("WIN", { exact: true }).isVisible());
+      if (game === "chess" || game === "checkers") assert(await modal.getByText("WIN", { exact: true }).isVisible());
       if (pending[1].data.xp_gained) assert(await modal.getByText(`+${pending[1].data.xp_gained}`, { exact: true }).isVisible());
       await page.getByTestId("share-close-btn").click();
       await modal.waitFor({ state: "detached" });
@@ -917,7 +921,7 @@ async function verifyResetScoreLifecycles(browser) {
       await release(2);
       assert.equal(await modal.count(), 0);
       await waitPending(3);
-      if (game === "chess") console.log("PASS: compiled Chess loss then two legal wins, winning score payload and victory result verified");
+      if (game === "chess" || game === "checkers") console.log(`PASS: compiled ${game} loss then two legal wins, winning score payload and victory result verified`);
       console.log(`PASS: compiled ${game} reset during pending timer, three real games, reversed score delivery, current award, no obsolete result after reset/SPA exit, no duplicate scores`);
     } finally {
       for (const item of pending.filter(item => !item.released)) await item.route.abort().catch(() => {});
