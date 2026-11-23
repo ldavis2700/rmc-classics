@@ -562,6 +562,51 @@ async function verifyMobileNavigation(page) {
 }
 
 
+async function verifyChessCheckersTurnCleanup(browser) {
+  for (const game of ["chess", "checkers"]) {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    let scoreRequests = 0;
+    await context.route("**/*", route => {
+      const url = new URL(route.request().url());
+      if (url.origin !== new URL(base).origin) return route.abort();
+      if (url.pathname === "/api/games/submit") scoreRequests++;
+      return route.continue();
+    });
+    const page = await context.newPage();
+    page.on("pageerror", error => errors.push(error.message));
+    try {
+      await page.goto(`${base}/play/${game}`);
+      const board = page.getByTestId(`${game}-board`);
+      await board.waitFor();
+      const snapshot = () => board.locator("button").evaluateAll(nodes => nodes.map(n => n.innerHTML));
+      const initial = await snapshot();
+      assert.equal(initial.length, 64);
+      const status = page.getByTestId(game === "chess" ? "chess-status" : "checkers-turn");
+      const opening = async () => {
+        for (const square of game === "chess" ? ["e2", "e4"] : ["5-0", "4-1"]) {
+          await page.getByTestId(`${game}-cell-${square}`).click();
+        }
+        await status.filter({ hasText: game === "chess" ? "CPU thinking" : "CPU…" }).waitFor();
+        assert.notDeepEqual(await snapshot(), initial, "Legal opening changes the board");
+      };
+      await opening();
+      await page.getByTestId("game-reset").click();
+      await page.waitForTimeout(900);
+      assert.deepEqual(await snapshot(), initial, "Cancelled CPU move cannot alter reset board");
+      assert.match(await status.textContent(), /Your turn/);
+      assert.equal(await page.getByTestId("share-card-modal").count(), 0);
+      await opening();
+      await page.getByTestId("mobile-nav-library").click();
+      await page.waitForURL(`${base}/library`);
+      await page.waitForTimeout(900);
+      assert.equal(await page.getByTestId("share-card-modal").count(), 0);
+      assert.equal(await board.count(), 0);
+      assert.equal(scoreRequests, 0, "Incomplete guest games submit no scores");
+      console.log(`PASS: compiled ${game} legal opening, reset during CPU turn, unchanged reset board after timer deadline, SPA exit without result or score`);
+    } finally { await context.close(); }
+  }
+}
+
 async function verifyResetScoreLifecycles(browser) {
   for (const game of ["rps", "connect4"]) {
     const email = `lifecycle-${game}-${crypto.randomUUID()}@example.com`;
@@ -864,6 +909,7 @@ async function clickMove(page, action) {
     await verifyGameHeaderControls(browser);
     await verifyMemoryScoreResponses(browser);
     await verifyResetScoreLifecycles(browser);
+    await verifyChessCheckersTurnCleanup(browser);
     await verifyProfileRefreshOrdering(browser);
     await verifyAnonymousOnboarding(browser);
     const users = [];
