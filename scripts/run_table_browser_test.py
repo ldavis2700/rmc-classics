@@ -119,8 +119,10 @@ uvicorn.run(app, fd=int(os.environ["RMC_TEST_LISTENER"]), log_level="warning")
                     return response.read(MAX_BYTES + 1)
             result = verify('https://rmcclassics.com', manifest, get_test_asset)
             print(f"PASS: deployed frontend bytes match {result['verified_files']} candidate HTML/JS/CSS assets", flush=True)
+            # Full legal game/lifecycle cases include real CPU delays; retain a bounded
+            # eight-minute ceiling as the suite now exceeds the former five minutes.
             subprocess.run(["node", "scripts/verify-table-browser.cjs"], cwd=ROOT,
-                           env=env, check=True, timeout=300)
+                           env=env, check=True, timeout=480)
             for collection, record in preserved.items():
                 assert client[db_name][collection].find_one({"_id": record["_id"]}) == record
             print("PASS: existing account, progress and purchase records preserved", flush=True)
