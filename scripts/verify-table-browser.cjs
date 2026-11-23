@@ -855,8 +855,58 @@ async function verifyUnoGuestResults(browser) {
   } finally { await context.close(); }
 }
 
+// Play the visible first legal request from the real ordered deck, never inject state.
+async function finishGoFishBrowserGame(page) {
+  for (let actions = 0; actions < 100; actions++) {
+    await page.waitForFunction(() => {
+      const books = (document.querySelector('[data-testid="gofish-books"]')?.textContent || '').match(/\d+/g)?.map(Number) || [];
+      return books.reduce((a,b) => a+b,0) === 13 || !!document.querySelector('[data-testid^="gofish-ask-"]');
+    });
+    const books = (await page.getByTestId("gofish-books").textContent()).match(/\d+/g).map(Number);
+    if (books[0] + books[1] === 13) {
+      assert.deepEqual(books, [12, 1]);
+      assert.equal(await page.getByTestId("gofish-pool").textContent(), "0 cards");
+      assert.equal(await page.getByTestId("gofish-you-hand").locator(':scope > div').count(), 0);
+      assert.equal(await page.getByTestId("gofish-cpu-hand").locator('div').count(), 0);
+      return;
+    }
+    await page.locator('[data-testid^="gofish-ask-"]').first().click();
+  }
+  throw new Error("Go Fish did not finish within 100 legal requests");
+}
+
+async function verifyGoFishGuestResult(browser) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  let scores = 0;
+  await context.route("**/*", route => {
+    const url = new URL(route.request().url());
+    if (url.origin !== new URL(base).origin) return route.abort();
+    if (url.pathname === "/api/games/submit") scores++;
+    return route.continue();
+  });
+  const page = await context.newPage();
+  page.on("pageerror", error => errors.push(error.message));
+  try {
+    await page.goto(`${base}/play/gofish`);
+    await page.getByTestId("gofish-books").waitFor();
+    await page.evaluate(() => { Math.random = () => 0.5; });
+    await page.getByTestId("game-reset").click();
+    await finishGoFishBrowserGame(page);
+    const modal = page.getByTestId("share-card-modal");
+    await modal.waitFor();
+    assert(await modal.getByText("WIN", { exact: true }).isVisible());
+    assert.equal(scores, 0);
+    await page.getByTestId("share-close-btn").click();
+    await page.getByTestId("game-reset").click();
+    assert.equal(await modal.count(), 0);
+    assert.equal(await page.getByTestId("gofish-books").textContent(), "You: 1 · CPU: 1");
+    assert(await page.getByTestId("gofish-ask-2").isVisible());
+    console.log("PASS: compiled Go Fish guest legal full round, 13 books, WIN, no score request and reset");
+  } finally { await context.close(); }
+}
+
 async function verifyResetScoreLifecycles(browser) {
-  for (const game of ["rps", "connect4", "checkers", "chess", "uno"]) {
+  for (const game of ["rps", "connect4", "checkers", "chess", "uno", "gofish"]) {
     const email = `lifecycle-${game}-${crypto.randomUUID()}@example.com`;
     const registered = await api("/auth/register", null, {
       name: "Disposable Lifecycle Player", email, password, accepted_terms: true,
@@ -875,6 +925,10 @@ async function verifyResetScoreLifecycles(browser) {
         if (game === "chess" || game === "checkers" || game === "uno") {
           assert.equal(request.postDataJSON().won, pending.length > 0);
           assert.equal(request.postDataJSON().score, pending.length > 0 ? 1 : 0);
+        }
+        if (game === "gofish") {
+          assert.equal(request.postDataJSON().won, true);
+          assert.equal(request.postDataJSON().score, 12);
         }
         const response = await route.fetch();
         assert.equal(response.status(), 200);
@@ -908,6 +962,8 @@ async function verifyResetScoreLifecycles(browser) {
         await finishCheckersBrowserGame(page, completedCheckersGames++ > 0);
       } else if (game === "uno") {
         await finishUnoBrowserGame(page, completedUnoGames++ > 0);
+      } else if (game === "gofish") {
+        await finishGoFishBrowserGame(page);
       } else {
         for (const col of [0, 1, 0, 1]) {
           await page.getByTestId(`c4-drop-${col}`).click();
@@ -927,6 +983,11 @@ async function verifyResetScoreLifecycles(browser) {
         await page.evaluate(() => { Math.random = () => 0.5; });
         await page.getByTestId("game-reset").click();
       }
+      if (game === "gofish") {
+        await page.getByTestId("gofish-books").waitFor();
+        await page.evaluate(() => { Math.random = () => 0.5; });
+        await page.getByTestId("game-reset").click();
+      }
       if (game === "chess") {
         await page.getByTestId("chess-cell-e2").click();
         await page.getByTestId("chess-cell-e4").click();
@@ -935,6 +996,8 @@ async function verifyResetScoreLifecycles(browser) {
         await page.getByTestId("checkers-cell-4-1").click();
       } else if (game === "uno") {
         await page.getByTestId("uno-card-0").click();
+      } else if (game === "gofish") {
+        await page.getByTestId("gofish-ask-2").click();
       } else await page.getByTestId(game === "rps" ? "rps-paper" : "c4-drop-0").click();
       await page.getByTestId("game-reset").click();
       await page.waitForTimeout(850);
@@ -950,6 +1013,10 @@ async function verifyResetScoreLifecycles(browser) {
         assert.equal(await page.getByTestId("uno-turn").textContent(), "Your turn");
         assert.equal(await page.locator('[data-testid^="uno-card-"]').count(), 7);
         assert.equal(await page.getByTestId("uno-cpu-hand").locator('div').count(), 7);
+      } else if (game === "gofish") {
+        assert.equal(await page.getByTestId("gofish-books").textContent(), "You: 1 · CPU: 1");
+        assert.equal(await page.getByTestId("gofish-pool").textContent(), "38 cards");
+        assert(await page.getByTestId("gofish-ask-2").isVisible());
       } else {
         assert.equal(await page.getByTestId("c4-cell-you").count(), 0);
         assert.equal(await page.getByTestId("c4-cell-cpu").count(), 0);
@@ -963,7 +1030,7 @@ async function verifyResetScoreLifecycles(browser) {
       await release(1);
       const modal = page.getByTestId("share-card-modal");
       await modal.waitFor();
-      if (game === "chess" || game === "checkers" || game === "uno") assert(await modal.getByText("WIN", { exact: true }).isVisible());
+      if (game === "chess" || game === "checkers" || game === "uno" || game === "gofish") assert(await modal.getByText("WIN", { exact: true }).isVisible());
       if (pending[1].data.xp_gained) assert(await modal.getByText(`+${pending[1].data.xp_gained}`, { exact: true }).isVisible());
       await page.getByTestId("share-close-btn").click();
       await modal.waitFor({ state: "detached" });
@@ -979,7 +1046,8 @@ async function verifyResetScoreLifecycles(browser) {
       assert.equal(await modal.count(), 0);
       await waitPending(3);
       if (game === "chess" || game === "checkers" || game === "uno") console.log(`PASS: compiled ${game} loss then two legal wins, winning score payload and victory result verified`);
-      console.log(`PASS: compiled ${game} reset during pending timer, three real games, reversed score delivery, current award, no obsolete result after reset/SPA exit, no duplicate scores`);
+      if (game === "gofish") console.log("PASS: compiled Go Fish three legal wins, book-score payload, current API award, reversed delivery, reset/SPA exit and no duplicate scores");
+      else console.log(`PASS: compiled ${game} reset during pending timer, three real games, reversed score delivery, current award, no obsolete result after reset/SPA exit, no duplicate scores`);
     } finally {
       for (const item of pending.filter(item => !item.released)) await item.route.abort().catch(() => {});
       await context.close();
@@ -1194,6 +1262,7 @@ async function clickMove(page, action) {
     await verifyMemoryScoreResponses(browser);
     await verifyResetScoreLifecycles(browser);
     await verifyUnoGuestResults(browser);
+    await verifyGoFishGuestResult(browser);
     await verifyChessCheckersTurnCleanup(browser);
     await verifyCheckersGuestCompletion(browser);
     await verifyChessGuestCompletion(browser);
