@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const fs = require("node:fs");
 const crypto = require("node:crypto");
+const { Chess: ChessEngine } = require("../frontend/node_modules/chess.js");
 const { chromium } = require(process.env.RMC_PLAYWRIGHT_MODULE || (process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES
   ? path.join(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES, "playwright") : "playwright"));
 const base = process.env.RMC_BROWSER_TEST_URL || "http://127.0.0.1:8765";
@@ -628,6 +629,108 @@ async function finishChessBrowserGame(page, won = false) {
   }
 }
 
+// Use legal moves and the real CPU scoring function in the compiled application.
+// Bias only its random tie-break values; never replace the board or engine state.
+async function finishChessBrowserDraw(page, scoreCount) {
+  const engine = new ChessEngine();
+  const whiteMoves = [["g1", "f3"], ["f3", "g1"], ["g1", "f3"], ["f3", "g1"]];
+  const blackMoves = ["Nf6", "Ng8", "Nf6", "Ng8"];
+  for (let turn = 0; turn < whiteMoves.length; turn++) {
+    const [from, to] = whiteMoves[turn];
+    engine.move({ from, to });
+    const legal = engine.moves({ verbose: true });
+    assert(legal.some(move => move.san === blackMoves[turn]));
+    // 1.998 beats the one-point center preference, with no captures/checks
+    // available in these positions. Install after the player's click sounds.
+    const randomValues = legal.map(move => move.san === blackMoves[turn] ? 0.999 : 0);
+    for (const square of [from, to]) await page.getByTestId(`chess-cell-${square}`).click();
+    await page.evaluate(values => { Math.random = () => values.shift() ?? 0; }, randomValues);
+    engine.move(blackMoves[turn]);
+    const status = page.getByTestId("chess-status");
+    await status.filter({ hasText: turn === 3 ? /^Draw\.$/ : /^Your turn\.$/ }).waitFor();
+    const knightSquare = turn % 2 === 0 ? "f6" : "g8";
+    assert.equal(await page.getByTestId(`chess-cell-${knightSquare}`).textContent(), "♞");
+    if (turn === 1) {
+      assert.equal(engine.isThreefoldRepetition(), false);
+      assert.equal(await page.getByTestId("share-card-modal").count(), 0);
+      assert.equal(scoreCount(), 0, "Second occurrence must not finish or submit");
+    }
+  }
+  assert.equal(engine.isThreefoldRepetition(), true);
+  assert.equal(engine.history().length, 8);
+}
+
+async function verifyChessDrawCompletion(browser) {
+  for (const authenticated of [false, true]) {
+    const email = `draw-${crypto.randomUUID()}@example.com`;
+    const registered = authenticated ? await api("/auth/register", null, {
+      name: "Disposable Draw Player", email, password, accepted_terms: true,
+    }) : null;
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const scores = [], routeErrors = [];
+    await context.route("**/*", async route => {
+      const request = route.request(), url = new URL(request.url());
+      if (url.origin !== new URL(base).origin) return route.abort();
+      if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
+      try {
+        assert(authenticated, "Guest draw must not submit a score");
+        const payload = request.postDataJSON();
+        assert.equal(payload.game_id, "chess");
+        assert.equal(payload.won, false);
+        assert.equal(payload.score, 0);
+        const response = await route.fetch();
+        assert.equal(response.status(), 200);
+        scores.push(await response.json());
+        await route.fulfill({ response });
+      } catch (error) { routeErrors.push(error.message); await route.abort(); }
+    });
+    const page = await context.newPage();
+    page.on("pageerror", error => errors.push(error.message));
+    try {
+      if (authenticated) {
+        await page.goto(`${base}/login`); await signIn(page, email);
+        await page.waitForURL(`${base}/profile`);
+      }
+      await page.goto(`${base}/play/chess`);
+      const board = page.getByTestId("chess-board"); await board.waitFor();
+      const snapshot = () => board.locator("button").allTextContents();
+      const initial = await snapshot();
+      await finishChessBrowserDraw(page, () => scores.length);
+      const modal = page.getByTestId("share-card-modal"); await modal.waitFor();
+      assert.deepEqual(routeErrors, []);
+      assert.equal(scores.length, authenticated ? 1 : 0);
+      assert(await modal.getByText("PLAYED", { exact: true }).isVisible());
+      assert.equal(await modal.getByText("WIN", { exact: true }).count(), 0);
+      if (scores[0]?.xp_gained) assert(await modal.getByText(`+${scores[0].xp_gained}`, { exact: true }).isVisible());
+      await page.getByTestId("share-close-btn").click();
+      const finished = await snapshot();
+      for (const square of ["e2", "e4"]) await page.getByTestId(`chess-cell-${square}`).click();
+      await page.waitForTimeout(700);
+      assert.deepEqual(await snapshot(), finished, "Drawn game rejects further moves");
+      assert.equal(await page.getByTestId("chess-status").textContent(), "Draw.");
+      assert.equal(scores.length, authenticated ? 1 : 0, "No duplicate draw score");
+      await page.getByTestId("game-reset").click();
+      assert.deepEqual(await snapshot(), initial);
+      assert.equal(await page.getByTestId("chess-status").textContent(), "Your turn (White).");
+      assert.equal(await modal.count(), 0);
+      for (const square of ["e2", "e4"]) await page.getByTestId(`chess-cell-${square}`).click();
+      await page.getByTestId("chess-status").filter({ hasText: /^Your turn\.$/ }).waitFor();
+      assert.equal(await modal.count(), 0, "Reset starts a playable game without stale draw");
+      assert.deepEqual(routeErrors, []);
+      assert.equal(scores.length, authenticated ? 1 : 0);
+      console.log(`PASS: compiled Chess ${authenticated ? "signed-in" : "guest"} legal threefold draw, no premature result, non-winning score/result, no duplicate score, reset and fresh play`);
+    } finally {
+      await context.close();
+      if (registered) {
+        const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${registered.token}` },
+          body: JSON.stringify({ password }) });
+        assert.equal(deleted.status, 200, "Disposable draw account cleanup");
+      }
+    }
+  }
+}
+
 async function verifyChessGuestCompletion(browser) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   let scores = 0;
@@ -1009,6 +1112,7 @@ async function clickMove(page, action) {
     await verifyChessCheckersTurnCleanup(browser);
     await verifyCheckersGuestCompletion(browser);
     await verifyChessGuestCompletion(browser);
+    await verifyChessDrawCompletion(browser);
     await verifyProfileRefreshOrdering(browser);
     await verifyAnonymousOnboarding(browser);
     const users = [];
