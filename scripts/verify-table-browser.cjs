@@ -856,7 +856,7 @@ async function verifyUnoGuestResults(browser) {
 }
 
 // Play the visible first legal request from the real ordered deck, never inject state.
-async function finishGoFishBrowserGame(page) {
+async function finishGoFishBrowserGame(page, outcome = "win") {
   for (let actions = 0; actions < 100; actions++) {
     await page.waitForFunction(() => {
       const books = (document.querySelector('[data-testid="gofish-books"]')?.textContent || '').match(/\d+/g)?.map(Number) || [];
@@ -864,7 +864,8 @@ async function finishGoFishBrowserGame(page) {
     });
     const books = (await page.getByTestId("gofish-books").textContent()).match(/\d+/g).map(Number);
     if (books[0] + books[1] === 13) {
-      assert.deepEqual(books, [12, 1]);
+      if (outcome === "win") assert.deepEqual(books, [12, 1]);
+      else assert(books[0] < books[1], `Expected a legal loss, got ${books}`);
       assert.equal(await page.getByTestId("gofish-pool").textContent(), "0 cards");
       assert.equal(await page.getByTestId("gofish-you-hand").locator(':scope > div').count(), 0);
       assert.equal(await page.getByTestId("gofish-cpu-hand").locator('div').count(), 0);
@@ -873,7 +874,8 @@ async function finishGoFishBrowserGame(page) {
     // A new rank can replace the hovered button at the same pointer position.
     // Move off the old hover boundary before normal visibility/stability checks.
     await page.mouse.move(0, 0);
-    await page.locator('[data-testid^="gofish-ask-"]').first().click();
+    const requests = page.locator('[data-testid^="gofish-ask-"]');
+    await (outcome === "win" ? requests.first() : requests.last()).click();
   }
   throw new Error("Go Fish did not finish within 100 legal requests");
 }
@@ -908,6 +910,81 @@ async function verifyGoFishGuestResult(browser) {
   } finally { await context.close(); }
 }
 
+
+
+async function verifyGoFishLosses(browser) {
+  for (const authenticated of [false, true]) {
+    const email = `gofish-loss-${crypto.randomUUID()}@example.com`;
+    const registered = authenticated ? await api("/auth/register", null, {
+      name: "Disposable Go Fish Loss Player", email, password, accepted_terms: true,
+    }) : null;
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const scores = [], routeErrors = [];
+    await context.route("**/*", async route => {
+      const request = route.request(), url = new URL(request.url());
+      if (url.origin !== new URL(base).origin) return route.abort();
+      if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
+      try {
+        assert(authenticated, "Guest must never submit a score");
+        const payload = request.postDataJSON();
+        assert.equal(payload.game_id, "gofish");
+        assert.equal(payload.won, false);
+        const response = await route.fetch();
+        assert.equal(response.status(), 200);
+        scores.push({ payload, data: await response.json() });
+        await route.fulfill({ response });
+      } catch (error) { routeErrors.push(error.message); await route.abort(); }
+    });
+    try {
+      const page = await context.newPage();
+      page.on("pageerror", error => errors.push(error.message));
+      if (authenticated) {
+        await page.goto(`${base}/login`);
+        await signIn(page, email);
+        await page.waitForURL(`${base}/profile`);
+      }
+      await page.goto(`${base}/play/gofish`);
+      await page.getByTestId("gofish-books").waitFor();
+      // Test-document-only seeded shuffle/CPU choices; actual game deck and legal UI requests.
+      await page.evaluate(() => {
+        let seed = 1;
+        Math.random = () => {
+          seed = (Math.imul(1664525, seed) + 1013904223) >>> 0;
+          return seed / 4294967296;
+        };
+      });
+      await page.getByTestId("game-reset").click();
+      await finishGoFishBrowserGame(page, "loss");
+      const books = (await page.getByTestId("gofish-books").textContent()).match(/\d+/g).map(Number);
+      const modal = page.getByTestId("share-card-modal");
+      await modal.waitFor();
+      assert.deepEqual(routeErrors, []);
+      assert(await modal.getByText("PLAYED", { exact: true }).isVisible());
+      assert.equal(await modal.getByText("WIN", { exact: true }).count(), 0);
+      assert.equal(scores.length, authenticated ? 1 : 0);
+      if (authenticated) {
+        assert.equal(scores[0].payload.score, books[0]);
+        if (scores[0].data.xp_gained) assert(await modal.getByText(`+${scores[0].data.xp_gained}`, { exact: true }).isVisible());
+      } else assert.equal(await modal.getByText("XP earned", { exact: true }).count(), 0);
+      await page.getByTestId("share-close-btn").click();
+      await page.evaluate(() => { Math.random = () => 0.5; });
+      await page.getByTestId("game-reset").click();
+      await page.waitForTimeout(200);
+      assert.equal(await modal.count(), 0);
+      assert.equal(scores.length, authenticated ? 1 : 0);
+      assert(await page.getByTestId("gofish-ask-2").isVisible());
+      console.log(`PASS: compiled Go Fish ${authenticated ? "signed-in" : "guest"} legal loss ${books}, all13 books, correct result/score, no duplicates and reset`);
+    } finally {
+      await context.close();
+      if (registered) {
+        const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${registered.token}` },
+          body: JSON.stringify({ password }) });
+        assert.equal(deleted.status, 200, "Disposable Go Fish loss account cleanup");
+      }
+    }
+  }
+}
 
 async function verifyGoFishFailedSaves(browser) {
   const email = `gofish-save-failure-${crypto.randomUUID()}@example.com`;
@@ -1334,6 +1411,7 @@ async function clickMove(page, action) {
     await verifyUnoGuestResults(browser);
     await verifyGoFishGuestResult(browser);
     await verifyGoFishFailedSaves(browser);
+    await verifyGoFishLosses(browser);
     await verifyChessCheckersTurnCleanup(browser);
     await verifyCheckersGuestCompletion(browser);
     await verifyChessGuestCompletion(browser);
