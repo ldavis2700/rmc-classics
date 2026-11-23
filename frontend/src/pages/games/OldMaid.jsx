@@ -56,10 +56,11 @@ export default function OldMaid() {
     deck.forEach((c, i) => (i % 2 === 0 ? you.push(c) : cpu.push(c)));
     you = pairOff(you);
     cpu = pairOff(cpu);
+    const wonOnDeal = you.length === 0;
     setState({ you, cpu });
     setTurn("you");
-    setMessage("Pick a card from the CPU's fanned-out hand.");
-    setWinner(null);
+    setMessage(wonOnDeal ? "You paired all your cards in the opening deal." : "Pick a card from the CPU's fanned-out hand.");
+    setWinner(wonOnDeal ? "you" : null);
     submitted.current = false;
     setXpInfo({ xp: 0, done: false, badges: [] });
     setShareOpen(false);
@@ -88,7 +89,7 @@ export default function OldMaid() {
 
   useEffect(() => {
     if (winner === "you" || winner === "cpu") finalize(winner === "you");
-  }, [winner, finalize]);
+  }, [winner, finalize, state]);
 
   // If a player has 0 cards after their move, they win (they went out). The other keeps the odd Queen and loses.
   const applyEndCheck = (nextYou, nextCpu) => {
