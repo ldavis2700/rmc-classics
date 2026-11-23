@@ -376,11 +376,34 @@ async function verifyGameHeaderControls(browser) {
       await page.getByTestId("game-reset").click();
       assert.equal((await page.getByTestId("memory-moves").textContent()).trim(), "Moves: 0");
       assert.equal(await page.getByTestId("memory-board").getByRole("button", { name: "?", exact: true }).count(), 16);
+      if (width === 320) {
+        // Find an actual matching pair; reset before its 350ms callback.
+        // This tests the live compiled component, not just a fake-timer unit.
+        let foundMatchingPair = false;
+        for (let index = 1; index < 16; index++) {
+          await page.getByTestId("memory-card-0").click();
+          const firstSymbol = await page.getByTestId("memory-card-0").textContent();
+          await page.getByTestId(`memory-card-${index}`).click();
+          const otherSymbol = await page.getByTestId(`memory-card-${index}`).textContent();
+          if (firstSymbol === otherSymbol) {
+            foundMatchingPair = true;
+            break;
+          }
+          await page.waitForTimeout(825);
+        }
+        assert(foundMatchingPair, "A sixteen-card Memory deck must contain a matching pair");
+        await page.getByTestId("game-reset").click();
+        await page.waitForTimeout(450);
+        assert.equal((await page.getByTestId("memory-moves").textContent()).trim(), "Moves: 0");
+        assert.equal(await page.getByTestId("memory-board")
+          .getByRole("button", { name: "?", exact: true }).count(), 16,
+          "A previous turn's matching callback must not reveal cards after Reset");
+      }
       await page.getByTestId("game-back").click();
       await page.waitForURL(`${base}/library`);
       await page.getByTestId("game-card-memory").waitFor();
     }
-    console.log("PASS: game Back/Share/Reset 44px targets, no horizontal overflow, real Memory reset and Library return at 320x844, 844x390 and 667x375; share actionability only, no external share");
+    console.log("PASS: game Back/Share/Reset 44px targets, no overflow, mid-resolution Memory reset and Library return at 320x844, 844x390 and 667x375; share actionability only, no external share");
   } finally { await context.close(); }
 }
 
