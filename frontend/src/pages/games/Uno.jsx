@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import GameShell from "@/components/rmc/GameShell";
 import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
@@ -50,12 +50,17 @@ export default function Uno() {
   const [pendingDraw, setPendingDraw] = useState(0);
   const [message, setMessage] = useState("Play a card that matches colour or number. Wilds always play.");
   const [finished, setFinished] = useState(null);
-  const [submitted, setSubmitted] = useState(false);
+  const submitted = useRef(false);
+  const gameGeneration = useRef(0);
+  useEffect(() => () => { gameGeneration.current += 1; }, []);
   const [shareOpen, setShareOpen] = useState(false);
   const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
   const [ready, setReady] = useState(false);
 
   const init = () => {
+    gameGeneration.current += 1;
+    submitted.current = false;
+    setXpInfo({ xp: 0, done: false, badges: [] });
     let d = buildDeck();
     const y = d.slice(0, 7);
     const c = d.slice(7, 14);
@@ -73,7 +78,6 @@ export default function Uno() {
     setPickColor(false);
     setPendingDraw(0);
     setFinished(null);
-    setSubmitted(false);
     setShareOpen(false);
     setMessage("Play a card that matches colour or value.");
     setReady(true);
@@ -82,17 +86,26 @@ export default function Uno() {
   useEffect(() => { init(); }, []);
 
   const finalize = useCallback(async (won) => {
+    // Claim completion before awaiting the score so rerenders cannot submit twice.
+    if (submitted.current) return;
+    submitted.current = true;
+    const generation = gameGeneration.current;
     won ? sfx.win() : sfx.lose();
     toast[won ? "success" : "error"](won ? "You won!" : "CPU emptied first.");
-    if (user && !submitted) {
-      const res = await submitScore({ game_id: "uno", won, score: won ? 1 : 0 });
-      if (res.ok) {
-        setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
+    try {
+      if (user) {
+        const res = await submitScore({ game_id: "uno", won, score: won ? 1 : 0 });
+        if (generation !== gameGeneration.current) return;
+        if (res.ok) {
+          setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
+        }
       }
-      setSubmitted(true);
+    } catch {
+      // A failed save must not hide the local result or claim unearned awards.
+    } finally {
+      if (generation === gameGeneration.current) setShareOpen(true);
     }
-    setShareOpen(true);
-  }, [user, submitted, submitScore]);
+  }, [user, submitScore]);
 
   useEffect(() => {
     if (finished === "you" || finished === "cpu") {
@@ -123,6 +136,7 @@ export default function Uno() {
           setMessage(`CPU played ${card.value}, stacking to +${pending}.`);
           sfx.card();
           setDeck(d); setDiscard(dc); setCpu(hand); setPendingDraw(pending); setWildColor(currentWild);
+          if (hand.length === 0) { setFinished("cpu"); return; }
           setTurn("you");
           return;
         }
