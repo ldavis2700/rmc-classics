@@ -62,6 +62,9 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Verify Chess history and special moves with installed rules engine
+        run: node --test tests/test_chess_history_runtime.cjs
+
       - name: Verify rendered native store price states
         working-directory: frontend
         env:

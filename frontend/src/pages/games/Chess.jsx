@@ -36,6 +36,14 @@ function pickCpuMove(game) {
   return scored[0].m;
 }
 
+function copyGame(game) {
+  // FEN alone loses prior positions, preventing threefold-repetition draws.
+  // PGN retains the full history and any custom starting-position header.
+  const copy = new ChessEngine();
+  copy.loadPgn(game.pgn());
+  return copy;
+}
+
 export default function Chess() {
   const { user, submitScore } = useAuth();
   const [game, setGame] = useState(() => new ChessEngine());
@@ -109,7 +117,7 @@ export default function Chess() {
       const t = setTimeout(() => {
         const move = pickCpuMove(game);
         if (!move) return;
-        const g2 = new ChessEngine(game.fen());
+        const g2 = copyGame(game);
         g2.move(move);
         sfx.drop();
         setGame(g2);
@@ -125,7 +133,7 @@ export default function Chess() {
     if (selected) {
       const move = legalFrom.find((m) => m.to === sq);
       if (move) {
-        const g2 = new ChessEngine(game.fen());
+        const g2 = copyGame(game);
         g2.move({ from: selected, to: sq, promotion: "q" });
         sfx.drop();
         setGame(g2);
