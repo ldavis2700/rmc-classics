@@ -7,10 +7,8 @@ on:
       - main
     paths:
       - '.github/workflows/android-build.yml'
-      - 'frontend/package.json'
-      - 'frontend/package-lock.json'
-      - 'frontend/capacitor.config.ts'
-      - 'frontend/src/**'
+      # npm build and cap sync consume assets, scripts, config and native files too.
+      - 'frontend/**'
       - 'tests/test_android_build_guard.py'
 
 permissions:

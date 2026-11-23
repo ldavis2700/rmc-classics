@@ -2,6 +2,8 @@
 
 from pathlib import Path
 import unittest
+import ast
+import fnmatch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -12,6 +14,31 @@ AUTH_CONTEXT = (ROOT / "frontend/src/context/AuthContext.jsx").read_text()
 
 
 class AndroidBuildGuardTests(unittest.TestCase):
+    def test_all_frontend_build_inputs_trigger_readiness(self):
+        # These representative inputs affect npm build or cap sync, even when
+        # the PR changes no frontend/src file.
+        block = WORKFLOW.split("    paths:\n", 1)[1].split("\npermissions:", 1)[0]
+        patterns = [ast.literal_eval(line.strip()[2:])
+                    for line in block.splitlines() if line.strip().startswith("- ")]
+        for changed in (
+            "frontend/public/index.html",
+            "frontend/scripts/generate-route-shells.mjs",
+            "frontend/scripts/generate-release-manifest.mjs",
+            "frontend/craco.config.js",
+            "frontend/android/app/build.gradle",
+            "frontend/capacitor.config.ts",
+            "frontend/package-lock.json",
+            "frontend/src/pages/games/Chess.jsx",
+            ".github/workflows/android-build.yml",
+            "tests/test_android_build_guard.py",
+        ):
+            with self.subTest(path=changed):
+                self.assertTrue(any(fnmatch.fnmatchcase(changed, p) for p in patterns),
+                                f"Native build input is not covered: {changed}")
+        for changed in ("docs/notes.md", "scripts/verify-table-browser.cjs"):
+            with self.subTest(path=changed):
+                self.assertFalse(any(fnmatch.fnmatchcase(changed, p) for p in patterns))
+
     def test_workflow_is_read_only_and_never_publishes(self):
         self.assertIn("permissions:\n  contents: read", WORKFLOW)
         self.assertIn("pull_request:", WORKFLOW)

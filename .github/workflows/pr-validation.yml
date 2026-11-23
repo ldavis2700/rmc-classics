@@ -132,6 +132,7 @@ jobs:
 
       - name: Protect Apple Review remediation
         run: |
+          python tests/test_android_build_guard.py
           python tests/test_accessible_loading_state.py
           python tests/test_reviewer_credentials_guard.py
           # Guideline 1.2: consent plus developer-visible Report and Block controls.
