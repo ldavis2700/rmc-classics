@@ -617,11 +617,14 @@ async function finishCheckersBrowserGame(page) {
 }
 
 // Legal five-move loss against the current CPU with random tie-breaking fixed to zero.
-async function finishChessBrowserGame(page) {
-  const moves = [["g2","g4"],["a2","a3"],["f1","h3"],["a3","a4"],["f2","f4"]];
+async function finishChessBrowserGame(page, won = false) {
+  // Legal standard-board sequences; CPU tie-breaking is fixed only in test documents.
+  const moves = won
+    ? [["b2","b3"],["g1","h3"],["g2","h3"],["c2","c3"],["e2","e4"],["f2","e3"],["d1","d2"],["f1","b5"],["d2","d7"]]
+    : [["g2","g4"],["a2","a3"],["f1","h3"],["a3","a4"],["f2","f4"]];
   for (let i = 0; i < moves.length; i++) {
     for (const square of moves[i]) await page.getByTestId(`chess-cell-${square}`).click();
-    await page.getByTestId("chess-status").filter({ hasText: i === moves.length - 1 ? "Checkmate. CPU wins." : "Your turn." }).waitFor();
+    await page.getByTestId("chess-status").filter({ hasText: i === moves.length - 1 ? (won ? "Checkmate. You win!" : "Checkmate. CPU wins.") : "Your turn." }).waitFor();
   }
 }
 
@@ -640,14 +643,17 @@ async function verifyChessGuestCompletion(browser) {
     await page.goto(`${base}/play/chess`);
     await page.getByTestId("chess-board").waitFor();
     await page.evaluate(() => { Math.random = () => 0; });
-    await finishChessBrowserGame(page);
-    await page.getByTestId("share-card-modal").waitFor();
-    assert.equal(scores, 0, "Guest completion never submits a score");
-    await page.getByTestId("share-close-btn").click();
-    await page.getByTestId("game-reset").click();
-    assert.equal(await page.getByTestId("share-card-modal").count(), 0);
-    assert.equal(await page.getByTestId("chess-status").textContent(), "Your turn (White).");
-    console.log("PASS: compiled Chess guest completes legal game, receives local result, submits no score and resets");
+    for (const won of [false, true]) {
+      await finishChessBrowserGame(page, won);
+      await page.getByTestId("share-card-modal").waitFor();
+      assert.equal(scores, 0, "Guest completion never submits a score");
+      if (won) assert(await page.getByTestId("share-card-modal").getByText("WIN", { exact: true }).isVisible());
+      await page.getByTestId("share-close-btn").click();
+      await page.getByTestId("game-reset").click();
+      assert.equal(await page.getByTestId("share-card-modal").count(), 0);
+      assert.equal(await page.getByTestId("chess-status").textContent(), "Your turn (White).");
+    }
+    console.log("PASS: compiled Chess guest completes legal loss and win, receives correct local result, submits no score and resets");
   } finally { await context.close(); }
 }
 
@@ -685,12 +691,17 @@ async function verifyResetScoreLifecycles(browser) {
     });
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const pending = [], routeErrors = [];
+    let completedChessGames = 0;
     await context.route("**/*", async route => {
       const request = route.request(), url = new URL(request.url());
       if (url.origin !== new URL(base).origin) return route.abort();
       if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
       try {
         assert.equal(request.postDataJSON().game_id, game);
+        if (game === "chess") {
+          assert.equal(request.postDataJSON().won, pending.length > 0);
+          assert.equal(request.postDataJSON().score, pending.length > 0 ? 1 : 0);
+        }
         const response = await route.fetch();
         assert.equal(response.status(), 200);
         pending.push({ route, response, data: await response.json(), released: false });
@@ -718,7 +729,7 @@ async function verifyResetScoreLifecycles(browser) {
         }
         await page.getByTestId("rps-finished").filter({ hasText: "You dominated!" }).waitFor();
       } else if (game === "chess") {
-        await finishChessBrowserGame(page);
+        await finishChessBrowserGame(page, completedChessGames++ > 0);
       } else if (game === "checkers") {
         await finishCheckersBrowserGame(page);
       } else {
@@ -733,7 +744,7 @@ async function verifyResetScoreLifecycles(browser) {
       await page.goto(`${base}/login`);
       await signIn(page, email); await page.waitForURL(`${base}/profile`);
       await page.goto(`${base}/play/${game}`);
-      // Deterministic CPU choices only in this isolated RPS test document.
+      // Deterministic CPU choices only in this isolated test document.
       if (game === "rps" || game === "checkers" || game === "chess") await page.evaluate(() => { Math.random = () => 0; });
       if (game === "chess") {
         await page.getByTestId("chess-cell-e2").click();
@@ -765,6 +776,7 @@ async function verifyResetScoreLifecycles(browser) {
       await release(1);
       const modal = page.getByTestId("share-card-modal");
       await modal.waitFor();
+      if (game === "chess") assert(await modal.getByText("WIN", { exact: true }).isVisible());
       if (pending[1].data.xp_gained) assert(await modal.getByText(`+${pending[1].data.xp_gained}`, { exact: true }).isVisible());
       await page.getByTestId("share-close-btn").click();
       await modal.waitFor({ state: "detached" });
@@ -779,6 +791,7 @@ async function verifyResetScoreLifecycles(browser) {
       await release(2);
       assert.equal(await modal.count(), 0);
       await waitPending(3);
+      if (game === "chess") console.log("PASS: compiled Chess loss then two legal wins, winning score payload and victory result verified");
       console.log(`PASS: compiled ${game} reset during pending timer, three real games, reversed score delivery, current award, no obsolete result after reset/SPA exit, no duplicate scores`);
     } finally {
       for (const item of pending.filter(item => !item.released)) await item.route.abort().catch(() => {});
