@@ -857,25 +857,52 @@ async function verifyUnoGuestResults(browser) {
 
 // Play the visible first legal request from the real ordered deck, never inject state.
 async function finishGoFishBrowserGame(page, outcome = "win") {
+  let sawTerminalCpuDraw = false;
   for (let actions = 0; actions < 100; actions++) {
-    await page.waitForFunction(() => {
+    const observed = await page.waitForFunction(terminalLoss => {
       const books = (document.querySelector('[data-testid="gofish-books"]')?.textContent || '').match(/\d+/g)?.map(Number) || [];
-      return books.reduce((a,b) => a+b,0) === 13 || !!document.querySelector('[data-testid^="gofish-ask-"]');
-    });
-    const books = (await page.getByTestId("gofish-books").textContent()).match(/\d+/g).map(Number);
+      const canAsk = !!document.querySelector('[data-testid^="gofish-ask-"]');
+      const playerCards = document.querySelector('[data-testid="gofish-you-hand"]')?.children.length;
+      const cpuCards = document.querySelector('[data-testid="gofish-cpu-hand"]')?.querySelectorAll('div').length;
+      const pool = document.querySelector('[data-testid="gofish-pool"]')?.textContent;
+      const terminalCpuDraw = terminalLoss && books[0] === 3 && books[1] === 9 && playerCards === 0 && !canAsk;
+      return books.reduce((a,b) => a+b,0) === 13 || canAsk || terminalCpuDraw
+        ? { books, canAsk, playerCards, cpuCards, pool, terminalCpuDraw } : false;
+    }, outcome === "terminal-loss");
+    const state = await observed.jsonValue();
+    await observed.dispose();
+    const { books } = state;
+    if (state.terminalCpuDraw) {
+      // Observe the real preterminal render before the scheduled CPU action.
+      // No injected position, accelerated timer or forced click is needed.
+      assert.equal(sawTerminalCpuDraw, false);
+      assert.deepEqual(books, [3, 9]);
+      assert.equal(state.playerCards, 0);
+      assert.equal(state.cpuCards, 3);
+      assert.equal(state.pool, "1 cards");
+      assert.equal(state.canAsk, false);
+      sawTerminalCpuDraw = true;
+      await page.waitForFunction(() => {
+        const books = (document.querySelector('[data-testid="gofish-books"]')?.textContent || '').match(/\d+/g)?.map(Number) || [];
+        return books[0] === 3 && books[1] === 10;
+      });
+      continue;
+    }
     if (books[0] + books[1] === 13) {
       if (outcome === "win") assert.deepEqual(books, [12, 1]);
-      else assert(books[0] < books[1], `Expected a legal loss, got ${books}`);
-      assert.equal(await page.getByTestId("gofish-pool").textContent(), "0 cards");
-      assert.equal(await page.getByTestId("gofish-you-hand").locator(':scope > div').count(), 0);
-      assert.equal(await page.getByTestId("gofish-cpu-hand").locator('div').count(), 0);
+      else {
+        assert.deepEqual(books, [3, 10]);
+        assert.equal(sawTerminalCpuDraw, true, "Must observe the empty-player final CPU draw");
+      }
+      assert.equal(state.pool, "0 cards");
+      assert.equal(state.playerCards, 0);
+      assert.equal(state.cpuCards, 0);
       return;
     }
     // A new rank can replace the hovered button at the same pointer position.
     // Move off the old hover boundary before normal visibility/stability checks.
     await page.mouse.move(0, 0);
-    const requests = page.locator('[data-testid^="gofish-ask-"]');
-    await (outcome === "win" ? requests.first() : requests.last()).click();
+    await page.locator('[data-testid^="gofish-ask-"]').first().click();
   }
   throw new Error("Go Fish did not finish within 100 legal requests");
 }
@@ -947,14 +974,14 @@ async function verifyGoFishLosses(browser) {
       await page.getByTestId("gofish-books").waitFor();
       // Test-document-only seeded shuffle/CPU choices; actual game deck and legal UI requests.
       await page.evaluate(() => {
-        let seed = 1;
+        let seed = 66;
         Math.random = () => {
           seed = (Math.imul(1664525, seed) + 1013904223) >>> 0;
           return seed / 4294967296;
         };
       });
       await page.getByTestId("game-reset").click();
-      await finishGoFishBrowserGame(page, "loss");
+      await finishGoFishBrowserGame(page, "terminal-loss");
       const books = (await page.getByTestId("gofish-books").textContent()).match(/\d+/g).map(Number);
       const modal = page.getByTestId("share-card-modal");
       await modal.waitFor();
@@ -973,7 +1000,7 @@ async function verifyGoFishLosses(browser) {
       assert.equal(await modal.count(), 0);
       assert.equal(scores.length, authenticated ? 1 : 0);
       assert(await page.getByTestId("gofish-ask-2").isVisible());
-      console.log(`PASS: compiled Go Fish ${authenticated ? "signed-in" : "guest"} legal loss ${books}, all13 books, correct result/score, no duplicates and reset`);
+      console.log(`PASS: compiled Go Fish ${authenticated ? "signed-in" : "guest"} legal final-CPU-card loss ${books}, empty player/CPU3/pool1 transition, all13 books, correct result/score, no duplicates and reset`);
     } finally {
       await context.close();
       if (registered) {
