@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import GameShell from "@/components/rmc/GameShell";
 import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
@@ -34,11 +34,17 @@ export default function GoFish() {
   const [turn, setTurn] = useState("you");
   const [message, setMessage] = useState("Ask the CPU for a rank you already have.");
   const [winner, setWinner] = useState(null);
-  const [submitted, setSubmitted] = useState(false);
+  const submitted = useRef(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [xpInfo, setXpInfo] = useState({ xp: 0, done: false, badges: [] });
 
+  const gameGeneration = useRef(0);
+  useEffect(() => () => { gameGeneration.current += 1; }, []);
+
   const init = () => {
+    gameGeneration.current += 1;
+    submitted.current = false;
+    setXpInfo({ xp: 0, done: false, badges: [] });
     const deck = buildDeck();
     let you = deck.slice(0, 7);
     let cpu = deck.slice(7, 14);
@@ -46,7 +52,7 @@ export default function GoFish() {
     const yb = findBooks(you); you = yb.remaining;
     const cb = findBooks(cpu); cpu = cb.remaining;
     setState({ you, cpu, pool, yourBooks: yb.books, cpuBooks: cb.books });
-    setTurn("you"); setMessage("Ask the CPU for a rank you already have."); setWinner(null); setSubmitted(false); setShareOpen(false);
+    setTurn("you"); setMessage("Ask the CPU for a rank you already have."); setWinner(null); setShareOpen(false);
   };
   useEffect(() => { init(); }, []);
 
@@ -61,17 +67,25 @@ export default function GoFish() {
   }, [turn, winner, state]);
 
   const finalize = useCallback(async (finalState) => {
+    if (submitted.current) return;
+    submitted.current = true;
+    const generation = gameGeneration.current;
     const yourN = finalState.yourBooks.length, cpuN = finalState.cpuBooks.length;
     const won = yourN > cpuN;
     won ? sfx.win() : sfx.lose();
     toast[won ? "success" : "error"](`You: ${yourN} books · CPU: ${cpuN} books`);
-    if (user && !submitted) {
-      const res = await submitScore({ game_id: "gofish", won, score: yourN });
-      if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
-      setSubmitted(true);
+    try {
+      if (user) {
+        const res = await submitScore({ game_id: "gofish", won, score: yourN });
+        if (generation !== gameGeneration.current) return;
+        if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
+      }
+    } catch {
+      // Preserve the local result without claiming awards when saving fails.
+    } finally {
+      if (generation === gameGeneration.current) setShareOpen(true);
     }
-    setShareOpen(true);
-  }, [user, submitted, submitScore]);
+  }, [user, submitScore]);
 
   const checkEndAndFinalize = useCallback((next) => {
     if (next.you.length === 0 && next.cpu.length === 0 && next.pool.length === 0) {
