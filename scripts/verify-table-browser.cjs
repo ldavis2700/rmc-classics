@@ -607,8 +607,43 @@ async function verifyChessCheckersTurnCleanup(browser) {
   }
 }
 
+// Legal game from the standard board against the first legal CPU move.
+async function finishCheckersBrowserGame(page) {
+  const moves = [[[5,2],[4,1]],[[5,6],[4,5]],[[6,3],[4,1]],[[4,5],[3,4]],[[7,4],[5,2]],[[5,2],[4,3]],[[6,5],[5,4]],[[7,2],[6,3]],[[4,3],[3,2]],[[3,2],[2,1]],[[7,6],[6,5]],[[6,7],[4,5]],[[5,0],[4,1]],[[4,5],[3,4]],[[7,0],[6,1]]];
+  for (let i = 0; i < moves.length; i++) {
+    for (const square of moves[i]) await page.getByTestId(`checkers-cell-${square.join("-")}`).click();
+    await page.getByTestId("checkers-turn").filter({ hasText: i === moves.length - 1 ? "CPU won" : "Your turn" }).waitFor();
+  }
+}
+
+async function verifyCheckersGuestCompletion(browser) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  let scores = 0;
+  await context.route("**/*", route => {
+    const url = new URL(route.request().url());
+    if (url.origin !== new URL(base).origin) return route.abort();
+    if (url.pathname === "/api/games/submit") scores++;
+    return route.continue();
+  });
+  const page = await context.newPage();
+  page.on("pageerror", error => errors.push(error.message));
+  try {
+    await page.goto(`${base}/play/checkers`);
+    await page.getByTestId("checkers-board").waitFor();
+    await page.evaluate(() => { Math.random = () => 0; });
+    await finishCheckersBrowserGame(page);
+    await page.getByTestId("share-card-modal").waitFor();
+    assert.equal(scores, 0, "Guest completion never submits a score");
+    await page.getByTestId("share-close-btn").click();
+    await page.getByTestId("game-reset").click();
+    assert.equal(await page.getByTestId("share-card-modal").count(), 0);
+    assert.equal(await page.getByTestId("checkers-turn").textContent(), "Your turn");
+    console.log("PASS: compiled Checkers guest completes legal game, receives local result, submits no score and resets");
+  } finally { await context.close(); }
+}
+
 async function verifyResetScoreLifecycles(browser) {
-  for (const game of ["rps", "connect4"]) {
+  for (const game of ["rps", "connect4", "checkers"]) {
     const email = `lifecycle-${game}-${crypto.randomUUID()}@example.com`;
     const registered = await api("/auth/register", null, {
       name: "Disposable Lifecycle Player", email, password, accepted_terms: true,
@@ -647,6 +682,8 @@ async function verifyResetScoreLifecycles(browser) {
           await page.waitForTimeout(750);
         }
         await page.getByTestId("rps-finished").filter({ hasText: "You dominated!" }).waitFor();
+      } else if (game === "checkers") {
+        await finishCheckersBrowserGame(page);
       } else {
         for (const col of [0, 1, 0, 1]) {
           await page.getByTestId(`c4-drop-${col}`).click();
@@ -660,14 +697,19 @@ async function verifyResetScoreLifecycles(browser) {
       await signIn(page, email); await page.waitForURL(`${base}/profile`);
       await page.goto(`${base}/play/${game}`);
       // Deterministic CPU choices only in this isolated RPS test document.
-      if (game === "rps") await page.evaluate(() => { Math.random = () => 0; });
-      await page.getByTestId(game === "rps" ? "rps-paper" : "c4-drop-0").click();
+      if (game === "rps" || game === "checkers") await page.evaluate(() => { Math.random = () => 0; });
+      if (game === "checkers") {
+        await page.getByTestId("checkers-cell-5-0").click();
+        await page.getByTestId("checkers-cell-4-1").click();
+      } else await page.getByTestId(game === "rps" ? "rps-paper" : "c4-drop-0").click();
       await page.getByTestId("game-reset").click();
       await page.waitForTimeout(850);
       if (game === "rps") {
         assert.equal(await page.getByTestId("rps-round").textContent(), "Round 1");
         assert.equal(await page.getByTestId("rps-finished").count(), 0);
         assert(await page.getByTestId("rps-paper").isEnabled());
+      } else if (game === "checkers") {
+        assert.equal(await page.getByTestId("checkers-turn").textContent(), "Your turn");
       } else {
         assert.equal(await page.getByTestId("c4-cell-you").count(), 0);
         assert.equal(await page.getByTestId("c4-cell-cpu").count(), 0);
@@ -910,6 +952,7 @@ async function clickMove(page, action) {
     await verifyMemoryScoreResponses(browser);
     await verifyResetScoreLifecycles(browser);
     await verifyChessCheckersTurnCleanup(browser);
+    await verifyCheckersGuestCompletion(browser);
     await verifyProfileRefreshOrdering(browser);
     await verifyAnonymousOnboarding(browser);
     const users = [];
