@@ -908,6 +908,73 @@ async function verifyGoFishGuestResult(browser) {
   } finally { await context.close(); }
 }
 
+
+async function verifyGoFishFailedSaves(browser) {
+  const email = `gofish-save-failure-${crypto.randomUUID()}@example.com`;
+  const registered = await api("/auth/register", null, {
+    name: "Disposable Go Fish Player", email, password, accepted_terms: true,
+  });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const submissions = [];
+  const routeErrors = [];
+  let failure = "http";
+  await context.route("**/*", async route => {
+    const request = route.request(), url = new URL(request.url());
+    if (url.origin !== new URL(base).origin) return route.abort();
+    if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
+    try {
+      const payload = request.postDataJSON();
+      assert.equal(payload.game_id, "gofish");
+      assert.equal(payload.won, true);
+      assert.equal(payload.score, 12);
+      submissions.push(payload);
+      if (failure === "network") return await route.abort("connectionfailed");
+      // Even award-like fields in an unsuccessful response must not become rewards.
+      return await route.fulfill({ status: 503, contentType: "application/json",
+        body: JSON.stringify({ detail: "Disposable save failure", xp_gained: 999,
+          challenge_completed: true, newly_unlocked_badges: [{ id: "fake", name: "Fake reward" }] }) });
+    } catch (error) { routeErrors.push(error.message); await route.abort(); }
+  });
+  try {
+    const page = await context.newPage();
+    page.on("pageerror", error => errors.push(error.message));
+    await page.goto(`${base}/login`);
+    await signIn(page, email);
+    await page.waitForURL(`${base}/profile`);
+    await page.goto(`${base}/play/gofish`);
+    await page.getByTestId("gofish-books").waitFor();
+    await page.evaluate(() => { Math.random = () => 0.5; });
+    for (const mode of ["http", "network"]) {
+      failure = mode;
+      await page.getByTestId("game-reset").click();
+      await finishGoFishBrowserGame(page);
+      const modal = page.getByTestId("share-card-modal");
+      await modal.waitFor();
+      assert.deepEqual(routeErrors, []);
+      assert.equal(submissions.length, mode === "http" ? 1 : 2);
+      assert(await modal.getByText("WIN", { exact: true }).isVisible());
+      assert(await modal.getByText("12", { exact: true }).isVisible());
+      assert.equal(await modal.getByText("XP earned", { exact: true }).count(), 0);
+      assert.equal(await modal.getByText("Daily Challenge complete!", { exact: true }).count(), 0);
+      assert.equal(await modal.getByTestId("share-badges").count(), 0);
+      await page.getByTestId("share-close-btn").click();
+      await page.getByTestId("game-reset").click();
+      await page.waitForTimeout(200);
+      assert.equal(await modal.count(), 0);
+      assert.equal(submissions.length, mode === "http" ? 1 : 2);
+      assert.equal(await page.getByTestId("gofish-books").textContent(), "You: 1 · CPU: 1");
+      assert(await page.getByTestId("gofish-ask-2").isVisible());
+    }
+    console.log("PASS: compiled Go Fish HTTP rejection and network failure preserve legal win/books, award nothing, submit once and reset for fresh play");
+  } finally {
+    await context.close();
+    const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${registered.token}` },
+      body: JSON.stringify({ password }) });
+    assert.equal(deleted.status, 200, "Disposable Go Fish failure account cleanup");
+  }
+}
+
 async function verifyResetScoreLifecycles(browser) {
   for (const game of ["rps", "connect4", "checkers", "chess", "uno", "gofish"]) {
     const email = `lifecycle-${game}-${crypto.randomUUID()}@example.com`;
@@ -1266,6 +1333,7 @@ async function clickMove(page, action) {
     await verifyResetScoreLifecycles(browser);
     await verifyUnoGuestResults(browser);
     await verifyGoFishGuestResult(browser);
+    await verifyGoFishFailedSaves(browser);
     await verifyChessCheckersTurnCleanup(browser);
     await verifyCheckersGuestCompletion(browser);
     await verifyChessGuestCompletion(browser);
