@@ -870,6 +870,9 @@ async function finishGoFishBrowserGame(page) {
       assert.equal(await page.getByTestId("gofish-cpu-hand").locator('div').count(), 0);
       return;
     }
+    // A new rank can replace the hovered button at the same pointer position.
+    // Move off the old hover boundary before normal visibility/stability checks.
+    await page.mouse.move(0, 0);
     await page.locator('[data-testid^="gofish-ask-"]').first().click();
   }
   throw new Error("Go Fish did not finish within 100 legal requests");
