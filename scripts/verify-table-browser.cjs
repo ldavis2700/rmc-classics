@@ -812,8 +812,51 @@ async function verifyCheckersGuestCompletion(browser) {
   } finally { await context.close(); }
 }
 
+// Comparator zero preserves the actual deck order only in this test document.
+// Both starting hands are red number cards: seven legal plays win; drawing one
+// extra card first lets the CPU empty its seven-card hand before the player.
+async function finishUnoBrowserGame(page, won) {
+  if (!won) await page.getByTestId("uno-draw").click();
+  for (let i = 0; i < 7; i++) {
+    await page.getByTestId("uno-card-0").click();
+    await page.getByTestId("uno-turn").filter({ hasText: i === 6 ? (won ? "You won" : "CPU won") : "Your turn" }).waitFor();
+  }
+}
+
+async function verifyUnoGuestResults(browser) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  let scores = 0;
+  await context.route("**/*", route => {
+    const url = new URL(route.request().url());
+    if (url.origin !== new URL(base).origin) return route.abort();
+    if (url.pathname === "/api/games/submit") scores++;
+    return route.continue();
+  });
+  const page = await context.newPage();
+  page.on("pageerror", error => errors.push(error.message));
+  try {
+    await page.goto(`${base}/play/uno`);
+    await page.getByTestId("uno-card-0").waitFor();
+    await page.evaluate(() => { Math.random = () => 0.5; });
+    await page.getByTestId("game-reset").click();
+    for (const won of [false, true]) {
+      await finishUnoBrowserGame(page, won);
+      const modal = page.getByTestId("share-card-modal");
+      await modal.waitFor();
+      assert(await modal.getByText(won ? "WIN" : "PLAYED", { exact: true }).isVisible());
+      assert.equal(scores, 0, "Guest Wild Cards never submits scores");
+      await page.getByTestId("share-close-btn").click();
+      await page.getByTestId("game-reset").click();
+      assert.equal(await modal.count(), 0);
+      assert.equal(await page.getByTestId("uno-turn").textContent(), "Your turn");
+      assert.equal(await page.locator('[data-testid^="uno-card-"]').count(), 7);
+    }
+    console.log("PASS: compiled Wild Cards guest legal loss/win, correct local results, no score requests and reset");
+  } finally { await context.close(); }
+}
+
 async function verifyResetScoreLifecycles(browser) {
-  for (const game of ["rps", "connect4", "checkers", "chess"]) {
+  for (const game of ["rps", "connect4", "checkers", "chess", "uno"]) {
     const email = `lifecycle-${game}-${crypto.randomUUID()}@example.com`;
     const registered = await api("/auth/register", null, {
       name: "Disposable Lifecycle Player", email, password, accepted_terms: true,
@@ -822,13 +865,14 @@ async function verifyResetScoreLifecycles(browser) {
     const pending = [], routeErrors = [];
     let completedChessGames = 0;
     let completedCheckersGames = 0;
+    let completedUnoGames = 0;
     await context.route("**/*", async route => {
       const request = route.request(), url = new URL(request.url());
       if (url.origin !== new URL(base).origin) return route.abort();
       if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
       try {
         assert.equal(request.postDataJSON().game_id, game);
-        if (game === "chess" || game === "checkers") {
+        if (game === "chess" || game === "checkers" || game === "uno") {
           assert.equal(request.postDataJSON().won, pending.length > 0);
           assert.equal(request.postDataJSON().score, pending.length > 0 ? 1 : 0);
         }
@@ -862,6 +906,8 @@ async function verifyResetScoreLifecycles(browser) {
         await finishChessBrowserGame(page, completedChessGames++ > 0);
       } else if (game === "checkers") {
         await finishCheckersBrowserGame(page, completedCheckersGames++ > 0);
+      } else if (game === "uno") {
+        await finishUnoBrowserGame(page, completedUnoGames++ > 0);
       } else {
         for (const col of [0, 1, 0, 1]) {
           await page.getByTestId(`c4-drop-${col}`).click();
@@ -876,12 +922,19 @@ async function verifyResetScoreLifecycles(browser) {
       await page.goto(`${base}/play/${game}`);
       // Deterministic CPU choices only in this isolated test document.
       if (game === "rps" || game === "checkers" || game === "chess") await page.evaluate(() => { Math.random = () => 0; });
+      if (game === "uno") {
+        await page.getByTestId("uno-card-0").waitFor();
+        await page.evaluate(() => { Math.random = () => 0.5; });
+        await page.getByTestId("game-reset").click();
+      }
       if (game === "chess") {
         await page.getByTestId("chess-cell-e2").click();
         await page.getByTestId("chess-cell-e4").click();
       } else if (game === "checkers") {
         await page.getByTestId("checkers-cell-5-0").click();
         await page.getByTestId("checkers-cell-4-1").click();
+      } else if (game === "uno") {
+        await page.getByTestId("uno-card-0").click();
       } else await page.getByTestId(game === "rps" ? "rps-paper" : "c4-drop-0").click();
       await page.getByTestId("game-reset").click();
       await page.waitForTimeout(850);
@@ -893,6 +946,10 @@ async function verifyResetScoreLifecycles(browser) {
         assert.equal(await page.getByTestId("chess-status").textContent(), "Your turn (White).");
       } else if (game === "checkers") {
         assert.equal(await page.getByTestId("checkers-turn").textContent(), "Your turn");
+      } else if (game === "uno") {
+        assert.equal(await page.getByTestId("uno-turn").textContent(), "Your turn");
+        assert.equal(await page.locator('[data-testid^="uno-card-"]').count(), 7);
+        assert.equal(await page.getByTestId("uno-cpu-hand").locator('div').count(), 7);
       } else {
         assert.equal(await page.getByTestId("c4-cell-you").count(), 0);
         assert.equal(await page.getByTestId("c4-cell-cpu").count(), 0);
@@ -906,7 +963,7 @@ async function verifyResetScoreLifecycles(browser) {
       await release(1);
       const modal = page.getByTestId("share-card-modal");
       await modal.waitFor();
-      if (game === "chess" || game === "checkers") assert(await modal.getByText("WIN", { exact: true }).isVisible());
+      if (game === "chess" || game === "checkers" || game === "uno") assert(await modal.getByText("WIN", { exact: true }).isVisible());
       if (pending[1].data.xp_gained) assert(await modal.getByText(`+${pending[1].data.xp_gained}`, { exact: true }).isVisible());
       await page.getByTestId("share-close-btn").click();
       await modal.waitFor({ state: "detached" });
@@ -921,7 +978,7 @@ async function verifyResetScoreLifecycles(browser) {
       await release(2);
       assert.equal(await modal.count(), 0);
       await waitPending(3);
-      if (game === "chess" || game === "checkers") console.log(`PASS: compiled ${game} loss then two legal wins, winning score payload and victory result verified`);
+      if (game === "chess" || game === "checkers" || game === "uno") console.log(`PASS: compiled ${game} loss then two legal wins, winning score payload and victory result verified`);
       console.log(`PASS: compiled ${game} reset during pending timer, three real games, reversed score delivery, current award, no obsolete result after reset/SPA exit, no duplicate scores`);
     } finally {
       for (const item of pending.filter(item => !item.released)) await item.route.abort().catch(() => {});
@@ -1136,6 +1193,7 @@ async function clickMove(page, action) {
     await verifyGameHeaderControls(browser);
     await verifyMemoryScoreResponses(browser);
     await verifyResetScoreLifecycles(browser);
+    await verifyUnoGuestResults(browser);
     await verifyChessCheckersTurnCleanup(browser);
     await verifyCheckersGuestCompletion(browser);
     await verifyChessGuestCompletion(browser);
