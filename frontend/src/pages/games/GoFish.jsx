@@ -50,6 +50,16 @@ export default function GoFish() {
   };
   useEffect(() => { init(); }, []);
 
+  // A CPU request can empty the player's hand. Refill at the start of
+  // their next turn, not only after the player's own successful request.
+  useEffect(() => {
+    if (turn !== "you" || winner || !state || state.you.length || !state.pool.length) return;
+    setState(current => {
+      if (!current || current.you.length || !current.pool.length) return current;
+      return { ...current, you: [current.pool[0]], pool: current.pool.slice(1) };
+    });
+  }, [turn, winner, state]);
+
   const finalize = useCallback(async (finalState) => {
     const yourN = finalState.yourBooks.length, cpuN = finalState.cpuBooks.length;
     const won = yourN > cpuN;
@@ -118,12 +128,6 @@ export default function GoFish() {
     setState(next);
     setMessage(msg);
     if (checkEndAndFinalize(next)) return;
-    if (you.length === 0 && pool.length > 0) {
-      // draw one to keep going
-      const d = pool.shift();
-      you.push(d);
-      setState({ ...next, you, pool });
-    }
   };
 
   // CPU turn
