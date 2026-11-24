@@ -908,6 +908,129 @@ async function finishGoFishBrowserGame(page, outcome = "win") {
 }
 
 
+
+async function resetOldMaidSeed(page, seed) {
+  await page.evaluate(value => {
+    let seed = value;
+    Math.random = () => {
+      seed = (Math.imul(1664525, seed) + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+  }, seed);
+  await page.getByTestId("game-reset").click();
+}
+
+async function finishOldMaidLegalRound(page, won) {
+  let draws = 0;
+  for (; draws < 20;) {
+    const counts = (await page.getByTestId("oldmaid-turn").textContent()).match(/\d+/g).map(Number);
+    if (counts.includes(0)) break;
+    await page.mouse.move(0, 0);
+    await page.getByTestId("oldmaid-cpu-card-0").click();
+    draws++;
+    // Let the real 900ms CPU timer finish; never inject cards or advance the clock.
+    await page.waitForFunction(() => {
+      const counts = document.querySelector('[data-testid="oldmaid-turn"]')?.textContent.match(/\d+/g).map(Number);
+      const button = document.querySelector('[data-testid="oldmaid-cpu-card-0"]');
+      return counts?.includes(0) || (button && !button.disabled);
+    });
+  }
+  assert.equal(draws, won ? 2 : 5, "Audited legal first-card strategy completes the full round");
+  assert.equal(await page.getByTestId("oldmaid-turn").textContent(), won ? "You: 0 · CPU: 1" : "You: 1 · CPU: 0");
+  if (won) {
+    assert(await page.getByTestId("oldmaid-message").textContent().then(text => text.startsWith("CPU took ")),
+      "Seed2 win completes on the CPU's real timed turn");
+    assert(await page.getByTestId("oldmaid-cpu-card-0").isDisabled());
+  } else {
+    assert.equal(await page.getByTestId("oldmaid-you-hand").locator(":scope > div").count(), 1);
+    assert.match(await page.getByTestId("oldmaid-you-hand").textContent(), /Q/);
+  }
+}
+
+async function verifyOldMaidFullRounds(browser) {
+  for (const mode of ["guest", "authenticated", "http", "network"]) {
+    const authenticated = mode !== "guest";
+    const email = `oldmaid-round-${crypto.randomUUID()}@example.com`;
+    const registered = authenticated ? await api("/auth/register", null, {
+      name: "Disposable Old Maid Round Player", email, password, accepted_terms: true,
+    }) : null;
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const submissions = [], routeErrors = [];
+    let recording = false, expectedWon = false;
+    await context.route("**/*", async route => {
+      const request = route.request(), url = new URL(request.url());
+      if (url.origin !== new URL(base).origin) return route.abort();
+      if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
+      try {
+        assert(authenticated, "Guest must not submit a score");
+        if (!recording) return route.continue();
+        const payload = request.postDataJSON();
+        assert.deepEqual(payload, { game_id: "oldmaid", won: expectedWon, score: expectedWon ? 1 : 0 });
+        const item = { payload }; submissions.push(item);
+        if (mode === "network") return await route.abort("connectionfailed");
+        if (mode === "http") return await route.fulfill({ status: 503, contentType: "application/json",
+          body: JSON.stringify({ detail: "Disposable save failure", xp_gained: 999,
+            challenge_completed: true, newly_unlocked_badges: [{ id: "fake", name: "Fake reward" }] }) });
+        const response = await route.fetch();
+        assert.equal(response.status(), 200);
+        item.data = await response.json();
+        await route.fulfill({ response });
+      } catch (error) { routeErrors.push(error.message); await route.abort(); }
+    });
+    try {
+      const page = await context.newPage();
+      page.on("pageerror", error => errors.push(error.message));
+      if (authenticated) {
+        await page.goto(`${base}/login`);
+        await signIn(page, email); await page.waitForURL(`${base}/profile`);
+      }
+      await page.goto(`${base}/play/oldmaid`);
+      await page.getByTestId("oldmaid-turn").waitFor();
+      const modal = page.getByTestId("share-card-modal");
+      const firstCounts = (await page.getByTestId("oldmaid-turn").textContent()).match(/\d+/g).map(Number);
+      if (firstCounts.includes(0)) {
+        await modal.waitFor(); await page.getByTestId("share-close-btn").click();
+        await modal.waitFor({ state: "detached" });
+      }
+      recording = true;
+      let rounds = 0;
+      for (const won of [false, true]) {
+        expectedWon = won;
+        await resetOldMaidSeed(page, won ? 2 : 1);
+        await finishOldMaidLegalRound(page, won);
+        await modal.waitFor(); rounds++;
+        assert.deepEqual(routeErrors, []);
+        assert(await modal.getByText(won ? "WIN" : "PLAYED", { exact: true }).isVisible());
+        assert.equal(submissions.length, authenticated ? rounds : 0);
+        if (mode === "authenticated") {
+          const data = submissions.at(-1).data;
+          assert(data, "Result uses a completed real API response");
+          if (data.xp_gained) assert(await modal.getByText(`+${data.xp_gained}`, { exact: true }).isVisible());
+        } else {
+          assert.equal(await modal.getByText("XP earned", { exact: true }).count(), 0);
+          assert.equal(await modal.getByText("Daily Challenge complete!", { exact: true }).count(), 0);
+          assert.equal(await modal.getByTestId("share-badges").count(), 0);
+        }
+        await page.getByTestId("share-close-btn").click();
+        await resetOldMaidSeed(page, 1);
+        await page.waitForTimeout(200);
+        assert.equal(await modal.count(), 0);
+        assert(await page.getByTestId("oldmaid-cpu-card-0").isEnabled());
+        assert.equal(submissions.length, authenticated ? rounds : 0);
+      }
+      console.log(`PASS: compiled Old Maid ${mode} legal full-round loss and CPU-turn win, correct result/score, no duplicate submissions, reset and truthful rewards`);
+    } finally {
+      await context.close();
+      if (registered) {
+        const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${registered.token}` },
+          body: JSON.stringify({ password }) });
+        assert.equal(deleted.status, 200, "Disposable Old Maid full-round account cleanup");
+      }
+    }
+  }
+}
+
 async function verifyOldMaidInitialWins(browser) {
   for (const authenticated of [false, true]) {
     const email = `oldmaid-initial-${crypto.randomUUID()}@example.com`;
@@ -1571,6 +1694,7 @@ async function clickMove(page, action) {
     await verifyGoFishFailedSaves(browser);
     await verifyGoFishLosses(browser);
     await verifyOldMaidInitialWins(browser);
+    await verifyOldMaidFullRounds(browser);
     await verifyChessCheckersTurnCleanup(browser);
     await verifyCheckersGuestCompletion(browser);
     await verifyChessGuestCompletion(browser);
