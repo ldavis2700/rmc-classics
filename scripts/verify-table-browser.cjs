@@ -907,6 +907,137 @@ async function finishGoFishBrowserGame(page, outcome = "win") {
   throw new Error("Go Fish did not finish within 100 legal requests");
 }
 
+
+async function verifyOldMaidInitialWins(browser) {
+  for (const authenticated of [false, true]) {
+    const email = `oldmaid-initial-${crypto.randomUUID()}@example.com`;
+    const registered = authenticated ? await api("/auth/register", null, {
+      name: "Disposable Old Maid Player", email, password, accepted_terms: true,
+    }) : null;
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const pending = [], routeErrors = [];
+    let recording = false;
+    await context.route("**/*", async route => {
+      const request = route.request(), url = new URL(request.url());
+      if (url.origin !== new URL(base).origin) return route.abort();
+      if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
+      try {
+        assert(authenticated, "Guest must never submit a score");
+        // An uncontrolled first deal can also win. Let it settle before the seeded cases.
+        if (!recording) return route.continue();
+        assert.deepEqual(request.postDataJSON(), { game_id: "oldmaid", won: true, score: 1 });
+        const response = await route.fetch();
+        assert.equal(response.status(), 200);
+        pending.push({ route, response, data: await response.json(), released: false });
+      } catch (error) { routeErrors.push(error.message); await route.abort(); }
+    });
+    const page = await context.newPage();
+    page.on("pageerror", error => errors.push(error.message));
+    const reset = async seed => {
+      // Seed only this test document, after navigation. No injected game state or timer changes.
+      await page.evaluate(value => {
+        let seed = value;
+        Math.random = () => {
+          seed = (Math.imul(1664525, seed) + 1013904223) >>> 0;
+          return seed / 4294967296;
+        };
+      }, seed);
+      await page.getByTestId("game-reset").click();
+    };
+    const waitPending = async count => {
+      for (let i = 0; i < 150 && pending.length < count && !routeErrors.length; i++) await page.waitForTimeout(20);
+      assert.deepEqual(routeErrors, []);
+      assert.equal(pending.length, count, "Exactly one real score request per seeded initial win");
+    };
+    const release = async index => {
+      const item = pending[index];
+      const delivered = page.waitForResponse(r => r.url().endsWith("/games/submit") && r.request().method() === "POST");
+      await item.route.fulfill({ response: item.response });
+      item.released = true;
+      await delivered;
+      await page.waitForTimeout(150);
+    };
+    const assertInitialWin = async () => {
+      assert.equal(await page.getByTestId("oldmaid-turn").textContent(), "You: 0 · CPU: 1");
+      assert.equal(await page.getByTestId("oldmaid-you-hand").locator(":scope > div").count(), 0);
+      assert.equal(await page.getByTestId("oldmaid-cpu-hand").getByRole("button").count(), 1);
+      assert(await page.getByTestId("oldmaid-cpu-card-0").isDisabled(), "Cannot draw lone Queen after winning");
+      assert.equal(await page.getByTestId("oldmaid-message").textContent(), "You paired off every card!");
+    };
+    try {
+      if (authenticated) {
+        await page.goto(`${base}/login`);
+        await signIn(page, email);
+        await page.waitForURL(`${base}/profile`);
+      }
+      await page.goto(`${base}/play/oldmaid`);
+      await page.getByTestId("oldmaid-turn").waitFor();
+      const modal = page.getByTestId("share-card-modal");
+      const firstCounts = (await page.getByTestId("oldmaid-turn").textContent()).match(/\d+/g).map(Number);
+      if (firstCounts.includes(0)) {
+        await modal.waitFor();
+        await page.getByTestId("share-close-btn").click();
+        await modal.waitFor({ state: "detached" });
+      }
+      recording = true;
+      for (let round = 1; round <= 2; round++) {
+        await reset(21);
+        await assertInitialWin();
+        if (authenticated) {
+          await waitPending(round);
+          assert.equal(await modal.count(), 0, "Result awaits its score response");
+        } else {
+          await modal.waitFor();
+          assert(await modal.getByText("WIN", { exact: true }).isVisible());
+          assert.equal(await modal.getByText("XP earned", { exact: true }).count(), 0);
+          await page.getByTestId("share-close-btn").click();
+        }
+      }
+      if (authenticated) {
+        await release(1);
+        await modal.waitFor();
+        assert(await modal.getByText("WIN", { exact: true }).isVisible());
+        if (pending[1].data.xp_gained) assert(await modal.getByText(`+${pending[1].data.xp_gained}`, { exact: true }).isVisible());
+        const currentResult = await modal.textContent();
+        await release(0);
+        assert.equal(await modal.textContent(), currentResult, "Old response cannot replace current round rewards");
+        await waitPending(2);
+        await page.getByTestId("share-close-btn").click();
+        await reset(21);
+        await waitPending(3);
+        await reset(1);
+        await release(2);
+        assert.equal(await modal.count(), 0, "Late result cannot reopen after reset to a playable deal");
+        assert(await page.getByTestId("oldmaid-cpu-card-0").isEnabled());
+        await reset(21);
+        await waitPending(4);
+        await page.getByTestId("mobile-nav-library").click();
+        await page.waitForURL(`${base}/library`);
+        await release(3);
+        assert.equal(await modal.count(), 0, "Late result stays silent after SPA exit");
+        await waitPending(4);
+      } else {
+        await reset(1);
+        await page.waitForTimeout(200);
+        assert.equal(await modal.count(), 0);
+        assert(await page.getByTestId("oldmaid-cpu-card-0").isEnabled());
+        assert.equal(pending.length, 0);
+      }
+      assert.deepEqual(routeErrors, []);
+      console.log(`PASS: compiled Old Maid ${authenticated ? "signed-in" : "guest"} seed21 initial wins, repeated same-winner reset, disabled lone Queen, ${authenticated ? "real API score/award, reversed responses, reset and SPA exit" : "no score requests or fabricated XP"}`);
+    } finally {
+      for (const item of pending.filter(item => !item.released)) await item.route.abort().catch(() => {});
+      await context.close();
+      if (registered) {
+        const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${registered.token}` },
+          body: JSON.stringify({ password }) });
+        assert.equal(deleted.status, 200, "Disposable Old Maid account cleanup");
+      }
+    }
+  }
+}
+
 async function verifyGoFishGuestResult(browser) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   let scores = 0;
@@ -1439,6 +1570,7 @@ async function clickMove(page, action) {
     await verifyGoFishGuestResult(browser);
     await verifyGoFishFailedSaves(browser);
     await verifyGoFishLosses(browser);
+    await verifyOldMaidInitialWins(browser);
     await verifyChessCheckersTurnCleanup(browser);
     await verifyCheckersGuestCompletion(browser);
     await verifyChessGuestCompletion(browser);
