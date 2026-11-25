@@ -70,16 +70,20 @@ async function finishRound(page) {
 
 
 async function verifySignedInResults(browser) {
- for (const mode of ["success","http","network","delayed-reset","delayed-exit"]) {
+ for (const mode of ["success","http","network","delayed-reset","delayed-exit","reversed"]) {
   const email = "tower-"+require("node:crypto").randomUUID()+"@example.com";
   const registered = await api("/auth/register",null,{name:"Disposable Tower Player",email,password,accepted_terms:true});
   let context;
-  const errors=[],submissions=[],routeErrors=[];
+  const errors=[],submissions=[],routeErrors=[],blockedProfileRefreshes=[];
+  let holdProfileRefresh=false;
   try {
    context=await browser.newContext({viewport:{width:1280,height:1000}});
    await context.route("**/*",async route=>{
     const request=route.request(),url=new URL(request.url());
     if(url.origin!==new URL(base).origin)return route.abort();
+    if(holdProfileRefresh && url.pathname==="/api/auth/me" && request.method()==="GET"){
+     blockedProfileRefreshes.push(route);return;
+    }
     if(url.pathname!=="/api/games/submit"||request.method()!=="POST")return route.continue();
     try {
      const item={payload:request.postDataJSON()};submissions.push(item);
@@ -87,7 +91,7 @@ async function verifySignedInResults(browser) {
      if(mode==="http")return await route.fulfill({status:503,contentType:"application/json",body:JSON.stringify({
       detail:"Disposable save failure",xp_gained:999,challenge_completed:true,newly_unlocked_badges:[{id:"fake",name:"Fake"}]})});
      const response=await route.fetch();assert.equal(response.status(),200);item.data=await response.json();
-     if(mode.startsWith("delayed-"))await new Promise(resolve=>{item.release=resolve;});
+     if(mode.startsWith("delayed-")||mode==="reversed")await new Promise(resolve=>{item.release=resolve;});
      await route.fulfill({response});item.fulfilled=true;
     }catch(error){routeErrors.push(error.message);await route.abort().catch(()=>{});}
    });
@@ -96,6 +100,56 @@ async function verifySignedInResults(browser) {
    await page.goto(base+"/login");await signIn(page,email);await page.waitForURL(base+"/profile");
    await page.goto(base+"/play/jenga");
    const result=await finishRound(page),modal=page.getByTestId("share-card-modal");
+   if(mode==="reversed"){
+    const waitHeld=async count=>{
+     for(let i=0;i<200&&!submissions[count-1]?.release&&!routeErrors.length;i++)await page.waitForTimeout(25);
+     assert.deepEqual(routeErrors,[]);assert.equal(submissions.length,count);
+     assert(submissions[count-1].release,"Real API score response held");
+    };
+    const release=async index=>{
+     const item=submissions[index];
+     const received=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/games/submit");
+     item.release();await received;
+     for(let i=0;i<200&&!item.fulfilled&&!routeErrors.length;i++)await page.waitForTimeout(25);
+     assert.deepEqual(routeErrors,[]);assert(item.fulfilled,"Held response delivered");
+    };
+    await waitHeld(1);assert.equal(await modal.count(),0);
+    await page.getByTestId("game-reset").click();
+    const second=await finishRound(page);
+    await waitHeld(2);assert.equal(await modal.count(),0);
+    assert(submissions[1].data.user.xp>submissions[0].data.user.xp,
+     "Real account snapshots must distinguish the completed rounds");
+    for(const [index,round] of [result,second].entries()){
+     assert.deepEqual(submissions[index].payload,{game_id:"jenga",won:round.score>=10,score:round.score});
+    }
+    await release(1);await modal.waitFor();
+    assert(await modal.getByText(second.score>=10?"WIN":"PLAYED",{exact:true}).isVisible());
+    assert(submissions[1].data.xp_gained>0,"Completed play awards real API XP");
+    assert(await modal.getByText("+"+submissions[1].data.xp_gained,{exact:true}).isVisible());
+    await page.getByTestId("share-close-btn").click();await modal.waitFor({state:"detached"});
+    const reconciled=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/auth/me"&&r.request().method()==="GET");
+    await release(0);
+    const response=await reconciled;assert.equal(response.status(),200);
+    assert.equal((await response.json()).user.xp,submissions[1].data.user.xp);
+    await page.waitForTimeout(300);
+    assert.equal(await modal.count(),0,"Old round cannot reopen dismissed current result");
+    assert.equal((await page.getByTestId("jenga-score").innerText()).trim(),String(second.score));
+    holdProfileRefresh=true;
+    await page.evaluate(()=>{window.__towerDocument="preserved";});
+    await page.locator('[data-testid="nav-profile"]:visible').click();
+    await page.waitForURL(base+"/profile");
+    assert.equal(await page.evaluate(()=>window.__towerDocument),"preserved");
+    await page.getByTestId("profile-email").filter({hasText:email}).waitFor();
+    for(let i=0;i<100&&!blockedProfileRefreshes.length;i++)await page.waitForTimeout(20);
+    assert(blockedProfileRefreshes.length,"Profile mount refresh held");
+    const visibleXP=page.getByText("XP",{exact:true}).locator("..").locator("div").first();
+    assert.equal((await visibleXP.textContent()).trim(),String(submissions[1].data.user.xp),
+     "Visible account XP already reconciled before mount refresh");
+    assert.equal(submissions.length,2,"No duplicate scores");
+    assert.deepEqual(routeErrors,[]);assert.deepEqual(errors,[]);
+    console.log("PASS: compiled Tumble Tower two legal rounds, reversed real score responses, current result/award, no stale modal and reconciled visible XP with mount refresh held",JSON.stringify({first:result,second}));
+    continue;
+   }
    if(mode.startsWith("delayed-")){
     for(let i=0;i<200&&!submissions[0]?.release&&!routeErrors.length;i++)await page.waitForTimeout(25);
     assert.deepEqual(routeErrors,[]);assert.equal(submissions.length,1);assert(submissions[0].release);
@@ -136,6 +190,7 @@ async function verifySignedInResults(browser) {
    assert.deepEqual(routeErrors,[]);assert.deepEqual(errors,[]);
    console.log("PASS: compiled Tumble Tower signed-in "+mode,JSON.stringify(result));
   }finally{
+   for(const route of blockedProfileRefreshes)await route.abort().catch(()=>{});
    for(const item of submissions)if(item.release)item.release();
    if(context)await context.close();
    const deleted=await fetch(base+"/api/auth/account",{method:"DELETE",headers:{"Content-Type":"application/json",Authorization:"Bearer "+registered.token},body:JSON.stringify({password})});
