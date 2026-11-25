@@ -34,6 +34,17 @@ function firstNonEight(deck) {
   return { start, rest };
 }
 
+// Reuse played cards only after the draw pile empties; the active top stays put.
+function refillDrawPile(deck, discard) {
+  if (deck.length || discard.length < 2) return { deck, discard };
+  const recycled = discard.slice(0, -1);
+  for (let i = recycled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [recycled[i], recycled[j]] = [recycled[j], recycled[i]];
+  }
+  return { deck: recycled, discard: discard.slice(-1) };
+}
+
 export default function CrazyEights() {
   const { user, submitScore } = useAuth();
   const [state, setState] = useState(null);
@@ -106,7 +117,9 @@ export default function CrazyEights() {
       let idx = hand.findIndex((c) => canPlay(c, top, currentWild));
       // draw until playable, but keep it reasonable
       let safety = 25;
-      while (idx === -1 && deck.length > 0 && safety-- > 0) {
+      while (idx === -1 && safety-- > 0) {
+        ({ deck, discard } = refillDrawPile(deck, discard));
+        if (!deck.length) break;
         const drawn = deck.shift();
         hand.push(drawn);
         idx = hand.findIndex((c) => canPlay(c, top, currentWild));
@@ -176,7 +189,9 @@ export default function CrazyEights() {
 
   const drawCard = () => {
     if (turn !== "you" || pickSuit || winner) return;
-    const deck = state.deck.slice();
+    let deck = state.deck.slice();
+    let discard = state.discard.slice();
+    ({ deck, discard } = refillDrawPile(deck, discard));
     if (deck.length === 0) {
       setMessage("Deck empty — pass.");
       setTurn("cpu");
@@ -184,7 +199,7 @@ export default function CrazyEights() {
     }
     const card = deck.shift();
     sfx.flip();
-    setState({ ...state, deck, you: [...state.you, card] });
+    setState({ ...state, deck, discard, you: [...state.you, card] });
     setMessage(`Drew ${card.rank}${card.suit}. Play if you can, otherwise draw again or the CPU takes over.`);
   };
 
@@ -319,4 +334,5 @@ export default function CrazyEights() {
     </GameShell>
   );
 }
+
 
