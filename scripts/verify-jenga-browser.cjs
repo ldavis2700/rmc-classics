@@ -23,34 +23,49 @@ async function signIn(page, email) {
 }
 
 async function finishRound(page) {
- const canvas=page.getByTestId('jenga-canvas');
- await canvas.waitFor(); await page.waitForTimeout(1000);
-    let attempts = 0, pulls = 0;
-    for (let row=0;row<8 && !await page.getByTestId("jenga-gameover").count();row++) {
-      for (const col of [0,2,1]) {
-        if (await page.getByTestId("jenga-gameover").count()) break;
-        const size = await canvas.boundingBox();
-        assert(size);
-        await canvas.click({position:{
-          x:size.width*(205+45*col)/500,
-          y:size.height*(659-22*row)/700,
-        }});
-        attempts++;
-        const pull = page.getByTestId("jenga-pull-btn");
-        if (await pull.isEnabled()) {
-          await pull.click();
-          pulls++;
-          await page.waitForTimeout(1000); // Actual physics/score settling, not a fake clock.
-        }
+  const canvas = page.getByTestId("jenga-canvas");
+  const gameOver = page.getByTestId("jenga-gameover");
+  await canvas.waitFor();
+  await page.waitForTimeout(1000);
+  let attempts = 0, pulls = 0;
+  async function clickWhilePlaying(locator, options = {}) {
+    try {
+      await locator.click({...options, timeout:1500});
+      return true;
+    } catch (error) {
+      // Real physics can end the round after the guard but before actionability.
+      // Accept only a click timeout followed by a visible terminal game state.
+      // Other failures (including a blocked click during play) still fail CI.
+      if (error.name !== "TimeoutError" || !await gameOver.isVisible()) throw error;
+      console.log("Observed Tumble Tower collapse while awaiting a UI click");
+      return false;
+    }
+  }
+  rounds: for (let row = 0; row < 8; row++) {
+    for (const col of [0, 2, 1]) {
+      if (await gameOver.isVisible()) break rounds;
+      const size = await canvas.boundingBox();
+      assert(size);
+      if (!await clickWhilePlaying(canvas, {position:{
+        x:size.width*(205+45*col)/500,
+        y:size.height*(659-22*row)/700,
+      }})) break rounds;
+      attempts++;
+      if (await gameOver.isVisible()) break rounds;
+      const pull = page.getByTestId("jenga-pull-btn");
+      if (await pull.isEnabled()) {
+        if (!await clickWhilePlaying(pull)) break rounds;
+        pulls++;
+        await page.waitForTimeout(1000); // Actual physics/score settling, not a fake clock.
       }
     }
-    await page.getByTestId("jenga-gameover").waitFor();
-    assert(pulls>0 && attempts<=24,"Bounded legal UI pulls must cause the collapse");
-    const score = Number((await page.getByTestId("jenga-score").innerText()).trim());
-    assert(Number.isInteger(score) && score>=0 && score<=pulls);
-    assert(await page.getByText("Final Score: "+score,{exact:true}).isVisible());
-
- return {score,pulls,attempts};
+  }
+  await gameOver.waitFor();
+  assert(pulls > 0 && attempts <= 24, "Bounded legal UI pulls must cause the collapse");
+  const score = Number((await page.getByTestId("jenga-score").innerText()).trim());
+  assert(Number.isInteger(score) && score >= 0 && score <= pulls);
+  assert(await page.getByText("Final Score: " + score, {exact:true}).isVisible());
+  return {score, pulls, attempts};
 }
 
 
@@ -228,32 +243,7 @@ async function verifySignedInResults(browser) {
     // A separate complete guest round: only rendered canvas clicks and PULL UI actions.
     // No body-position edits, React state access, clock acceleration or forced collapse.
     await page.goto(base + "/play/jenga");
-    await canvas.waitFor();
-    await page.waitForTimeout(1000);
-    let attempts = 0, pulls = 0;
-    for (let row=0;row<8 && !await page.getByTestId("jenga-gameover").count();row++) {
-      for (const col of [0,2,1]) {
-        if (await page.getByTestId("jenga-gameover").count()) break;
-        const size = await canvas.boundingBox();
-        assert(size);
-        await canvas.click({position:{
-          x:size.width*(205+45*col)/500,
-          y:size.height*(659-22*row)/700,
-        }});
-        attempts++;
-        const pull = page.getByTestId("jenga-pull-btn");
-        if (await pull.isEnabled()) {
-          await pull.click();
-          pulls++;
-          await page.waitForTimeout(1000); // Actual physics/score settling, not a fake clock.
-        }
-      }
-    }
-    await page.getByTestId("jenga-gameover").waitFor();
-    assert(pulls>0 && attempts<=24,"Bounded legal UI pulls must cause the collapse");
-    const score = Number((await page.getByTestId("jenga-score").innerText()).trim());
-    assert(Number.isInteger(score) && score>=0 && score<=pulls);
-    assert(await page.getByText("Final Score: "+score,{exact:true}).isVisible());
+    const {score, pulls, attempts} = await finishRound(page);
     const modal = page.getByTestId("share-card-modal");
     await modal.waitFor();
     assert(await modal.getByText(score>=10?"WIN":"PLAYED",{exact:true}).isVisible());
