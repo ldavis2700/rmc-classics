@@ -947,6 +947,65 @@ async function finishOldMaidLegalRound(page, won) {
   }
 }
 
+// Visible legal actions only; real CPU timers, no game-state injection.
+async function verifyCrazyEightsGuestRounds(browser) {
+  for(const seed of [1,9,2]){
+   const context=await browser.newContext({viewport:{width:390,height:844}});
+   const submissions=[];
+   try {
+   await context.route('**/*',route=>{
+    const u=new URL(route.request().url());
+    if(u.origin!==new URL(base).origin)return route.abort();
+    if(u.pathname==='/api/games/submit')submissions.push(route.request().postData());
+    return route.continue();
+   });
+   const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
+   await page.goto(base+'/play/crazy8');await page.getByTestId('c8-turn').waitFor();
+   await page.evaluate(seed=>{Math.random=()=>{seed=(Math.imul(1664525,seed)+1013904223)>>>0;return seed/4294967296;};},seed);
+   await page.getByTestId('game-reset').click();
+   let actions=0,recycled=false,finalEight=false,previousDeck=37;
+   while(actions<500){
+    const turn=(await page.getByTestId('c8-turn').innerText()).trim();
+    const deck=Number((await page.getByTestId('c8-draw').innerText()).match(/\d+/)[0]);
+    if(deck>previousDeck)recycled=true;previousDeck=deck;
+    if(/won/.test(turn))break;
+    if(turn==='CPU'){
+     await page.waitForFunction(()=>document.querySelector('[data-testid="c8-turn"]')?.textContent.trim()!=='CPU');continue;
+    }
+    const hand=await page.getByTestId('c8-you-hand').locator('button').evaluateAll(els=>els.map(el=>({id:el.dataset.testid,rank:el.children[0].textContent,suit:el.children[1].textContent,enabled:!el.disabled})));
+    const playable=hand.find(c=>c.enabled);
+    await page.mouse.move(0,0);
+    if(playable){
+     await page.getByTestId(playable.id).click();actions++;
+     if(playable.rank==='8'){
+      if(hand.length===1)finalEight=true;
+      const remaining=hand.filter(c=>c.id!==playable.id),counts={};
+      for(const c of remaining)counts[c.suit]=(counts[c.suit]||0)+1;
+      const suit=Object.entries(counts).sort((a,b)=>b[1]-a[1])[0]?.[0]||'♠';
+      await page.getByTestId('c8-pick-'+suit).click();actions++;
+     }
+    }else {await page.getByTestId('c8-draw').click();actions++;}
+   }
+   const outcome=(await page.getByTestId('c8-turn').innerText()).trim();
+   assert(actions<500,'bounded game did not finish');
+   assert.equal(outcome,seed===9?'You won':'CPU won');
+   if(seed===9)assert(finalEight,'win must follow final eight suit selection');
+   if(seed===2)assert(recycled,'previously stalled seed must recycle draw pile');
+   const modal=page.getByTestId('share-card-modal');
+   await modal.waitFor();
+   assert(await modal.getByText(seed===9?'WIN':'PLAYED',{exact:true}).isVisible());
+   assert.equal(await modal.getByText('XP earned',{exact:true}).count(),0);
+   assert.equal(await modal.getByTestId('share-badges').count(),0);
+   assert.equal(submissions.length,0,'guest must not submit score');
+   await page.getByTestId('share-close-btn').click();await page.getByTestId('game-reset').click();
+   assert.equal(await page.getByTestId('c8-you-hand').locator('button').count(),7);
+   assert.equal((await page.getByTestId('c8-turn').innerText()).trim(),'Your turn');
+   assert.equal(await page.getByTestId('share-card-modal').count(),0);
+   console.log('PASS: compiled Crazy Eights guest '+JSON.stringify({seed,actions,outcome,recycled,finalEight,guestSubmissions:submissions.length,reset:'passed'}));
+   } finally { await context.close(); }
+  }
+}
+
 async function verifyOldMaidFullRounds(browser) {
   for (const mode of ["guest", "authenticated", "http", "network"]) {
     const authenticated = mode !== "guest";
@@ -1695,6 +1754,7 @@ async function clickMove(page, action) {
     await verifyGoFishLosses(browser);
     await verifyOldMaidInitialWins(browser);
     await verifyOldMaidFullRounds(browser);
+    await verifyCrazyEightsGuestRounds(browser);
     await verifyChessCheckersTurnCleanup(browser);
     await verifyCheckersGuestCompletion(browser);
     await verifyChessGuestCompletion(browser);
@@ -1918,3 +1978,4 @@ async function clickMove(page, action) {
     throw error;
   } finally { await browser.close(); }
 })().catch((error) => { console.error(error); process.exitCode = 1; });
+
