@@ -101,6 +101,50 @@ assert(base && ["127.0.0.1", "localhost"].includes(new URL(base).hostname), "Dis
     assert.deepEqual(submissions,[],"Guest/reset must not submit a score");
     assert.deepEqual(errors,[]);
     console.log("PASS: compiled Tumble Tower real canvas hit testing, repeated-reset animation-loop stability, pending-pull reset/SPA-exit cancellation and stopped detached-canvas drawing; no guest scores");
+
+    // A separate complete guest round: only rendered canvas clicks and PULL UI actions.
+    // No body-position edits, React state access, clock acceleration or forced collapse.
+    await page.goto(base + "/play/jenga");
+    await canvas.waitFor();
+    await page.waitForTimeout(1000);
+    let attempts = 0, pulls = 0;
+    for (let row=0;row<8 && !await page.getByTestId("jenga-gameover").count();row++) {
+      for (const col of [0,2,1]) {
+        if (await page.getByTestId("jenga-gameover").count()) break;
+        const size = await canvas.boundingBox();
+        assert(size);
+        await canvas.click({position:{
+          x:size.width*(205+45*col)/500,
+          y:size.height*(659-22*row)/700,
+        }});
+        attempts++;
+        const pull = page.getByTestId("jenga-pull-btn");
+        if (await pull.isEnabled()) {
+          await pull.click();
+          pulls++;
+          await page.waitForTimeout(1000); // Actual physics/score settling, not a fake clock.
+        }
+      }
+    }
+    await page.getByTestId("jenga-gameover").waitFor();
+    assert(pulls>0 && attempts<=24,"Bounded legal UI pulls must cause the collapse");
+    const score = Number((await page.getByTestId("jenga-score").innerText()).trim());
+    assert(Number.isInteger(score) && score>=0 && score<=pulls);
+    assert(await page.getByText("Final Score: "+score,{exact:true}).isVisible());
+    const modal = page.getByTestId("share-card-modal");
+    await modal.waitFor();
+    assert(await modal.getByText(score>=10?"WIN":"PLAYED",{exact:true}).isVisible());
+    assert.deepEqual(submissions,[],"Completed guest round must not submit a score");
+    await page.getByTestId("share-close-btn").click();
+    await modal.waitFor({state:"detached"});
+    await page.getByTestId("game-reset").click();
+    await page.waitForTimeout(1000);
+    assert.equal((await page.getByTestId("jenga-score").innerText()).trim(),"0");
+    assert.equal(await page.getByTestId("jenga-gameover").count(),0);
+    assert.equal(await modal.count(),0);
+    assert.deepEqual(errors,[]);
+    console.log("PASS: compiled Tumble Tower guest legal-collapse result and reset",JSON.stringify({attempts,pulls,score}));
+
     await context.close();
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode=1; });

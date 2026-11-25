@@ -121,7 +121,7 @@ uvicorn.run(app, fd=int(os.environ["RMC_TEST_LISTENER"]), log_level="warning")
             print(f"PASS: deployed frontend bytes match {result['verified_files']} candidate HTML/JS/CSS assets", flush=True)
             # Actual Matter.js lifecycle smoke; resource observers do not change physics/timing.
             subprocess.run(["node", "scripts/verify-jenga-browser.cjs"], cwd=ROOT,
-                           env=env, check=True, timeout=45)
+                           env=env, check=True, timeout=90)
             # Focused signed-in score cases have a separate two-minute ceiling.
             subprocess.run(["node", "scripts/verify-crazy8-browser.cjs"], cwd=ROOT,
                            env=env, check=True, timeout=120)
