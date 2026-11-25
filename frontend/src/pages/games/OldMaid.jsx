@@ -35,7 +35,7 @@ function pairOff(hand) {
 }
 
 export default function OldMaid() {
-  const { user, submitScore } = useAuth();
+  const { user, loading, submitScore } = useAuth();
   const [state, setState] = useState(null);
   const [turn, setTurn] = useState("you");
   const [message, setMessage] = useState("Draw a card from the CPU. Match its rank to discard a pair.");
@@ -88,9 +88,12 @@ export default function OldMaid() {
   }, [user, submitScore]);
 
   useEffect(() => {
+    // An immediate deal can finish before a saved session has been restored.
+    // Do not consume this round's result as a guest while identity is unresolved.
+    if (loading) return;
     if (winner === "you" || winner === "cpu") finalize(winner === "you");
   // Reset may deal the same immediate winner; the new hand still needs its own result.
-  }, [winner, finalize, state]);
+  }, [winner, finalize, state, loading]);
 
   // If a player has 0 cards after their move, they win (they went out). The other keeps the odd Queen and loses.
   const applyEndCheck = (nextYou, nextCpu) => {
@@ -241,4 +244,5 @@ export default function OldMaid() {
     </GameShell>
   );
 }
+
 

@@ -1098,10 +1098,18 @@ async function verifyOldMaidInitialWins(browser) {
     }) : null;
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const pending = [], routeErrors = [];
-    let recording = false;
+    let recording = false, holdAuth = false, authResponse = null;
     await context.route("**/*", async route => {
       const request = route.request(), url = new URL(request.url());
       if (url.origin !== new URL(base).origin) return route.abort();
+      if (holdAuth && url.pathname === "/api/auth/me" && request.method() === "GET") {
+        try {
+          const response = await route.fetch();
+          assert.equal(response.status(), 200);
+          authResponse = { route, response, released: false };
+        } catch (error) { routeErrors.push(error.message); await route.abort(); }
+        return;
+      }
       if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
       try {
         assert(authenticated, "Guest must never submit a score");
@@ -1152,11 +1160,12 @@ async function verifyOldMaidInitialWins(browser) {
         await signIn(page, email);
         await page.waitForURL(`${base}/profile`);
       }
+      holdAuth = authenticated;
       await page.goto(`${base}/play/oldmaid`);
       await page.getByTestId("oldmaid-turn").waitFor();
       const modal = page.getByTestId("share-card-modal");
       const firstCounts = (await page.getByTestId("oldmaid-turn").textContent()).match(/\d+/g).map(Number);
-      if (firstCounts.includes(0)) {
+      if (!authenticated && firstCounts.includes(0)) {
         await modal.waitFor();
         await page.getByTestId("share-close-btn").click();
         await modal.waitFor({ state: "detached" });
@@ -1166,6 +1175,18 @@ async function verifyOldMaidInitialWins(browser) {
         await reset(21);
         await assertInitialWin();
         if (authenticated) {
+          if (round === 1) {
+            for (let i = 0; i < 150 && !authResponse && !routeErrors.length; i++) await page.waitForTimeout(20);
+            assert.deepEqual(routeErrors, []);
+            assert(authResponse, "Real saved-session response is held before completing initial win");
+            assert.equal(pending.length, 0, "Unresolved identity must not submit a score");
+            assert.equal(await modal.count(), 0, "Unresolved identity must not consume a guest result");
+            const restored = page.waitForResponse(r => new URL(r.url()).pathname === "/api/auth/me");
+            holdAuth = false;
+            await authResponse.route.fulfill({ response: authResponse.response });
+            authResponse.released = true;
+            await restored;
+          }
           await waitPending(round);
           assert.equal(await modal.count(), 0, "Result awaits its score response");
         } else {
@@ -1206,8 +1227,9 @@ async function verifyOldMaidInitialWins(browser) {
         assert.equal(pending.length, 0);
       }
       assert.deepEqual(routeErrors, []);
-      console.log(`PASS: compiled Old Maid ${authenticated ? "signed-in" : "guest"} seed21 initial wins, repeated same-winner reset, disabled lone Queen, ${authenticated ? "real API score/award, reversed responses, reset and SPA exit" : "no score requests or fabricated XP"}`);
+      console.log(`PASS: compiled Old Maid ${authenticated ? "signed-in" : "guest"} seed21 initial wins, repeated same-winner reset, disabled lone Queen, ${authenticated ? "delayed saved-session restoration, real API score/award, reversed responses, reset and SPA exit" : "no score requests or fabricated XP"}`);
     } finally {
+      if (authResponse && !authResponse.released) await authResponse.route.abort().catch(() => {});
       for (const item of pending.filter(item => !item.released)) await item.route.abort().catch(() => {});
       await context.close();
       if (registered) {
@@ -1978,4 +2000,5 @@ async function clickMove(page, action) {
     throw error;
   } finally { await browser.close(); }
 })().catch((error) => { console.error(error); process.exitCode = 1; });
+
 

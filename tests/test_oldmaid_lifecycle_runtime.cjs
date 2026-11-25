@@ -7,15 +7,15 @@ const source=fs.readFileSync(path.join(__dirname,'../frontend/src/pages/games/Ol
 const start=source.indexOf('export default function OldMaid() {');
 const end=source.indexOf('  if (!state) return null;',start);
 assert(start>0&&end>start);
-function harness(authenticated=false, random=seeded(1)){
+function harness(authenticated=false, random=seeded(1), loading=false){
   const slots=[],effects=[],callbacks=[],timers=new Map(),requests=[];
   let mounted=true,afterUnmountWrites=0;
-  const user=authenticated?{id:"test-player"}:null;
+  let user=authenticated?{id:"test-player"}:null;
   const submitScore=payload=>new Promise((resolve,reject)=>requests.push({payload,resolve,reject}));
   let cursor=0,ec=0,cc=0,queued=[],dirty=false,nextTimer=0;
   const run=vm.runInNewContext(source.slice(source.indexOf('const RANKS'),start)+'\n(function(){'+source.slice(start+'export default function OldMaid() {'.length,end)+'\nreturn {drawFromCpu,init,state,turn,winner,shareOpen,xpInfo};})',{
     Math:Object.assign(Object.create(Math),{random}),
-    useAuth:()=>({user,submitScore}),
+    useAuth:()=>({user,loading,submitScore}),
     useRef:initial=>{const i=cursor++;return slots[i]||(slots[i]={current:initial});},
     useState:initial=>{const i=cursor++;if(!(i in slots))slots[i]=initial;return [slots[i],v=>{if(!mounted)afterUnmountWrites++;const next=typeof v==='function'?v(slots[i]):v;if(!Object.is(next,slots[i])){slots[i]=next;dirty=true;}}];},
     useMemo:fn=>fn(),
@@ -26,7 +26,7 @@ function harness(authenticated=false, random=seeded(1)){
   });
   function render(){let result;for(let i=0;i<20;i++){cursor=ec=cc=0;queued=[];dirty=false;result=run();queued.forEach(f=>f());if(!dirty)return result;}throw new Error('Non-settling effects');}
   render();
-  return {render,requests,unmount(){effects.forEach(e=>e.dispose?.());mounted=false;},get afterUnmountWrites(){return afterUnmountWrites;},get result(){return {shareOpen:slots[5],xpInfo:slots[6]};},position(state,turn='you',winner=null){slots[0]=state;slots[1]=turn;slots[3]=winner;return render();},tick(){const pending=[...timers];timers.clear();pending.forEach(([,fn])=>fn());return render();},draw(i){render().drawFromCpu(i);return render();},reset(){render().init();return render();}};
+  return {render,requests,restoreAuth(authenticated){user=authenticated?{id:"test-player"}:null;loading=false;return render();},unmount(){effects.forEach(e=>e.dispose?.());mounted=false;},get afterUnmountWrites(){return afterUnmountWrites;},get result(){return {shareOpen:slots[5],xpInfo:slots[6]};},position(state,turn='you',winner=null){slots[0]=state;slots[1]=turn;slots[3]=winner;return render();},tick(){const pending=[...timers];timers.clear();pending.forEach(([,fn])=>fn());return render();},draw(i){render().drawFromCpu(i);return render();},reset(){render().init();return render();}};
 }
 
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
@@ -51,3 +51,32 @@ test('legal seed21 deal recognizes player win without drawing the lone Queen',as
 test('normal seeded deal remains playable without an automatic score',()=>{const h=harness(true,seeded(1));const r=h.render();assert(r.state.you.length>0);assert(r.state.cpu.length>0);assert.equal(r.winner,null);assert.equal(h.requests.length,0);assert.equal(h.result.shareOpen,false);});
 
 test('reset into another initial win saves once per round',async()=>{let random=seeded(21);const h=harness(true,()=>random());assert.equal(h.requests.length,1);random=seeded(21);h.reset();assert.equal(h.requests.length,2);h.requests[1].resolve({...award,xp_gained:30});await settle();h.requests[0].resolve(award);await settle();assert.equal(h.result.xpInfo.xp,30);assert.equal(h.render().winner,'you');h.draw(0);assert.equal(h.requests.length,2);});
+
+
+test('initial win waits for saved login restoration before submitting exactly once',async()=>{
+  const h=harness(false,seeded(21),true);
+  assert.equal(h.render().winner,'you');
+  assert.equal(h.result.shareOpen,false);
+  assert.equal(h.requests.length,0);
+  h.restoreAuth(true);
+  assert.equal(h.requests.length,1);
+  assert.equal(h.result.shareOpen,false);
+  h.requests[0].resolve(award);await settle();h.render();
+  assert.equal(h.result.shareOpen,true);
+  assert.equal(h.result.xpInfo.xp,20);
+  assert.equal(h.requests.length,1);
+});
+test('resolved guest initial win opens result without submitting',()=>{
+  const h=harness(false,seeded(21),true);
+  assert.equal(h.result.shareOpen,false);
+  h.restoreAuth(false);
+  assert.equal(h.result.shareOpen,true);
+  assert.equal(h.requests.length,0);
+});
+test('reset before login restoration does not save the abandoned initial win',()=>{
+  let random=seeded(21);const h=harness(false,()=>random(),true);
+  random=seeded(1);h.reset();h.restoreAuth(true);
+  assert.equal(h.render().winner,null);
+  assert.equal(h.requests.length,0);
+  assert.equal(h.result.shareOpen,false);
+});
