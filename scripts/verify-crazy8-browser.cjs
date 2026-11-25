@@ -22,45 +22,8 @@ async function signIn(page, email) {
   await page.getByTestId("login-terms-checkbox").check();
   await page.getByTestId("login-submit").click();
 }
-// Dedicated bounded stage: real local API, disposable accounts and normal CPU timers.
-async function verifySignedInResults(browser) {
-  for (const mode of ["success", "http", "network", "delayed-reset", "delayed-exit"]) {
-    const email = `crazy8-${crypto.randomUUID()}@example.com`;
-    const registered = await api("/auth/register", null, {
-      name: "Disposable Crazy Eights Player", email, password, accepted_terms: true,
-    });
-    let context;
-    const errors = [], submissions = [], routeErrors = [];
-    try {
-      context = await browser.newContext({ viewport: { width: 390, height: 844 } });
-      await context.route("**/*", async route => {
-        const request = route.request(), url = new URL(request.url());
-        if (url.origin !== new URL(base).origin) return route.abort();
-        if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
-        try {
-          const payload = request.postDataJSON();
-          assert.deepEqual(payload, { game_id: "crazy8", won: true, score: 1 });
-          const item = { payload }; submissions.push(item);
-          if (mode === "network") return await route.abort("connectionfailed");
-          if (mode === "http") return await route.fulfill({ status: 503, contentType: "application/json",
-            body: JSON.stringify({ detail: "Disposable save failure", xp_gained: 999,
-              challenge_completed: true, newly_unlocked_badges: [{ id: "fake", name: "Fake reward" }] }) });
-          const response = await route.fetch();
-          assert.equal(response.status(), 200);
-          item.data = await response.json();
-          if (mode.startsWith("delayed-")) {
-            await new Promise(resolve => { item.release = resolve; });
-          }
-          await route.fulfill({ response });
-          item.fulfilled = true;
-        } catch (error) { routeErrors.push(error.message); await route.abort(); }
-      });
-      const page = await context.newPage();
-      page.on("pageerror", error => errors.push(error.message));
-      await page.goto(`${base}/login`);
-      await signIn(page, email); await page.waitForURL(`${base}/profile`);
+async function finishSeededWin(page) {
       const seed = 9;
-   await page.goto(base+'/play/crazy8');await page.getByTestId('c8-turn').waitFor();
    await page.evaluate(seed=>{Math.random=()=>{seed=(Math.imul(1664525,seed)+1013904223)>>>0;return seed/4294967296;};},seed);
    await page.getByTestId('game-reset').click();
    let actions=0,recycled=false,finalEight=false,previousDeck=37;
@@ -92,7 +55,106 @@ async function verifySignedInResults(browser) {
    if(seed===9)assert(finalEight,'win must follow final eight suit selection');
    if(seed===2)assert(recycled,'previously stalled seed must recycle draw pile');
 
+}
+// Dedicated bounded stage: real local API, disposable accounts and normal CPU timers.
+async function verifySignedInResults(browser) {
+  for (const mode of ["success", "http", "network", "delayed-reset", "delayed-exit", "reversed"]) {
+    const email = `crazy8-${crypto.randomUUID()}@example.com`;
+    const registered = await api("/auth/register", null, {
+      name: "Disposable Crazy Eights Player", email, password, accepted_terms: true,
+    });
+    let context;
+    const errors = [], submissions = [], routeErrors = [], blockedProfileRefreshes = [];
+    let holdProfileRefresh = false;
+    try {
+      context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+      await context.route("**/*", async route => {
+        const request = route.request(), url = new URL(request.url());
+        if (url.origin !== new URL(base).origin) return route.abort();
+        if (holdProfileRefresh && url.pathname === "/api/auth/me" && request.method() === "GET") {
+          blockedProfileRefreshes.push(route);
+          return; // Do not let a mount refresh hide stale in-memory account totals.
+        }
+        if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
+        try {
+          const payload = request.postDataJSON();
+          assert.deepEqual(payload, { game_id: "crazy8", won: true, score: 1 });
+          const item = { payload }; submissions.push(item);
+          if (mode === "network") return await route.abort("connectionfailed");
+          if (mode === "http") return await route.fulfill({ status: 503, contentType: "application/json",
+            body: JSON.stringify({ detail: "Disposable save failure", xp_gained: 999,
+              challenge_completed: true, newly_unlocked_badges: [{ id: "fake", name: "Fake reward" }] }) });
+          const response = await route.fetch();
+          assert.equal(response.status(), 200);
+          item.data = await response.json();
+          if (mode.startsWith("delayed-") || mode === "reversed") {
+            await new Promise(resolve => { item.release = resolve; });
+          }
+          await route.fulfill({ response });
+          item.fulfilled = true;
+        } catch (error) { routeErrors.push(error.message); await route.abort(); }
+      });
+      const page = await context.newPage();
+      page.on("pageerror", error => errors.push(error.message));
+      await page.goto(`${base}/login`);
+      await signIn(page, email); await page.waitForURL(`${base}/profile`);
+      await page.goto(base + '/play/crazy8');
+      await page.getByTestId('c8-turn').waitFor();
+      await finishSeededWin(page);
+
       const modal = page.getByTestId("share-card-modal");
+      if (mode === "reversed") {
+        const waitHeld = async count => {
+          for (let i = 0; i < 200 && !submissions[count - 1]?.release && !routeErrors.length; i++) await page.waitForTimeout(25);
+          assert.deepEqual(routeErrors, []);
+          assert.equal(submissions.length, count);
+          assert(submissions[count - 1].release, "Real score response held");
+        };
+        const release = async index => {
+          const item = submissions[index];
+          const received = page.waitForResponse(r => new URL(r.url()).pathname === "/api/games/submit");
+          item.release();
+          await received;
+          for (let i = 0; i < 200 && !item.fulfilled && !routeErrors.length; i++) await page.waitForTimeout(25);
+          assert.deepEqual(routeErrors, []);
+          assert(item.fulfilled, "Held score response delivered");
+        };
+        await waitHeld(1);
+        assert.equal(await modal.count(), 0);
+        await finishSeededWin(page); // Reset and legally win a second round while the first response is held.
+        await waitHeld(2);
+        assert.equal(await modal.count(), 0);
+        assert(submissions[1].data.user.xp > submissions[0].data.user.xp,
+          "Real API snapshots must distinguish the two rounds");
+        await release(1);
+        await modal.waitFor();
+        assert(await modal.getByText("WIN", { exact: true }).isVisible());
+        assert(await modal.getByText(`+${submissions[1].data.xp_gained}`, { exact: true }).isVisible());
+        await page.getByTestId("share-close-btn").click();
+        await modal.waitFor({ state: "detached" });
+        const reconciled = page.waitForResponse(r => new URL(r.url()).pathname === "/api/auth/me" && r.request().method() === "GET");
+        await release(0);
+        const response = await reconciled;
+        assert.equal(response.status(), 200);
+        assert.equal((await response.json()).user.xp, submissions[1].data.user.xp);
+        await page.waitForTimeout(300);
+        assert.equal(await modal.count(), 0, "Old round cannot reopen dismissed current results");
+        holdProfileRefresh = true;
+        await page.evaluate(() => { window.__crazy8Document = "preserved"; });
+        await page.getByTestId("mobile-nav-profile").click();
+        await page.waitForURL(base + "/profile");
+        assert.equal(await page.evaluate(() => window.__crazy8Document), "preserved");
+        await page.getByTestId("profile-email").filter({ hasText: email }).waitFor();
+        for (let i = 0; i < 100 && !blockedProfileRefreshes.length; i++) await page.waitForTimeout(20);
+        assert(blockedProfileRefreshes.length, "Profile mount refresh held");
+        const visibleXP = page.getByText("XP", { exact: true }).locator("..").locator("div").first();
+        assert.equal((await visibleXP.textContent()).trim(), String(submissions[1].data.user.xp),
+          "Visible account total already reconciled before mount refresh");
+        assert.equal(submissions.length, 2, "No duplicate scores");
+        assert.deepEqual(errors, []);
+        console.log("PASS: Crazy Eights two legal wins, reversed real score responses, current award, no stale result, reconciled visible XP with profile mount refresh held and no duplicates");
+        continue;
+      }
       if (mode.startsWith("delayed-")) {
         for (let attempt = 0; attempt < 200 && !submissions[0]?.release && !routeErrors.length; attempt++) {
           await page.waitForTimeout(25);
@@ -156,6 +218,7 @@ async function verifySignedInResults(browser) {
       assert.deepEqual(errors, []);
       console.log(`PASS: Crazy Eights signed-in ${mode}: legal final-eight win, correct single score, truthful rewards and reset`);
     } finally {
+      for (const route of blockedProfileRefreshes) await route.abort().catch(() => {});
       for (const item of submissions) if (item.release) item.release();
       if (context) await context.close();
       const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
@@ -170,3 +233,4 @@ async function verifySignedInResults(browser) {
     ...(process.env.RMC_CHROMIUM_PATH ? { executablePath: process.env.RMC_CHROMIUM_PATH } : {}) });
   try { await verifySignedInResults(browser); } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
+
