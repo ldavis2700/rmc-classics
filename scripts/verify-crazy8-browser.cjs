@@ -24,7 +24,7 @@ async function signIn(page, email) {
 }
 // Dedicated bounded stage: real local API, disposable accounts and normal CPU timers.
 async function verifySignedInResults(browser) {
-  for (const mode of ["success", "http", "network"]) {
+  for (const mode of ["success", "http", "network", "delayed-reset", "delayed-exit"]) {
     const email = `crazy8-${crypto.randomUUID()}@example.com`;
     const registered = await api("/auth/register", null, {
       name: "Disposable Crazy Eights Player", email, password, accepted_terms: true,
@@ -48,7 +48,11 @@ async function verifySignedInResults(browser) {
           const response = await route.fetch();
           assert.equal(response.status(), 200);
           item.data = await response.json();
+          if (mode.startsWith("delayed-")) {
+            await new Promise(resolve => { item.release = resolve; });
+          }
           await route.fulfill({ response });
+          item.fulfilled = true;
         } catch (error) { routeErrors.push(error.message); await route.abort(); }
       });
       const page = await context.newPage();
@@ -89,6 +93,45 @@ async function verifySignedInResults(browser) {
    if(seed===2)assert(recycled,'previously stalled seed must recycle draw pile');
 
       const modal = page.getByTestId("share-card-modal");
+      if (mode.startsWith("delayed-")) {
+        for (let attempt = 0; attempt < 200 && !submissions[0]?.release && !routeErrors.length; attempt++) {
+          await page.waitForTimeout(25);
+        }
+        assert.deepEqual(routeErrors, []);
+        assert.equal(submissions.length, 1);
+        assert(submissions[0].release, "Real score response must be held before reset/exit");
+        assert.equal(await modal.count(), 0, "No result modal before score resolves");
+        if (mode === "delayed-reset") {
+          await page.getByTestId("game-reset").click();
+        } else {
+          await page.evaluate(() => { window.__crazy8Document = "preserved"; });
+          await page.getByTestId("mobile-nav-library").click();
+          await page.waitForURL(base + "/library");
+          assert.equal(await page.evaluate(() => window.__crazy8Document), "preserved",
+            "Exit must stay in the same SPA document");
+        }
+        const received = page.waitForResponse(response => new URL(response.url()).pathname === "/api/games/submit");
+        submissions[0].release();
+        await received;
+        for (let attempt = 0; attempt < 200 && !submissions[0].fulfilled && !routeErrors.length; attempt++) {
+          await page.waitForTimeout(25);
+        }
+        await page.waitForTimeout(300); // Let the real response update React.
+        assert(submissions[0].fulfilled, "Delayed response delivered");
+        assert.deepEqual(routeErrors, []);
+        assert.equal(await modal.count(), 0, "Obsolete round must not reopen results");
+        if (mode === "delayed-reset") {
+          assert.equal(await page.getByTestId("c8-you-hand").locator("button").count(), 7);
+          assert.equal((await page.getByTestId("c8-turn").innerText()).trim(), "Your turn");
+        } else {
+          assert.equal(new URL(page.url()).pathname, "/library");
+          assert.equal(await page.getByTestId("c8-turn").count(), 0);
+        }
+        assert.equal(submissions.length, 1, "Reset/exit must not resubmit");
+        assert.deepEqual(errors, []);
+        console.log(`PASS: Crazy Eights ${mode}: real delayed score stays silent after reset/SPA exit`);
+        continue;
+      }
       await modal.waitFor();
       assert.deepEqual(routeErrors, []);
       assert.equal(submissions.length, 1);
@@ -113,6 +156,7 @@ async function verifySignedInResults(browser) {
       assert.deepEqual(errors, []);
       console.log(`PASS: Crazy Eights signed-in ${mode}: legal final-eight win, correct single score, truthful rewards and reset`);
     } finally {
+      for (const item of submissions) if (item.release) item.release();
       if (context) await context.close();
       const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${registered.token}` },
