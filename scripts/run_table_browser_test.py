@@ -119,6 +119,9 @@ uvicorn.run(app, fd=int(os.environ["RMC_TEST_LISTENER"]), log_level="warning")
                     return response.read(MAX_BYTES + 1)
             result = verify('https://rmcclassics.com', manifest, get_test_asset)
             print(f"PASS: deployed frontend bytes match {result['verified_files']} candidate HTML/JS/CSS assets", flush=True)
+            # Focused signed-in score cases have a separate two-minute ceiling.
+            subprocess.run(["node", "scripts/verify-crazy8-browser.cjs"], cwd=ROOT,
+                           env=env, check=True, timeout=120)
             # Full legal game/lifecycle cases include real CPU delays; retain a bounded
             # eight-minute ceiling as the suite now exceeds the former five minutes.
             subprocess.run(["node", "scripts/verify-table-browser.cjs"], cwd=ROOT,
@@ -143,3 +146,4 @@ uvicorn.run(app, fd=int(os.environ["RMC_TEST_LISTENER"]), log_level="warning")
 
 if __name__ == "__main__":
     main()
+
