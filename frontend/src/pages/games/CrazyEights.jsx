@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import GameShell from "@/components/rmc/GameShell";
 import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
@@ -41,12 +41,15 @@ export default function CrazyEights() {
   const [wildSuit, setWildSuit] = useState(null);
   const [pickSuit, setPickSuit] = useState(false); // player picks after playing 8
   const [winner, setWinner] = useState(null);
-  const [submitted, setSubmitted] = useState(false);
+  const submitted = useRef(false);
   const [message, setMessage] = useState("Play a card that matches suit or rank.");
   const [shareOpen, setShareOpen] = useState(false);
-  const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
+  const [xpInfo, setXpInfo] = useState({ xp: 0, done: false, badges: [] });
+  const generation = useRef(0);
+  useEffect(() => () => { generation.current += 1; }, []);
 
   const init = () => {
+    generation.current += 1;
     let deck = buildDeck();
     const you = deck.slice(0, 7);
     const cpu = deck.slice(7, 14);
@@ -57,7 +60,8 @@ export default function CrazyEights() {
     setWildSuit(null);
     setPickSuit(false);
     setWinner(null);
-    setSubmitted(false);
+    submitted.current = false;
+    setXpInfo({ xp: 0, done: false, badges: [] });
     setShareOpen(false);
     setMessage("Play a card that matches suit or rank.");
   };
@@ -67,21 +71,27 @@ export default function CrazyEights() {
   }, []);
 
   useEffect(() => {
-    if (winner && !submitted) {
-      const won = winner === "you";
-      won ? sfx.win() : sfx.lose();
-      toast[won ? "success" : "error"](won ? "Empty hand — you win!" : "CPU emptied first.");
-      setSubmitted(true);
-      if (user) {
-        submitScore({ game_id: "crazy8", won, score: won ? 1 : 0 }).then((res) => {
+    if (!winner || submitted.current) return;
+    submitted.current = true;
+    const round = generation.current;
+    const won = winner === "you";
+    won ? sfx.win() : sfx.lose();
+    toast[won ? "success" : "error"](won ? "Empty hand — you win!" : "CPU emptied first.");
+    const saveResult = async () => {
+      try {
+        if (user) {
+          const res = await submitScore({ game_id: "crazy8", won, score: won ? 1 : 0 });
+          if (round !== generation.current) return;
           if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
-          setShareOpen(true);
-        });
-      } else {
-        setShareOpen(true);
+        }
+      } catch {
+        // Preserve the local outcome without inventing a reward when saving fails.
+      } finally {
+        if (round === generation.current) setShareOpen(true);
       }
-    }
-  }, [winner, submitted, user, submitScore]);
+    };
+    saveResult();
+  }, [winner, user, submitScore]);
 
   // CPU turn
   useEffect(() => {
@@ -309,3 +319,4 @@ export default function CrazyEights() {
     </GameShell>
   );
 }
+
