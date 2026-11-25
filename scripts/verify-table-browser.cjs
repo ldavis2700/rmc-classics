@@ -1150,7 +1150,8 @@ async function verifyOldMaidInitialWins(browser) {
     const assertInitialWin = async () => {
       assert.equal(await page.getByTestId("oldmaid-turn").textContent(), "You: 0 · CPU: 1");
       assert.equal(await page.getByTestId("oldmaid-you-hand").locator(":scope > div").count(), 0);
-      assert.equal(await page.getByTestId("oldmaid-cpu-hand").getByRole("button").count(), 1);
+      // Board-state assertion: the result dialog intentionally hides the board from accessibility queries.
+      assert.equal(await page.getByTestId("oldmaid-cpu-hand").getByRole("button", { includeHidden: true }).count(), 1);
       assert(await page.getByTestId("oldmaid-cpu-card-0").isDisabled(), "Cannot draw lone Queen after winning");
       assert.equal(await page.getByTestId("oldmaid-message").textContent(), "You paired off every card!");
     };
@@ -1173,6 +1174,13 @@ async function verifyOldMaidInitialWins(browser) {
       recording = true;
       for (let round = 1; round <= 2; round++) {
         await reset(21);
+        if (!authenticated) {
+          // Exercise the modal-open state deterministically, rather than racing its accessibility isolation.
+          await modal.waitFor();
+          await page.waitForFunction(() => !!document.querySelector('[data-testid="oldmaid-cpu-hand"]')?.closest('[aria-hidden="true"]'));
+          assert.equal(await page.getByTestId("oldmaid-cpu-hand").getByRole("button").count(), 0,
+            "Modal must hide background cards from accessible-role queries");
+        }
         await assertInitialWin();
         if (authenticated) {
           if (round === 1) {
