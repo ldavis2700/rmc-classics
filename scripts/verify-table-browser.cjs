@@ -1698,26 +1698,42 @@ async function verifyRefreshRecovery(page, user) {
 async function verifyStaleProfile(page, users) {
   await page.setViewportSize({ width: 1280, height: 900 });
   for (const switchAccount of [false, true]) {
+    // Always mount Profile from a settled, different route. A same-route click
+    // does not promise another refresh.
+    await page.getByTestId("nav-library").click();
+    await page.waitForURL(`${base}/library`);
+    await page.getByTestId("profile-email").waitFor({ state: "detached" });
     const originalToken = await page.evaluate(() => localStorage.getItem("rmc_token"));
     let release;
     const held = new Promise((resolve) => { release = resolve; });
-    let first = true;
+    let first = true, readyResolve, readyReject, readyTimer;
+    const ready = new Promise((resolve, reject) => {
+      readyResolve = resolve; readyReject = reject;
+    });
     const handler = async (route) => {
       if (!first) return route.continue();
       first = false;
-      assert.equal(route.request().headers().authorization, `Bearer ${originalToken}`);
-      // Obtain real account A data, but delay its delivery to the application.
-      const response = await route.fetch();
-      assert.equal(response.status(), 200);
-      assert.equal((await response.json()).user.id, users[0].user.id);
-      await held;
-      await route.fulfill({ response });
+      try {
+        assert.equal(route.request().headers().authorization, `Bearer ${originalToken}`);
+        // Capture real account A data before logout changes the session.
+        const response = await route.fetch({ timeout: 10000 });
+        assert.equal(response.status(), 200);
+        assert.equal((await response.json()).user.id, users[0].user.id);
+        readyResolve();
+        await held;
+        await route.fulfill({ response });
+      } catch (error) {
+        readyReject(error);
+        await route.abort().catch(() => {});
+      }
     };
     await page.route("**/api/auth/me", handler);
     try {
-      const requested = page.waitForRequest((r) => r.url().endsWith("/api/auth/me"));
-      await page.getByTestId("nav-profile").click();
-      await requested;
+      // Observe click and route readiness together: neither rejection is detached.
+      readyTimer = setTimeout(() => readyReject(new Error(
+        "Profile refresh was not captured for account-switch fixture")), 15000);
+      await Promise.all([page.getByTestId("nav-profile").click(), ready]);
+      clearTimeout(readyTimer);
       await page.getByTestId("profile-logout").click();
       await page.waitForURL(`${base}/login`);
       assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), null);
@@ -1745,6 +1761,7 @@ async function verifyStaleProfile(page, users) {
         assert.equal(await page.getByTestId("profile-email").count(), 0);
       }
     } finally {
+      clearTimeout(readyTimer);
       release();
       await page.unroute("**/api/auth/me", handler);
     }
