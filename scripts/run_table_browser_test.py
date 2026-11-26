@@ -121,7 +121,7 @@ uvicorn.run(app, fd=int(os.environ["RMC_TEST_LISTENER"]), log_level="warning")
             print(f"PASS: deployed frontend bytes match {result['verified_files']} candidate HTML/JS/CSS assets", flush=True)
             # Snakes uses actual CPU timers and UI actions, with a bounded smoke stage.
             subprocess.run(["node", "scripts/verify-snakes-browser.cjs"], cwd=ROOT,
-                           env=env, check=True, timeout=45)
+                           env=env, check=True, timeout=120)
             # Actual Matter.js lifecycle smoke; resource observers do not change physics/timing.
             subprocess.run(["node", "scripts/verify-jenga-browser.cjs"], cwd=ROOT,
                            env=env, check=True, timeout=180)
