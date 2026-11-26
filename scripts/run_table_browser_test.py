@@ -121,7 +121,7 @@ uvicorn.run(app, fd=int(os.environ["RMC_TEST_LISTENER"]), log_level="warning")
             print(f"PASS: deployed frontend bytes match {result['verified_files']} candidate HTML/JS/CSS assets", flush=True)
             # Ludo board visibility and CPU lifecycle use legal UI moves and real clocks.
             subprocess.run(["node", "scripts/verify-ludo-browser.cjs"], cwd=ROOT,
-                           env=env, check=True, timeout=120)
+                           env=env, check=True, timeout=180)
             # Snakes uses actual CPU timers and UI actions, with a bounded smoke stage.
             subprocess.run(["node", "scripts/verify-snakes-browser.cjs"], cwd=ROOT,
                            env=env, check=True, timeout=120)

@@ -53,7 +53,7 @@ async function finishRound(page,won){
  return won?"two-player-tokens-home":"two-cpu-tokens-home";
 }
 async function verifyResults(browser){
- for(const mode of ["guest","success","http","network"]){
+ for(const mode of ["guest","success","http","network","delayed-reset","delayed-exit"]){
   const email="ludo-"+require("node:crypto").randomUUID()+"@example.com";
   const registered=mode==="guest"?null:await api("/auth/register",null,{name:"Disposable Ludo Player",email,password,accepted_terms:true});
   let context;const errors=[],requests=[],routeErrors=[];
@@ -70,6 +70,7 @@ async function verifyResults(browser){
       body:JSON.stringify({detail:"Disposable failure",xp_gained:999,challenge_completed:true,newly_unlocked_badges:[{id:"fake",name:"Fake reward"}]})});
      const response=await route.fetch();assert.equal(response.status(),200);
      item.data=await response.json();
+     if(mode.startsWith("delayed-"))await new Promise(resolve=>{item.release=resolve;});
      await route.fulfill({response});item.fulfilled=true;
     }catch(e){routeErrors.push(e.message);await route.abort().catch(()=>{});}
    });
@@ -79,6 +80,39 @@ async function verifyResults(browser){
    await page.goto(base+"/play/ludo");await page.getByTestId("ludo-roll").waitFor();
    for(const won of [true,false]){
     const before=requests.length,planLabel=await finishRound(page,won),modal=page.getByTestId("share-card-modal");
+    if(mode.startsWith("delayed-")){
+     for(let i=0;i<200&&!requests[before]?.release&&!routeErrors.length;i++)await page.waitForTimeout(25);
+     assert.deepEqual(routeErrors,[]);assert.equal(requests.length,before+1);
+     const item=requests[before];assert(item.release,"Real score response must be held");
+     assert.deepEqual(item.payload,{game_id:"ludo",won,score:won?1:0});
+     assert.equal(await modal.count(),0,"No result before the held score response");
+     if(mode==="delayed-reset")await page.getByTestId("game-reset").click();
+     else{
+      await page.evaluate(()=>{window.__ludoDocument="preserved";});
+      await page.getByTestId("game-back").click();await page.waitForURL(base+"/library");
+      assert.equal(await page.evaluate(()=>window.__ludoDocument),"preserved");
+     }
+     const received=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/games/submit");
+     item.release();await received;
+     for(let i=0;i<200&&!item.fulfilled&&!routeErrors.length;i++)await page.waitForTimeout(25);
+     assert.deepEqual(routeErrors,[]);assert(item.fulfilled);
+     await page.waitForTimeout(800);
+     assert.equal(await modal.count(),0,"Late save cannot reopen an obsolete result");
+     if(mode==="delayed-reset"){
+      assert(await page.getByTestId("ludo-roll").isEnabled());
+      for(const side of ["you","cpu"])for(let i=0;i<2;i++)
+       assert.equal((await page.getByTestId("ludo-"+side+"-token-"+i).innerText()).trim(),"HOME");
+      assert.equal((await page.getByTestId("ludo-message").innerText()).trim(),"Roll the dice. A 6 lets a token out of home.");
+      assert.equal((await page.getByTestId("ludo-dice").innerText()).trim(),"Dice: —");
+     }else{
+      assert.equal(await page.getByTestId("ludo-roll").count(),0);
+      await page.goto(base+"/play/ludo");await page.getByTestId("ludo-roll").waitFor();
+     }
+     assert.equal(requests.length,before+1,"No duplicate score after reset/exit");
+     assert.deepEqual(errors,[]);
+     console.log("PASS: compiled Ludo legal "+mode+" "+(won?"win":"loss")+", real delayed save silent after reset/SPA exit, no duplicate; plan="+planLabel);
+     continue;
+    }
     await modal.waitFor();
     assert(await modal.getByText(won?"WIN":"PLAYED",{exact:true}).isVisible());
     if(mode==="guest")assert.equal(requests.length,0);
@@ -106,6 +140,7 @@ async function verifyResults(browser){
     console.log("PASS: compiled Ludo legal "+mode+" "+(won?"win":"loss")+", exact move path, single score/truthful rewards, clean reset; plan="+planLabel);
    }
   }finally{
+   for(const item of requests)if(item.release)item.release();
    if(context)await context.close();
    if(registered){
     const deleted=await fetch(base+"/api/auth/account",{method:"DELETE",headers:{"Content-Type":"application/json",Authorization:"Bearer "+registered.token},body:JSON.stringify({password})});
