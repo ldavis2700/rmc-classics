@@ -121,7 +121,7 @@ uvicorn.run(app, fd=int(os.environ["RMC_TEST_LISTENER"]), log_level="warning")
                     return response.read(MAX_BYTES + 1)
             result = verify('https://rmcclassics.com', manifest, get_test_asset)
             print(f"PASS: deployed frontend bytes match {result['verified_files']} candidate HTML/JS/CSS assets", flush=True)
-            # Legal computer Dominoes games exercise delayed saves across reset/exit.
+            # Full Spades matches: test-only CPU timer acceleration, real legal UI actions/API.\n            subprocess.run(["node", "scripts/verify-computer-spades-browser.cjs"], cwd=ROOT,\n                           env=env, check=True, timeout=150)\n            # Legal computer Dominoes games exercise delayed saves across reset/exit.
             subprocess.run(["node", "scripts/verify-computer-dominoes-browser.cjs"], cwd=ROOT,
                            env=env, check=True, timeout=120)
             # Ludo board visibility and CPU lifecycle use legal UI moves and real clocks.
@@ -162,5 +162,6 @@ uvicorn.run(app, fd=int(os.environ["RMC_TEST_LISTENER"]), log_level="warning")
 
 if __name__ == "__main__":
     main()
+
 
 
