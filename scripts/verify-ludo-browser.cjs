@@ -53,15 +53,19 @@ async function finishRound(page,won){
  return won?"two-player-tokens-home":"two-cpu-tokens-home";
 }
 async function verifyResults(browser){
- for(const mode of ["guest","success","http","network","delayed-reset","delayed-exit"]){
+ for(const mode of ["guest","success","http","network","delayed-reset","delayed-exit","reversed"]){
   const email="ludo-"+require("node:crypto").randomUUID()+"@example.com";
   const registered=mode==="guest"?null:await api("/auth/register",null,{name:"Disposable Ludo Player",email,password,accepted_terms:true});
-  let context;const errors=[],requests=[],routeErrors=[];
+  let context;const errors=[],requests=[],routeErrors=[],blockedProfileRefreshes=[];
+  let holdProfileRefresh=false;
   try{
    context=await browser.newContext({viewport:{width:390,height:844}});
    await context.route("**/*",async route=>{
     const req=route.request(),url=new URL(req.url());
     if(url.origin!==new URL(base).origin)return route.abort();
+    if(holdProfileRefresh&&url.pathname==="/api/auth/me"&&req.method()==="GET"){
+     blockedProfileRefreshes.push(route);return;
+    }
     if(url.pathname!=="/api/games/submit"||req.method()!=="POST")return route.continue();
     const item={payload:req.postDataJSON()};requests.push(item);
     try{
@@ -70,7 +74,7 @@ async function verifyResults(browser){
       body:JSON.stringify({detail:"Disposable failure",xp_gained:999,challenge_completed:true,newly_unlocked_badges:[{id:"fake",name:"Fake reward"}]})});
      const response=await route.fetch();assert.equal(response.status(),200);
      item.data=await response.json();
-     if(mode.startsWith("delayed-"))await new Promise(resolve=>{item.release=resolve;});
+     if(mode.startsWith("delayed-")||mode==="reversed")await new Promise(resolve=>{item.release=resolve;});
      await route.fulfill({response});item.fulfilled=true;
     }catch(e){routeErrors.push(e.message);await route.abort().catch(()=>{});}
    });
@@ -78,6 +82,58 @@ async function verifyResults(browser){
    page.on("pageerror",e=>errors.push(e.message));
    if(registered){await page.goto(base+"/login");await signIn(page,email);await page.waitForURL(base+"/profile");}
    await page.goto(base+"/play/ludo");await page.getByTestId("ludo-roll").waitFor();
+   if(mode==="reversed"){
+    const modal=page.getByTestId("share-card-modal");
+    const waitHeld=async count=>{
+     for(let i=0;i<200&&!requests[count-1]?.release&&!routeErrors.length;i++)await page.waitForTimeout(25);
+     assert.deepEqual(routeErrors,[]);assert.equal(requests.length,count);
+     assert(requests[count-1].release,"Real API score response held");
+    };
+    const release=async index=>{
+     const item=requests[index];
+     const received=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/games/submit");
+     item.release();await received;
+     for(let i=0;i<200&&!item.fulfilled&&!routeErrors.length;i++)await page.waitForTimeout(25);
+     assert.deepEqual(routeErrors,[]);assert(item.fulfilled,"Held response delivered");
+    };
+    await finishRound(page,true);
+    await waitHeld(1);assert.equal(await modal.count(),0);
+    await page.getByTestId("game-reset").click();
+    await finishRound(page,false);
+    await waitHeld(2);assert.equal(await modal.count(),0);
+    assert(requests[1].data.user.xp>requests[0].data.user.xp,
+     "Real account snapshots must distinguish the completed rounds");
+    for(const [index,won] of [true,false].entries()){
+     assert.deepEqual(requests[index].payload,{game_id:"ludo",won,score:won?1:0});
+    }
+    await release(1);await modal.waitFor();
+    assert(await modal.getByText("PLAYED",{exact:true}).isVisible());
+    assert(requests[1].data.xp_gained>0,"Completed play awards real API XP");
+    assert(await modal.getByText("+"+requests[1].data.xp_gained,{exact:true}).isVisible());
+    await page.getByTestId("share-close-btn").click();await modal.waitFor({state:"detached"});
+    const reconciled=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/auth/me"&&r.request().method()==="GET");
+    await release(0);
+    const response=await reconciled;assert.equal(response.status(),200);
+    assert.equal((await response.json()).user.xp,requests[1].data.user.xp);
+    await page.waitForTimeout(300);
+    assert.equal(await modal.count(),0,"Old round cannot reopen dismissed current result");
+    for(let i=0;i<2;i++)assert.equal((await page.getByTestId("ludo-cpu-token-"+i).innerText()).trim(),"GOAL");
+    holdProfileRefresh=true;
+    await page.evaluate(()=>{window.__ludoDocument="preserved";});
+    await page.locator('[data-testid="mobile-nav-profile"]:visible').click();
+    await page.waitForURL(base+"/profile");
+    assert.equal(await page.evaluate(()=>window.__ludoDocument),"preserved");
+    await page.getByTestId("profile-email").filter({hasText:email}).waitFor();
+    for(let i=0;i<100&&!blockedProfileRefreshes.length;i++)await page.waitForTimeout(20);
+    assert(blockedProfileRefreshes.length,"Profile mount refresh held");
+    const visibleXP=page.getByText("XP",{exact:true}).locator("..").locator("div").first();
+    assert.equal((await visibleXP.textContent()).trim(),String(requests[1].data.user.xp),
+     "Visible account XP already reconciled before mount refresh");
+    assert.equal(requests.length,2,"No duplicate scores");
+    assert.deepEqual(routeErrors,[]);assert.deepEqual(errors,[]);
+    console.log("PASS: compiled Ludo legal win then loss, reversed real score responses, current PLAYED result/award, no stale modal and reconciled visible XP with profile mount refresh held");
+    continue;
+   }
    for(const won of [true,false]){
     const before=requests.length,planLabel=await finishRound(page,won),modal=page.getByTestId("share-card-modal");
     if(mode.startsWith("delayed-")){
@@ -141,6 +197,7 @@ async function verifyResults(browser){
    }
   }finally{
    for(const item of requests)if(item.release)item.release();
+   for(const route of blockedProfileRefreshes)await route.abort().catch(()=>{});
    if(context)await context.close();
    if(registered){
     const deleted=await fetch(base+"/api/auth/account",{method:"DELETE",headers:{"Content-Type":"application/json",Authorization:"Bearer "+registered.token},body:JSON.stringify({password})});
