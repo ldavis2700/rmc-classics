@@ -9,20 +9,21 @@ export default function ComputerTable({ game }) {
   const [saved, setSaved] = useState("");
   const submitted = useRef(false);
   const generation = useRef(0);
-  const { user, submitScore } = useAuth();
+  const { user, submitScore, loading } = useAuth();
+  useEffect(() => () => { generation.current += 1; }, []);
   useEffect(() => {
     if (!["playing", "bidding"].includes(state.phase) || state.turn === 0) return undefined;
     const timer = setTimeout(() => setState((s) => s === state ? applyAction(s, s.turn, computerAction(s, s.turn)) : s), 650);
     return () => clearTimeout(timer);
   }, [state]);
   useEffect(() => {
-    if (state.phase !== "ended" || submitted.current || !user) return;
+    if (state.phase !== "ended" || submitted.current || !user || loading) return;
     submitted.current = true;
     const started = generation.current;
     submitScore({ game_id: game, won: state.winner === 0, score: game === "spades" ? state.scores[0] : (state.winner === 0 ? 1 : 0) })
       .then((result) => { if (started === generation.current) setSaved(result.ok ? "Result saved to your profile." : "Result could not be saved."); })
       .catch(() => { if (started === generation.current) setSaved("Result could not be saved."); });
-  }, [state, user, submitScore, game]);
+  }, [state, user, submitScore, game, loading]);
   const reset = () => { generation.current += 1; submitted.current = false; setSaved(""); setState(newGame(game)); };
   const members = game === "spades" ? [{ name: "You" }, { name: "Computer West" }, { name: "Computer Partner" }, { name: "Computer East" }] : [{ name: "You" }, { name: "Computer" }];
   return <>
@@ -36,3 +37,4 @@ export default function ComputerTable({ game }) {
     </div>
   </>;
 }
+
