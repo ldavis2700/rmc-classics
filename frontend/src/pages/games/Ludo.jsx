@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import GameShell from "@/components/rmc/GameShell";
 import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
@@ -11,6 +11,7 @@ import { GAME_MAP } from "@/lib/games";
 // Must roll a 6 to leave home. Landing on opponent (on board 0-31 only) sends them home.
 
 const TRACK_LEN = 32;
+const BOARD_SIDE = TRACK_LEN / 4 + 1;
 const YOU_START = 0;
 const CPU_START = 16;
 const YOU_SAFE = [0, 8, 16, 24];
@@ -25,7 +26,7 @@ function absPos(rel, side) {
 }
 
 export default function Ludo() {
-  const { user, submitScore } = useAuth();
+  const { user, submitScore, loading } = useAuth();
   const [you, setYou] = useState(initTokens);
   const [cpu, setCpu] = useState(initTokens);
   const [turn, setTurn] = useState("you");
@@ -38,22 +39,35 @@ export default function Ludo() {
   const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
   const [selectable, setSelectable] = useState([]); // indices for player to pick
 
-  const finalize = useCallback(async (won) => {
-    won ? sfx.win() : sfx.lose();
-    if (user && !submitted) {
-      const res = await submitScore({ game_id: "ludo", won, score: won ? 1 : 0 });
-      if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
-      setSubmitted(true);
-    }
-    setShareOpen(true);
-  }, [user, submitted, submitScore]);
+  const generationRef = useRef(0);
+  const cpuTimerRef = useRef(null);
+
+  useEffect(() => () => {
+    generationRef.current += 1;
+    clearTimeout(cpuTimerRef.current);
+  }, []);
 
   useEffect(() => {
-    if (finished) finalize(finished === "you");
-  }, [finished, finalize]);
+    if (!finished || submitted || loading) return;
+    const generation = generationRef.current;
+    const won = finished === "you";
+    setSubmitted(true);
+    won ? sfx.win() : sfx.lose();
+    if (user) {
+      submitScore({ game_id: "ludo", won, score: won ? 1 : 0 })
+        .then((res) => {
+          if (generation !== generationRef.current) return;
+          if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
+        })
+        .catch(() => { /* Local result remains valid when saving fails. */ })
+        .finally(() => {
+          if (generation === generationRef.current) setShareOpen(true);
+        });
+    } else setShareOpen(true);
+  }, [finished, submitted, loading, user, submitScore]);
 
   const rollAndPick = () => {
-    if (turn !== "you" || busy || finished) return;
+    if (turn !== "you" || busy || finished || selectable.length > 0) return;
     const r = Math.floor(Math.random() * 6) + 1;
     sfx.dice();
     setDice(r);
@@ -117,7 +131,10 @@ export default function Ludo() {
   // CPU AI: try to capture, else advance farthest token, else release
   useEffect(() => {
     if (turn !== "cpu" || finished || busy) return;
+    const generation = generationRef.current;
     const t = setTimeout(() => {
+      if (generation !== generationRef.current) return;
+      cpuTimerRef.current = null;
       const r = Math.floor(Math.random() * 6) + 1;
       sfx.dice();
       setDice(r);
@@ -171,18 +188,21 @@ export default function Ludo() {
       if (r === 6) setTurn("cpu");
       else setTurn("you");
     }, 800);
+    cpuTimerRef.current = t;
     return () => clearTimeout(t);
   }, [turn, cpu, you, finished, busy]);
 
   const reset = () => {
+    generationRef.current += 1;
+    clearTimeout(cpuTimerRef.current);
+    cpuTimerRef.current = null;
     setYou(initTokens()); setCpu(initTokens()); setTurn("you"); setDice(null); setBusy(false);
     setMessage("Roll the dice. A 6 lets a token out of home.");
     setFinished(null); setSubmitted(false); setSelectable([]);
+    setShareOpen(false); setXpInfo({ xp: 0, done: false, badges: [] });
   };
 
   // Build track cells for visual (32 squares around perimeter)
-  const cells = Array.from({ length: TRACK_LEN }, (_, i) => i);
-
   const tokenAt = (absIdx) => {
     const items = [];
     you.forEach((t, i) => {
@@ -210,20 +230,22 @@ export default function Ludo() {
         <div>
           <div className="relative mx-auto aspect-square max-w-[440px]">
             {/* Track around perimeter */}
-            <div className="absolute inset-0 grid grid-cols-8 grid-rows-8 gap-0.5 rounded-2xl bg-black/40 p-1">
-              {Array.from({ length: 64 }).map((_, i) => {
-                const row = Math.floor(i / 8);
-                const col = i % 8;
-                const perim = row === 0 || row === 7 || col === 0 || col === 7;
+            <div className="absolute inset-0 grid gap-0.5 rounded-2xl bg-black/40 p-1"
+              style={{ gridTemplateColumns: `repeat(${BOARD_SIDE}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${BOARD_SIDE}, minmax(0, 1fr))` }}>
+              {Array.from({ length: BOARD_SIDE * BOARD_SIDE }).map((_, i) => {
+                const row = Math.floor(i / BOARD_SIDE);
+                const col = i % BOARD_SIDE;
+                const edge = BOARD_SIDE - 1;
+                const perim = row === 0 || row === edge || col === 0 || col === edge;
                 // Assign perimeter cells to track indices sequentially
                 let trackIdx = null;
                 if (perim) {
                   // clockwise from top-left
                   const order = [];
-                  for (let c = 0; c < 8; c++) order.push([0, c]);
-                  for (let r = 1; r < 8; r++) order.push([r, 7]);
-                  for (let c = 6; c >= 0; c--) order.push([7, c]);
-                  for (let r = 6; r >= 1; r--) order.push([r, 0]);
+                  for (let c = 0; c < BOARD_SIDE; c++) order.push([0, c]);
+                  for (let r = 1; r < BOARD_SIDE; r++) order.push([r, edge]);
+                  for (let c = edge - 1; c >= 0; c--) order.push([edge, c]);
+                  for (let r = edge - 1; r >= 1; r--) order.push([r, 0]);
                   const idx = order.findIndex(([r, c]) => r === row && c === col);
                   if (idx !== -1) trackIdx = idx % TRACK_LEN;
                 }
@@ -232,6 +254,7 @@ export default function Ludo() {
                 return (
                   <div
                     key={i}
+                    data-testid={trackIdx == null ? undefined : `ludo-cell-${trackIdx}`}
                     className="relative rounded-sm"
                     style={{
                       backgroundColor: perim
@@ -344,3 +367,4 @@ function TokenPanel({ label, side, tokens, selectable = [], onSelect }) {
     </div>
   );
 }
+
