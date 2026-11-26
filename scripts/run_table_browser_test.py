@@ -20,6 +20,8 @@ import uuid
 from pymongo import MongoClient
 from pymongo.uri_parser import parse_uri
 
+from browser_acceptance import Acceptance
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -32,6 +34,7 @@ def main():
         raise SystemExit("Refusing non-loopback MongoDB; this runner is test-only")
     if not (ROOT / "frontend/build/index.html").is_file():
         raise SystemExit("Build frontend first with REACT_APP_BACKEND_URL unset")
+    acceptance = Acceptance(ROOT, os.environ)
     client = MongoClient(mongo_url, serverSelectionTimeoutMS=5000)
     client.admin.command("ping")
     db_name = "rmc_browser_test_" + uuid.uuid4().hex
@@ -86,6 +89,7 @@ uvicorn.run(app, fd=int(os.environ["RMC_TEST_LISTENER"]), log_level="warning")
                    PYTHON_DOTENV_DISABLED="1",
                    RMC_TEST_SOURCE_ROOT=str(ROOT), RMC_TEST_LISTENER=str(listener.fileno()),
                    RMC_BROWSER_TEST_URL=f"http://127.0.0.1:{port}")
+        acceptance.env = env
         try:
             process = subprocess.Popen([sys.executable, str(server_file)], env=env,
                                        cwd=ROOT, pass_fds=(listener.fileno(),))
@@ -122,29 +126,21 @@ uvicorn.run(app, fd=int(os.environ["RMC_TEST_LISTENER"]), log_level="warning")
             result = verify('https://rmcclassics.com', manifest, get_test_asset)
             print(f"PASS: deployed frontend bytes match {result['verified_files']} candidate HTML/JS/CSS assets", flush=True)
             # Full Spades matches: test-only CPU timer acceleration, real legal UI actions/API.
-            subprocess.run(["node", "scripts/verify-computer-spades-browser.cjs"], cwd=ROOT,
-                           env=env, check=True, timeout=150)
+            acceptance.run("verify-computer-spades-browser.cjs", 150)
             # Legal computer Dominoes games exercise delayed saves across reset/exit.
-            subprocess.run(["node", "scripts/verify-computer-dominoes-browser.cjs"], cwd=ROOT,
-                           env=env, check=True, timeout=120)
+            acceptance.run("verify-computer-dominoes-browser.cjs", 120)
             # Ludo board visibility and CPU lifecycle use legal UI moves and real clocks.
-            subprocess.run(["node", "scripts/verify-scrabble-browser.cjs"], cwd=ROOT,
-                           env=env, check=True, timeout=120)
-            subprocess.run(["node", "scripts/verify-ludo-browser.cjs"], cwd=ROOT,
-                           env=env, check=True, timeout=180)
+            acceptance.run("verify-scrabble-browser.cjs", 120)
+            acceptance.run("verify-ludo-browser.cjs", 180)
             # Snakes uses actual CPU timers and UI actions, with a bounded smoke stage.
-            subprocess.run(["node", "scripts/verify-snakes-browser.cjs"], cwd=ROOT,
-                           env=env, check=True, timeout=120)
+            acceptance.run("verify-snakes-browser.cjs", 120)
             # Actual Matter.js lifecycle smoke; resource observers do not change physics/timing.
-            subprocess.run(["node", "scripts/verify-jenga-browser.cjs"], cwd=ROOT,
-                           env=env, check=True, timeout=180)
+            acceptance.run("verify-jenga-browser.cjs", 180)
             # Focused signed-in score cases have a separate two-minute ceiling.
-            subprocess.run(["node", "scripts/verify-crazy8-browser.cjs"], cwd=ROOT,
-                           env=env, check=True, timeout=120)
+            acceptance.run("verify-crazy8-browser.cjs", 120)
             # Full legal game/lifecycle cases include real CPU delays; retain a bounded
             # eight-minute ceiling as the suite now exceeds the former five minutes.
-            subprocess.run(["node", "scripts/verify-table-browser.cjs"], cwd=ROOT,
-                           env=env, check=True, timeout=480)
+            acceptance.run("verify-table-browser.cjs", 480)
             for collection, record in preserved.items():
                 assert client[db_name][collection].find_one({"_id": record["_id"]}) == record
             print("PASS: existing account, progress and purchase records preserved", flush=True)
@@ -162,9 +158,12 @@ uvicorn.run(app, fd=int(os.environ["RMC_TEST_LISTENER"]), log_level="warning")
             client.close()
             print("PASS: disposable browser database removed; production data untouched", flush=True)
 
+    acceptance.finish()
+
 
 if __name__ == "__main__":
     main()
+
 
 
 

@@ -111,6 +111,7 @@ jobs:
 
       - name: Verify Dominoes and Spades rules, privacy, concurrency, and persistence
         env:
+          RMC_BROWSER_ACCEPTANCE: ${{ runner.temp }}/rmc-browser-acceptance.json
           RMC_APP_CAPTURE_DIR: ${{ runner.temp }}/rmc-app-captures
           RMC_CAPTURE_CANDIDATE: ${{ github.event.pull_request.head.sha || github.sha }}
           RMC_TEST_MONGO_URL: mongodb://127.0.0.1:27017/?serverSelectionTimeoutMS=5000
@@ -127,6 +128,7 @@ jobs:
           RMC_PLAYWRIGHT_MODULE: ${{ runner.temp }}/rmc-browser/node_modules/playwright
         run: |
           npm install --prefix "$RUNNER_TEMP/rmc-browser" --no-save --no-audit --no-fund playwright@1.58.2
+          python tests/test_browser_acceptance.py
           python tests/test_browser_apt_sources.py
           sudo "$(command -v python)" scripts/install_browser_deps.py "$(command -v node)" "$RMC_PLAYWRIGHT_MODULE/cli.js"
           node "$RMC_PLAYWRIGHT_MODULE/cli.js" install chromium
@@ -212,13 +214,18 @@ jobs:
 
       - name: Package tested web bundle and source receipt
         env:
+          RMC_BROWSER_ACCEPTANCE: ${{ runner.temp }}/rmc-browser-acceptance.json
+          RMC_CAPTURE_CANDIDATE: ${{ github.event.pull_request.head.sha || github.sha }}
           CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -eu
+          python scripts/browser_acceptance.py
           checkout_commit="$(git rev-parse --verify HEAD^{commit})"
           checkout_tree="$(git rev-parse --verify HEAD^{tree})"
           test -s frontend/build/rmc-release.json
           mkdir -p "$RUNNER_TEMP/rmc-web-evidence"
+          cp "$RMC_BROWSER_ACCEPTANCE" "$RUNNER_TEMP/rmc-web-evidence/browser-acceptance.json"
+          cp "$RMC_BROWSER_ACCEPTANCE" "$RUNNER_TEMP/rmc-app-captures/browser-acceptance.json"
           tar -czf "$RUNNER_TEMP/rmc-web-evidence/frontend-build.tar.gz" -C frontend/build .
           cp frontend/build/rmc-release.json "$RUNNER_TEMP/rmc-web-evidence/"
           {
@@ -237,7 +244,7 @@ jobs:
             echo 'production_deployment_verified=false'
           } > "$RUNNER_TEMP/rmc-web-evidence/source-receipt.txt"
           cd "$RUNNER_TEMP/rmc-web-evidence"
-          sha256sum frontend-build.tar.gz rmc-release.json source-receipt.txt > SHA256SUMS
+          sha256sum frontend-build.tar.gz rmc-release.json source-receipt.txt browser-acceptance.json > SHA256SUMS
           sha256sum -c SHA256SUMS
 
       - name: Retain tested web build evidence
@@ -255,6 +262,7 @@ jobs:
           path: ${{ runner.temp }}/rmc-app-captures/
           if-no-files-found: error
           retention-days: 14
+
 
 
 
