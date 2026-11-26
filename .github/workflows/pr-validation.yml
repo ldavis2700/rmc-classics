@@ -111,7 +111,6 @@ jobs:
 
       - name: Verify Dominoes and Spades rules, privacy, concurrency, and persistence
         env:
-          RMC_BROWSER_ACCEPTANCE: ${{ runner.temp }}/rmc-browser-acceptance.json
           RMC_APP_CAPTURE_DIR: ${{ runner.temp }}/rmc-app-captures
           RMC_CAPTURE_CANDIDATE: ${{ github.event.pull_request.head.sha || github.sha }}
           RMC_TEST_MONGO_URL: mongodb://127.0.0.1:27017/?serverSelectionTimeoutMS=5000
@@ -121,6 +120,7 @@ jobs:
 
       - name: Verify production bundle through real API and disposable MongoDB
         env:
+          RMC_BROWSER_ACCEPTANCE: ${{ runner.temp }}/rmc-browser-acceptance.json
           RMC_APP_CAPTURE_DIR: ${{ runner.temp }}/rmc-app-captures
           RMC_CAPTURE_CANDIDATE: ${{ github.event.pull_request.head.sha || github.sha }}
           RMC_TEST_MONGO_URL: mongodb://127.0.0.1:27017/?serverSelectionTimeoutMS=5000
@@ -262,6 +262,7 @@ jobs:
           path: ${{ runner.temp }}/rmc-app-captures/
           if-no-files-found: error
           retention-days: 14
+
 
 
 

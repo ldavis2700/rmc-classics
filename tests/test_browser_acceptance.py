@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import yaml
 from unittest.mock import patch
 spec = importlib.util.spec_from_file_location('acceptance', Path(__file__).resolve().parents[1] / 'scripts/browser_acceptance.py')
 a = importlib.util.module_from_spec(spec); spec.loader.exec_module(a)
@@ -30,6 +31,34 @@ class ReceiptTests(unittest.TestCase):
         data = self.complete().finish()
         a.validate(json.loads(self.path.read_text()),self.root,self.env)
         self.assertEqual(len(data['stages']),8)
+    def test_ci_requires_receipt_and_identity_before_execution(self):
+        for key in ('RMC_BROWSER_ACCEPTANCE', 'RMC_CAPTURE_CANDIDATE',
+                    'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT'):
+            for value in (None, ''):
+                env = dict(self.env, GITHUB_ACTIONS='true')
+                if value is None: del env[key]
+                else: env[key] = value
+                with self.subTest(key=key, value=value), patch.object(a.subprocess, 'run') as run:
+                    with self.assertRaisesRegex(ValueError, key): a.Acceptance(self.root, env)
+                    run.assert_not_called()
+    def test_local_execution_can_omit_receipt_file(self):
+        env = dict(self.env); del env['RMC_BROWSER_ACCEPTANCE']
+        receipt = a.Acceptance(self.root, env)
+        with patch.object(a.subprocess, 'run'):
+            for stage in a.STAGES: receipt.run(*stage)
+        a.validate(receipt.finish(), self.root, env)
+        self.assertFalse(self.path.exists())
+    def test_workflow_producer_and_packager_share_receipt_path(self):
+        workflow = Path(__file__).resolve().parents[1] / '.github/workflows/pr-validation.yml'
+        steps = yaml.safe_load(workflow.read_text())['jobs']['validate']['steps']
+        producers = [s for s in steps if 'python scripts/run_table_browser_test.py' in s.get('run', '')]
+        consumers = [s for s in steps if 'python scripts/browser_acceptance.py' in s.get('run', '')]
+        self.assertEqual(len(producers), 1); self.assertEqual(len(consumers), 1)
+        for key in ('RMC_BROWSER_ACCEPTANCE', 'RMC_CAPTURE_CANDIDATE'):
+            self.assertTrue(producers[0].get('env', {}).get(key), key)
+            self.assertEqual(producers[0]['env'][key], consumers[0]['env'][key])
+        self.assertEqual(producers[0]['env']['RMC_BROWSER_ACCEPTANCE'],
+                         '${{ runner.temp }}/rmc-browser-acceptance.json')
     def test_missing_stage_has_no_receipt(self):
         receipt = a.Acceptance(self.root,self.env)
         with patch.object(a.subprocess,'run'):
@@ -74,3 +103,4 @@ class ReceiptTests(unittest.TestCase):
             with self.assertRaises(ValueError): a.validate(changed,self.root,self.env)
 
 if __name__ == '__main__': unittest.main()
+

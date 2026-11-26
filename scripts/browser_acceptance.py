@@ -49,6 +49,11 @@ def validate(data, root, env):
 class Acceptance:
     def __init__(self, root, env):
         self.root, self.env = Path(root), env
+        if env.get('GITHUB_ACTIONS') == 'true':
+            for key in ('RMC_BROWSER_ACCEPTANCE', 'RMC_CAPTURE_CANDIDATE',
+                        'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT'):
+                if not env.get(key):
+                    raise ValueError('Missing CI browser acceptance setting: ' + key)
         self.path = Path(env['RMC_BROWSER_ACCEPTANCE']) if env.get('RMC_BROWSER_ACCEPTANCE') else None
         if self.path:
             self.path.unlink(missing_ok=True)  # A failed attempt cannot reuse an old receipt.
@@ -93,3 +98,4 @@ if __name__ == '__main__':
             raise SystemExit('Missing acceptance identity: ' + key)
     validate(json.loads(Path(os.environ['RMC_BROWSER_ACCEPTANCE']).read_text()), root, os.environ)
     print('PASS: browser acceptance matches candidate, attempt, scripts and web manifest')
+
