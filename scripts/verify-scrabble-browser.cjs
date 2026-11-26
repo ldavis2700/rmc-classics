@@ -13,23 +13,38 @@ async function fresh(page){
  assert.equal(await page.getByTestId("share-card-modal").count(),0);
  assert.equal((await page.getByTestId("scrabble-word").innerText()).trim(),"Tap tiles below");
 }
-async function terminal(page){
- assert.equal((await page.getByTestId("scrabble-score").innerText()).trim(),"Round 5/5 · 0 pts");
+const winPlan={"seed":10332,"total":62,"rounds":[{"rack":["K","B","I","W","C","S","N"],"word":"WICK","score":13},{"rack":["D","O","A","G","O","Y","H"],"word":"GOODY","score":10},{"rack":["D","U","R","V","E","N","Y"],"word":"ENVY","score":10},{"rack":["M","O","O","U","I","C","R"],"word":"CURIO","score":7},{"rack":["P","I","Z","Q","X","U","M"],"word":"QUIZ","score":22}]};
+async function terminal(page,score=0){
+ assert.equal((await page.getByTestId("scrabble-score").innerText()).trim(),"Round 5/5 · "+score+" pts");
  for(const id of ["scrabble-skip","scrabble-shuffle","scrabble-submit"])assert(await page.getByTestId(id).isDisabled());
  for(let i=0;i<7;i++)assert(await page.getByTestId("scrabble-tile-"+i).isDisabled());
 }
-async function finish(page){
+async function finish(page,won=false){
+ if(won)await page.evaluate(seed=>{Math.random=()=>{seed=(Math.imul(1664525,seed)+1013904223)>>>0;return seed/4294967296;};},winPlan.seed);
  await page.getByTestId("game-reset").click();await fresh(page);
+ let total=0;
  for(let i=1;i<=5;i++){
-  assert.equal((await page.getByTestId("scrabble-score").innerText()).trim(),"Round "+i+"/5 · 0 pts");
-  await page.getByTestId("scrabble-skip").click();
+  assert.equal((await page.getByTestId("scrabble-score").innerText()).trim(),"Round "+i+"/5 · "+total+" pts");
+  if(won){
+   const round=winPlan.rounds[i-1],rack=[];
+   for(let j=0;j<7;j++)rack.push(await page.getByTestId("scrabble-tile-"+j).locator("span").first().innerText());
+   assert.deepEqual(rack,round.rack,"Seeded legal rack for round "+i);
+   const used=new Set();
+   for(const letter of round.word){
+    const index=rack.findIndex((value,j)=>value===letter&&!used.has(j));assert(index>=0);used.add(index);
+    await page.getByTestId("scrabble-tile-"+index).click();
+   }
+   assert.equal((await page.getByTestId("scrabble-word").locator("button span.font-display").allTextContents()).join(""),round.word);
+   assert.equal((await page.getByTestId("scrabble-validity").innerText()).trim(),"VALID");
+   await page.getByTestId("scrabble-submit").click();total+=round.score;
+  }else await page.getByTestId("scrabble-skip").click();
  }
- await terminal(page);
+ assert.equal(total,won?winPlan.total:0);await terminal(page,total);
 }
 (async()=>{
  const browser=await chromium.launch({headless:true});
  try{
-  for(const mode of ["guest","success","http","network","delayed-reset","delayed-exit","reversed"]){
+  for(const {mode,won} of ["guest","success","http","network","delayed-reset","delayed-exit","reversed"].flatMap(mode=>[{mode,won:false},{mode,won:true}])){
    const email="word-tiles-"+require("node:crypto").randomUUID()+"@example.com";
    const account=mode==="guest"?null:await register(email);
    let context,holdProfile=false;const requests=[],errors=[],routeErrors=[],blocked=[];
@@ -69,20 +84,20 @@ async function finish(page){
      assert.deepEqual(routeErrors,[]);assert(item.fulfilled);
     };
     const reward=async item=>{
-     await modal.waitFor();assert(await modal.getByText("PLAYED",{exact:true}).isVisible());
+     await modal.waitFor();assert(await modal.getByText(won?"WIN":"PLAYED",{exact:true}).isVisible());
      assert(item.data.xp_gained>0);assert(await modal.getByText("+"+item.data.xp_gained,{exact:true}).isVisible());
      for(const badge of item.data.newly_unlocked_badges||[])assert((await modal.innerText()).includes(badge.name));
     };
-    await finish(page);
+    await finish(page,won);
     if(mode==="reversed"){
-     await held(1);await finish(page);await held(2);
+     await held(1);await finish(page,won);await held(2);
      assert(requests[1].data.user.xp>requests[0].data.user.xp);
      await release(1);await reward(requests[1]);
      await page.getByTestId("share-close-btn").click();await modal.waitFor({state:"detached"});
      const reconciled=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/auth/me"&&r.request().method()==="GET");
      await release(0);const response=await reconciled;assert.equal(response.status(),200);
      assert.equal((await response.json()).user.xp,requests[1].data.user.xp);
-     await page.waitForTimeout(300);assert.equal(await modal.count(),0);await terminal(page);
+     await page.waitForTimeout(300);assert.equal(await modal.count(),0);await terminal(page,won?winPlan.total:0);
      holdProfile=true;await page.evaluate(()=>{window.__wordTilesDocument="preserved";});
      await page.locator('[data-testid="mobile-nav-profile"]:visible').click();await page.waitForURL(base+"/profile");
      assert.equal(await page.evaluate(()=>window.__wordTilesDocument),"preserved");
@@ -101,19 +116,19 @@ async function finish(page){
      await release(0);await page.waitForTimeout(300);assert.equal(await modal.count(),0);
      if(mode==="delayed-reset")await fresh(page);else assert.equal(await page.getByTestId("scrabble-rack").count(),0);
     }else{
-     await modal.waitFor();assert(await modal.getByText("PLAYED",{exact:true}).isVisible());
+     await modal.waitFor();assert(await modal.getByText(won?"WIN":"PLAYED",{exact:true}).isVisible());
      if(mode==="success")await reward(requests[0]);else{
       assert.equal(await modal.getByText("XP earned",{exact:true}).count(),0);
       assert.equal(await modal.getByText("Daily Challenge complete!",{exact:true}).count(),0);
       assert.equal(await modal.getByTestId("share-badges").count(),0);
      }
      await page.getByTestId("share-close-btn").click();await modal.waitFor({state:"detached"});
-     await terminal(page);await page.getByTestId("game-reset").click();await fresh(page);
+     await terminal(page,won?winPlan.total:0);await page.getByTestId("game-reset").click();await fresh(page);
     }
     assert.equal(requests.length,mode==="guest"?0:mode==="reversed"?2:1);
-    for(const item of requests)assert.deepEqual(item.payload,{game_id:"scrabble",won:false,score:0});
+    for(const item of requests)assert.deepEqual(item.payload,{game_id:"scrabble",won,score:won?winPlan.total:0});
     assert.deepEqual(errors,[]);assert.deepEqual(routeErrors,[]);
-    console.log("PASS: compiled Word Tiles five skipped rounds "+mode+", exact score count/payload, truthful rewards, terminal controls and result lifecycle");
+    console.log("PASS: compiled Word Tiles "+(won?"five legal words, seed10332, 62-point win":"five skipped rounds")+" "+mode+", exact score count/payload, truthful rewards, terminal controls and result lifecycle");
    }finally{
     for(const item of requests)if(item.release)item.release();
     for(const route of blocked)await route.abort().catch(()=>{});
