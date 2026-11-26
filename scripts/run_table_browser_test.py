@@ -39,9 +39,11 @@ def main():
     # Synthetic pre-existing records must survive API startup and game activity.
     preserved = {
         "users": {"_id": "preserve-user", "id": "preserve-user",
+                  "name": "Preservation Fixture",
                   "email": "release-preservation@example.com", "password_hash": "fixture-only",
-                  "xp": 500, "total_wins": 12, "freezes_available": 7,
-                  "stats": {"dominoes": {"plays": 8, "wins": 3}}},
+                  "xp": 500, "total_plays": 20, "total_wins": 12, "freezes_available": 7,
+                  "stats": {"dominoes": {"plays": 8, "wins": 3},
+                            "chess": {"plays": 12, "wins": 9}}},
         "game_events": {"_id": "preserve-progress", "user_id": "preserve-user", "score": 3},
         "iap_events": {"_id": "preserve-purchase", "event_id": "preserve-purchase",
                        "user_id": "preserve-user", "product_id": "rmc.freeze.pack5"},
@@ -157,4 +159,5 @@ uvicorn.run(app, fd=int(os.environ["RMC_TEST_LISTENER"]), log_level="warning")
 
 if __name__ == "__main__":
     main()
+
 

@@ -58,6 +58,26 @@ async function captureActualApp(browser, user) {
   const page = await context.newPage();
   page.on("pageerror", (error) => errors.push(error.message));
   const files = {};
+  async function navigateCapture(target, route) {
+    if (route !== "/leaderboard") return target.goto(`${base}${route}`);
+    // Wait for the actual API payload and rendered row, not just the list shell.
+    const ready = target.waitForResponse((r) => r.url() === `${base}/api/games/leaderboard`
+      && r.request().method() === "GET");
+    const [response, leaderboard] = await Promise.all([target.goto(`${base}${route}`), ready]);
+    assert.equal(leaderboard.status(), 200);
+    const { rows } = await leaderboard.json();
+    const fixture = rows.find((row) => row.id === "preserve-user");
+    assert(fixture, "Preservation fixture must remain in the real leaderboard response");
+    assert.equal(fixture.name, "Preservation Fixture");
+    assert.equal(fixture.total_plays, 20);
+    assert.equal(fixture.total_wins, 12);
+    const row = target.getByTestId("leaderboard-list").locator(":scope > div")
+      .filter({ has: target.getByText(fixture.name, { exact: true }) });
+    await row.getByText("20 games played", { exact: true }).waitFor();
+    await row.getByText(/^12\s*W$/).waitFor();
+    console.log("PASS: leaderboard capture renders real preservation fixture: 20 plays, 12 wins");
+    return response;
+  }
   try {
     await page.goto(`${base}/login`);
     await signIn(page, user.email);
@@ -74,7 +94,7 @@ async function captureActualApp(browser, user) {
       ["/privacy", "08-privacy", "legal-title"],
     ];
     for (const [route, name, ready] of screens) {
-      const response = await page.goto(`${base}${route}`);
+      const response = await navigateCapture(page, route);
       assert(response.ok(), "Capture route must respond successfully");
       const destination = new URL(page.url());
       assert.equal(destination.origin, new URL(base).origin);
@@ -109,7 +129,7 @@ async function captureActualApp(browser, user) {
     fs.mkdirSync(path.join(output, "tablet"));
     const tabletFiles = {};
     for (const [route, name, ready] of screens) {
-      const response = await tablet.goto(`${base}${route}`);
+      const response = await navigateCapture(tablet, route);
       assert(response.ok(), "Tablet capture route must respond successfully");
       const destination = new URL(tablet.url());
       assert.equal(destination.origin, new URL(base).origin);
@@ -2025,5 +2045,6 @@ async function clickMove(page, action) {
     throw error;
   } finally { await browser.close(); }
 })().catch((error) => { console.error(error); process.exitCode = 1; });
+
 
 
