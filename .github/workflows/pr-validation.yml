@@ -127,7 +127,9 @@ jobs:
           RMC_PLAYWRIGHT_MODULE: ${{ runner.temp }}/rmc-browser/node_modules/playwright
         run: |
           npm install --prefix "$RUNNER_TEMP/rmc-browser" --no-save --no-audit --no-fund playwright@1.58.2
-          node "$RMC_PLAYWRIGHT_MODULE/cli.js" install --with-deps chromium
+          python tests/test_browser_apt_sources.py
+          sudo "$(command -v python)" scripts/install_browser_deps.py "$(command -v node)" "$RMC_PLAYWRIGHT_MODULE/cli.js"
+          node "$RMC_PLAYWRIGHT_MODULE/cli.js" install chromium
           python scripts/run_table_browser_test.py
 
       - name: Protect Apple Review remediation
@@ -253,5 +255,6 @@ jobs:
           path: ${{ runner.temp }}/rmc-app-captures/
           if-no-files-found: error
           retention-days: 14
+
 
 
