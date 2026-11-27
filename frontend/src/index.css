@@ -188,3 +188,20 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: #ff479a;
 }
+
+/* Keep the primary play action visible above bottom navigation on short phones. */
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 1023px) {
+    .rmc-home.rmc-home { padding-top: 8px; }
+    .rmc-home .rmc-home-hero { padding: 16px; }
+    .rmc-home .rmc-home-hero-grid { display: block; }
+    .rmc-home .rmc-home-hero [data-testid="hero-reel"] { display: none; }
+    .rmc-home .rmc-home-title { margin-top: 8px; font-size: 24px; line-height: 1; }
+    .rmc-home .rmc-home-title br { display: none; }
+    .rmc-home .rmc-home-description { margin-top: 8px; font-size: 12px; line-height: 1.3; }
+    .rmc-home .rmc-home-hero-grid > div:first-child { display: flex; flex-direction: column; }
+    .rmc-home .rmc-home-hero .chip { align-self: flex-start; }
+    .rmc-home .rmc-home-description { order: 1; }
+    .rmc-home .rmc-home-actions + div { order: 2; }
+    .rmc-home .rmc-home-actions { margin-top: 12px; gap: 8px; }
+    .rmc-home .rmc-home-actions a { min-height: 44px; display: inline-flex; align-items: center; }
+}

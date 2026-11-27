@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import GameShell from "@/components/rmc/GameShell";
 import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
@@ -112,16 +112,23 @@ export default function Checkers() {
     return legal.filter((m) => m.from[0] === selected[0] && m.from[1] === selected[1]);
   }, [legal, selected]);
 
+  const gameGeneration = useRef(0);
+  useEffect(() => () => { gameGeneration.current += 1; }, []);
+
   useEffect(() => {
     if (winner && !submitted) {
       const won = winner === "you";
       won ? sfx.win() : sfx.lose();
       toast[won ? "success" : "error"](won ? "You cleaned the board!" : "CPU cleaned the board.");
       setSubmitted(true);
+      const generation = gameGeneration.current;
       if (user) {
         submitScore({ game_id: "checkers", won, score: won ? 1 : 0 }).then((res) => {
+          if (generation !== gameGeneration.current) return;
           if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
           setShareOpen(true);
+        }).catch(() => {
+          if (generation === gameGeneration.current) setShareOpen(true);
         });
       } else {
         setShareOpen(true);
@@ -204,6 +211,8 @@ export default function Checkers() {
   };
 
   const reset = () => {
+    gameGeneration.current += 1;
+    setXpInfo({ xp: 0, done: false });
     setBoard(initialBoard());
     setSelected(null);
     setTurn("you");

@@ -1,0 +1,2050 @@
+/* Run against a disposable local API serving frontend/build. Never production. */
+const assert = require("node:assert/strict");
+const path = require("node:path");
+const fs = require("node:fs");
+const crypto = require("node:crypto");
+const { Chess: ChessEngine } = require("../frontend/node_modules/chess.js");
+const { chromium } = require(process.env.RMC_PLAYWRIGHT_MODULE || (process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES
+  ? path.join(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES, "playwright") : "playwright"));
+const base = process.env.RMC_BROWSER_TEST_URL || "http://127.0.0.1:8765";
+assert(["127.0.0.1", "localhost"].includes(new URL(base).hostname), "Use only a disposable local test backend");
+const password = "DisposableTableTest-2026!";
+const errors = [];
+const tableCaptures = {};
+const landscapeCaptures = {};
+let unavailableStoreCapture = null;
+async function captureTableState(page, name) {
+  if (!process.env.RMC_APP_CAPTURE_DIR) return;
+  assert.equal(new URL(page.url()).origin, new URL(base).origin);
+  assert(await page.locator("html").evaluate((el) => el.scrollWidth <= window.innerWidth),
+    `Horizontal overflow in ${name}`);
+  await page.evaluate(() => document.fonts.ready);
+  const bytes = await page.screenshot({ type: "png", fullPage: false, animations: "disabled" });
+  assert.equal(bytes.readUInt32BE(16), 390);
+  assert.equal(bytes.readUInt32BE(20), 844);
+  tableCaptures[name + ".png"] = bytes;
+}
+const labels = { C: "clubs", D: "diamonds", H: "hearts", S: "spades" };
+const ranks = { 11: "J", 12: "Q", 13: "K", 14: "A" };
+const cardLabel = (c) => `${ranks[c.slice(1)] || c.slice(1)} of ${labels[c[0]]}`;
+async function api(endpoint, token, body) {
+  const response = await fetch(`${base}/api${endpoint}`, { method: body === undefined ? "GET" : "POST",
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  const data = await response.json();
+  assert(response.ok, `${endpoint}: ${response.status} ${JSON.stringify(data)}`);
+  return data;
+}
+async function signIn(page, email) {
+  await page.getByTestId("login-email").fill(email);
+  await page.getByTestId("login-password").fill(password);
+  await page.getByTestId("login-terms-checkbox").check();
+  await page.getByTestId("login-submit").click();
+}
+async function captureActualApp(browser, user) {
+  const output = process.env.RMC_APP_CAPTURE_DIR;
+  if (!output) return; // Opt-in only in the disposable CI harness.
+  const candidate = process.env.RMC_CAPTURE_CANDIDATE;
+  assert(/^[a-f0-9]{40}$/.test(candidate || ""), "Capture requires candidate identity");
+  fs.mkdirSync(output, { recursive: false });
+  const context = await browser.newContext({
+    viewport: { width: 428, height: 926 }, deviceScaleFactor: 3,
+    isMobile: true, hasTouch: true,
+  });
+  let tabletContext;
+  // Captures obey the same isolation boundary as the gameplay acceptance.
+  await context.route("**/*", (route) => new URL(route.request().url()).origin === new URL(base).origin
+    ? route.continue() : route.abort());
+  const page = await context.newPage();
+  page.on("pageerror", (error) => errors.push(error.message));
+  const files = {};
+  async function navigateCapture(target, route) {
+    if (route !== "/leaderboard") return target.goto(`${base}${route}`);
+    // Wait for the actual API payload and rendered row, not just the list shell.
+    const ready = target.waitForResponse((r) => r.url() === `${base}/api/games/leaderboard`
+      && r.request().method() === "GET");
+    const [response, leaderboard] = await Promise.all([target.goto(`${base}${route}`), ready]);
+    assert.equal(leaderboard.status(), 200);
+    const { rows } = await leaderboard.json();
+    const fixture = rows.find((row) => row.id === "preserve-user");
+    assert(fixture, "Preservation fixture must remain in the real leaderboard response");
+    assert.equal(fixture.name, "Preservation Fixture");
+    assert.equal(fixture.total_plays, 20);
+    assert.equal(fixture.total_wins, 12);
+    const row = target.getByTestId("leaderboard-list").locator(":scope > div")
+      .filter({ has: target.getByText(fixture.name, { exact: true }) });
+    await row.getByText("20 games played", { exact: true }).waitFor();
+    await row.getByText(/^12\s*W$/).waitFor();
+    console.log("PASS: leaderboard capture renders real preservation fixture: 20 plays, 12 wins");
+    return response;
+  }
+  try {
+    await page.goto(`${base}/login`);
+    await signIn(page, user.email);
+    await page.waitForURL(`${base}/profile`);
+    await page.getByTestId("profile-email").filter({ hasText: user.email }).waitFor();
+    const screens = [
+      ["/", "01-home", "hero-tag"],
+      ["/library", "02-library", "game-card-chess"],
+      ["/leaderboard", "03-leaderboard", "leaderboard-list"],
+      ["/play/chess", "04-chess", "chess-board"],
+      ["/play/memory", "05-memory", "memory-board"],
+      ["/play/connect4", "06-connect4", "c4-board"],
+      ["/profile", "07-profile", "profile-name"],
+      ["/privacy", "08-privacy", "legal-title"],
+    ];
+    for (const [route, name, ready] of screens) {
+      const response = await navigateCapture(page, route);
+      assert(response.ok(), "Capture route must respond successfully");
+      const destination = new URL(page.url());
+      assert.equal(destination.origin, new URL(base).origin);
+      assert([route, route === "/" ? "/" : `${route}/`].includes(destination.pathname),
+        `Unexpected capture route: ${destination.pathname}`);
+      assert.equal(destination.search, "");
+      assert.equal(destination.hash, "");
+      await page.getByTestId(ready).waitFor();
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(1200); // Finish entrance animations.
+      assert(await page.locator("html").evaluate((el) => el.scrollWidth <= window.innerWidth),
+        `Horizontal overflow in phone capture ${name}`);
+      const bytes = await page.screenshot({ type: "png", fullPage: false, animations: "disabled" });
+      assert.equal(bytes.readUInt32BE(16), 1284);
+      assert.equal(bytes.readUInt32BE(20), 2778);
+      fs.writeFileSync(path.join(output, name + ".png"), bytes);
+      files[name + ".png"] = crypto.createHash("sha256").update(bytes).digest("hex");
+    }
+    // Tablet-sized Chromium evidence is layout coverage, not an iPad/native capture.
+    tabletContext = await browser.newContext({
+      viewport: { width: 1032, height: 1376 }, deviceScaleFactor: 2,
+      isMobile: true, hasTouch: true,
+    });
+    await tabletContext.route("**/*", (route) => new URL(route.request().url()).origin === new URL(base).origin
+      ? route.continue() : route.abort());
+    const tablet = await tabletContext.newPage();
+    tablet.on("pageerror", (error) => errors.push(error.message));
+    await tablet.goto(`${base}/login`);
+    await signIn(tablet, user.email);
+    await tablet.waitForURL(`${base}/profile`);
+    await tablet.getByTestId("profile-email").filter({ hasText: user.email }).waitFor();
+    fs.mkdirSync(path.join(output, "tablet"));
+    const tabletFiles = {};
+    for (const [route, name, ready] of screens) {
+      const response = await navigateCapture(tablet, route);
+      assert(response.ok(), "Tablet capture route must respond successfully");
+      const destination = new URL(tablet.url());
+      assert.equal(destination.origin, new URL(base).origin);
+      assert([route, route === "/" ? "/" : `${route}/`].includes(destination.pathname),
+        `Unexpected tablet capture route: ${destination.pathname}`);
+      assert.equal(destination.search, "");
+      assert.equal(destination.hash, "");
+      await tablet.getByTestId(ready).waitFor();
+      await tablet.evaluate(() => document.fonts.ready);
+      await tablet.waitForTimeout(1200);
+      assert(await tablet.locator("html").evaluate((el) => el.scrollWidth <= window.innerWidth),
+        `Horizontal overflow in tablet capture ${name}`);
+      const bytes = await tablet.screenshot({ type: "png", fullPage: false, animations: "disabled" });
+      assert.equal(bytes.readUInt32BE(16), 2064);
+      assert.equal(bytes.readUInt32BE(20), 2752);
+      const file = `tablet/${name}.png`;
+      fs.writeFileSync(path.join(output, file), bytes);
+      tabletFiles[file] = crypto.createHash("sha256").update(bytes).digest("hex");
+    }
+    assert.equal(Object.keys(tableCaptures).length, 3, "Require all online table states");
+    const tableFiles = {};
+    for (const [name, bytes] of Object.entries(tableCaptures)) {
+      fs.writeFileSync(path.join(output, name), bytes);
+      tableFiles[name] = { sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
+        width: 390, height: 844, scope: "actual-online-table-disposable-ci-browser-only" };
+    }
+    assert(unavailableStoreCapture, "Require unavailable-store fixture capture");
+    const storeName = "12-store-unavailable-fixture.png";
+    fs.writeFileSync(path.join(output, storeName), unavailableStoreCapture);
+    const storeFixture = { file: storeName,
+      sha256: crypto.createHash("sha256").update(unavailableStoreCapture).digest("hex"),
+      width: 390, height: 844, scope: "simulated-android-store-unavailable-browser-only",
+      real_store_validated: false };
+    assert.equal(Object.keys(landscapeCaptures).length, 12, "Require all landscape routes and viewports");
+    fs.mkdirSync(path.join(output, "landscape"));
+    const landscapeFiles = {};
+    for (const [name, { bytes, width, height, route }] of Object.entries(landscapeCaptures)) {
+      fs.writeFileSync(path.join(output, name), bytes);
+      landscapeFiles[name] = { sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
+        width, height, route, scope: "landscape-chromium-layout-only",
+        physical_device_rotation_validated: false };
+    }
+    const manifest = fs.readFileSync("frontend/build/rmc-release.json");
+    fs.writeFileSync(path.join(output, "capture-receipt.json"), JSON.stringify({
+      scope: "actual-app-disposable-ci-browser-only", candidate_commit: candidate,
+      run_id: process.env.GITHUB_RUN_ID || null,
+      browser: "Chromium", width: 1284, height: 2778,
+      account_type: "synthetic-disposable-test-account",
+      web_manifest_sha256: crypto.createHash("sha256").update(manifest).digest("hex"),
+      signed_device_validation: false, production_deployment_verified: false,
+      resubmission_ready: false, landscape_captures: landscapeFiles, files_sha256: files, table_captures: tableFiles, store_fixture: storeFixture,
+      tablet_captures: { scope: "tablet-sized-chromium-layout-only", width: 2064, height: 2752,
+        viewport_width: 1032, viewport_height: 1376, device_scale_factor: 2,
+        actual_ipad_validated: false, files_sha256: tabletFiles },
+    }, null, 2) + "\n");
+    console.log("PASS: eight phone and eight tablet-sized app views, three online tables, one simulated store and twelve landscape captures; dimensions and hashes; disposable CI only");
+  } finally {
+    if (tabletContext) await tabletContext.close();
+    await context.close();
+  }
+}
+async function verifyUnavailableStore(browser, user) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const creditRequests = [];
+  await context.route("**/*", (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.startsWith("/api/iap/")) {
+      creditRequests.push(url.pathname);
+      return route.abort();
+    }
+    return url.origin === new URL(base).origin ? route.continue() : route.abort();
+  });
+  // Test-only bridge: every plugin call fails, never reaches a device/store.
+  await context.addInitScript(() => {
+    window.__unavailableStoreCalls = [];
+    window.androidBridge = { postMessage(raw) {
+      const call = JSON.parse(raw);
+      window.__unavailableStoreCalls.push(call.methodName);
+      queueMicrotask(() => window.Capacitor?.fromNative?.({
+        callbackId: call.callbackId, pluginId: call.pluginId, methodName: call.methodName,
+        success: false, error: { message: "Disposable unavailable-store fixture", code: "UNAVAILABLE" },
+      }));
+    } };
+    window.Capacitor = { isNativePlatform: () => true, getPlatform: () => "android" };
+  });
+  try {
+    const page = await context.newPage();
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(`${base}/login`);
+    await signIn(page, user.email);
+    await page.waitForURL(`${base}/profile`);
+    const retry = page.getByTestId("freeze-buy-btn");
+    await retry.filter({ hasText: "Retry store price" }).waitFor();
+    assert(await retry.isEnabled());
+    const balance = await page.getByTestId("freeze-balance").textContent();
+    await retry.click();
+    await retry.filter({ hasText: "Retry store price" }).waitFor();
+    assert(await retry.isEnabled());
+    await page.getByTestId("freeze-restore-btn").click();
+    await page.getByText("Purchases are temporarily unavailable.", { exact: true }).waitFor();
+    assert.equal(await page.getByTestId("freeze-balance").textContent(), balance);
+    assert.deepEqual(creditRequests, [], "Unavailable store must not request purchase credits");
+    assert.equal(await page.evaluate(() => window.__unavailableStoreCalls.includes("purchaseStoreProduct")), false);
+    if (process.env.RMC_APP_CAPTURE_DIR) {
+      await page.getByTestId("freeze-restore-btn").scrollIntoViewIfNeeded();
+      assert(await page.locator("html").evaluate((el) => el.scrollWidth <= window.innerWidth),
+        "Unavailable store must not overflow mobile width");
+      for (const control of [retry, page.getByTestId("freeze-restore-btn")]) {
+        const box = await control.boundingBox();
+        assert(box && box.x >= 0 && box.x + box.width <= 390, "Store controls must fit mobile width");
+        assert(box.height >= 44, "Store controls must offer at least a 44px-high touch target");
+      }
+      await page.evaluate(() => document.fonts.ready);
+      unavailableStoreCapture = await page.screenshot({ type: "png", fullPage: false, animations: "disabled" });
+      assert.equal(unavailableStoreCapture.readUInt32BE(16), 390);
+      assert.equal(unavailableStoreCapture.readUInt32BE(20), 844);
+    }
+    console.log("PASS: unavailable native-store fixture permits price retry, reports restore failure, preserves balance and never requests purchase credits");
+  } finally { await context.close(); }
+}
+
+async function verifyMemoryScoreResponses(browser) {
+  const email = `memory-${crypto.randomUUID()}@example.com`;
+  const registered = await api("/auth/register", null, {
+    name: "Disposable Memory Player", email, password, accepted_terms: true,
+  });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const pending = [], routeErrors = [], blockedProfileRefreshes = [];
+  let holdProfileRefresh = false;
+  await context.route("**/*", async (route) => {
+    const request = route.request(), url = new URL(request.url());
+    if (url.origin !== new URL(base).origin) return route.abort();
+    if (holdProfileRefresh && url.pathname === "/api/auth/me" && request.method() === "GET") {
+      blockedProfileRefreshes.push(route);
+      return; // Do not let Profile's mount refresh repair stale context before the assertion.
+    }
+    if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
+    try {
+      assert.equal(request.postDataJSON().game_id, "memory");
+      // The real disposable API processes each score once. Delay delivery only.
+      const response = await route.fetch();
+      assert.equal(response.status(), 200);
+      const data = await response.json();
+      pending.push({ route, response, data, released: false });
+    } catch (error) { routeErrors.push(error.message); await route.abort(); }
+  });
+  await context.addInitScript(() => {
+    const timeout = window.setTimeout.bind(window);
+    // Accelerate pair animation only; preserve real clicks, state and API calls.
+    window.setTimeout = (fn, delay, ...args) => timeout(fn, delay === 350 || delay === 800 ? 100 : delay, ...args);
+  });
+  const page = await context.newPage();
+  page.on("pageerror", (error) => errors.push(error.message));
+  const waitPending = async count => {
+    for (let i = 0; i < 100 && pending.length < count && !routeErrors.length; i++) await page.waitForTimeout(50);
+    assert.deepEqual(routeErrors, []);
+    assert.equal(pending.length, count, "One score request per completed round");
+  };
+  const release = async index => {
+    const item = pending[index];
+    item.released = true;
+    const delivered = page.waitForResponse(r => r.url().endsWith("/games/submit") && r.request().method() === "POST");
+    await item.route.fulfill({ response: item.response });
+    await delivered;
+    await page.waitForTimeout(150); // Let the response promise update React state.
+  };
+  const finishRound = async () => {
+    const symbols = [], matched = new Set();
+    // Learn the shuffled deck using visible card faces, without reading React state.
+    for (let i = 0; i < 16; i += 2) {
+      await page.getByTestId(`memory-card-${i}`).click();
+      symbols[i] = await page.getByTestId(`memory-card-${i}`).textContent();
+      await page.getByTestId(`memory-card-${i + 1}`).click();
+      symbols[i + 1] = await page.getByTestId(`memory-card-${i + 1}`).textContent();
+      if (symbols[i] === symbols[i + 1]) { matched.add(i); matched.add(i + 1); }
+      await page.waitForTimeout(150);
+    }
+    for (let i = 0; i < 16; i++) {
+      if (matched.has(i)) continue;
+      const j = symbols.findIndex((symbol, index) => index !== i && !matched.has(index) && symbol === symbols[i]);
+      assert(j >= 0 && symbols[i] !== "?", "Every visible symbol has a pair");
+      await page.getByTestId(`memory-card-${i}`).click();
+      await page.getByTestId(`memory-card-${j}`).click();
+      matched.add(i); matched.add(j);
+      await page.waitForTimeout(150);
+    }
+    await page.getByText("// CLEARED", { exact: true }).waitFor();
+  };
+  try {
+    await page.goto(`${base}/login`);
+    await signIn(page, email); await page.waitForURL(`${base}/profile`);
+    await page.goto(`${base}/play/memory`);
+    await finishRound(); await waitPending(1);
+    assert.equal(await page.getByTestId("share-card-modal").count(), 0);
+    await page.getByTestId("game-reset").click();
+    assert.equal(await page.getByTestId("memory-board").getByRole("button", { name: "?", exact: true }).count(), 16);
+    await finishRound(); await waitPending(2);
+    await release(1);
+    const modal = page.getByTestId("share-card-modal");
+    await modal.waitFor();
+    assert((await modal.textContent()).includes("Victory!"));
+    if (pending[1].data.xp_gained) {
+      assert(await modal.getByText(`+${pending[1].data.xp_gained}`, { exact: true }).isVisible());
+    }
+    await page.getByTestId("share-close-btn").click();
+    await modal.waitFor({ state: "hidden" });
+    const reconciled = page.waitForResponse(r => r.url().endsWith("/auth/me") && r.request().method() === "GET");
+    await release(0);
+    const profileResponse = await reconciled;
+    assert.equal(profileResponse.status(), 200);
+    assert.equal((await profileResponse.json()).user.xp, pending[1].data.user.xp,
+      "Settled overlapping scores reconcile authoritative profile totals");
+    assert.equal(await modal.count(), 0, "Old round must not reopen the dismissed current result");
+    assert.equal(pending.length, 2, "No duplicate score submission after old response");
+    await page.getByText("// CLEARED", { exact: true }).waitFor();
+    // Navigate through the SPA so AuthContext survives. A full reload would mask the bug.
+    holdProfileRefresh = true;
+    await page.getByTestId("mobile-nav-profile").click();
+    await page.waitForURL(`${base}/profile`);
+    await page.getByTestId("profile-email").filter({ hasText: email }).waitFor();
+    for (let i = 0; i < 100 && !blockedProfileRefreshes.length; i++) await page.waitForTimeout(20);
+    assert(blockedProfileRefreshes.length > 0, "Profile mount refresh was intercepted");
+    const visibleXP = page.getByText("XP", { exact: true }).locator("..").locator("div").first();
+    assert.equal((await visibleXP.textContent()).trim(), String(pending[1].data.user.xp),
+      "Visible profile XP must already be reconciled before mount refresh responds");
+    assert.deepEqual(routeErrors, []);
+    console.log("PASS: two compiled Memory rounds, Reset, real score processing with reversed response delivery, current award, authoritative profile reconciliation, visible XP with mount refresh held and no stale result reopening or duplicate submissions; disposable browser only");
+  } finally {
+    for (const route of blockedProfileRefreshes) await route.abort().catch(() => {});
+    for (const item of pending) if (!item.released) await item.route.abort().catch(() => {});
+    await context.close();
+    const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${registered.token}` },
+      body: JSON.stringify({ password }) });
+    assert.equal(deleted.status, 200, "Disposable Memory account cleanup");
+  }
+}
+
+async function verifyGameHeaderControls(browser) {
+  const context = await browser.newContext({ hasTouch: true });
+  await context.route("**/*", (route) => new URL(route.request().url()).origin === new URL(base).origin
+    ? route.continue() : route.abort());
+  const page = await context.newPage();
+  page.on("pageerror", (error) => errors.push(error.message));
+  try {
+    for (const [width, height] of [[320, 844], [844, 390], [667, 375]]) {
+      await page.setViewportSize({ width, height });
+      await page.goto(`${base}/play/memory`);
+      await page.getByTestId("memory-board").waitFor();
+      await page.evaluate(() => document.fonts.ready);
+      assert(await page.locator("html").evaluate((el) => el.scrollWidth <= innerWidth),
+        `Game header must fit ${width}x${height}`);
+      for (const id of ["game-back", "game-share", "game-reset"]) {
+        const control = page.getByTestId(id);
+        await control.click({ trial: true });
+        const box = await control.boundingBox();
+        assert(box && box.width >= 44 && box.height >= 44,
+          `${id} touch target must be at least 44px at ${width}x${height}`);
+      }
+      await page.getByTestId("memory-card-0").click();
+      await page.getByTestId("memory-card-1").click();
+      assert.equal((await page.getByTestId("memory-moves").textContent()).trim(), "Moves: 1");
+      await page.waitForTimeout(850); // Finish the game's pair-resolution animation.
+      await page.getByTestId("game-reset").click();
+      assert.equal((await page.getByTestId("memory-moves").textContent()).trim(), "Moves: 0");
+      assert.equal(await page.getByTestId("memory-board").getByRole("button", { name: "?", exact: true }).count(), 16);
+      if (width === 320) {
+        // Find an actual matching pair; reset before its 350ms callback.
+        // This tests the live compiled component, not just a fake-timer unit.
+        let foundMatchingPair = false;
+        for (let index = 1; index < 16; index++) {
+          await page.getByTestId("memory-card-0").click();
+          const firstSymbol = await page.getByTestId("memory-card-0").textContent();
+          await page.getByTestId(`memory-card-${index}`).click();
+          const otherSymbol = await page.getByTestId(`memory-card-${index}`).textContent();
+          if (firstSymbol === otherSymbol) {
+            foundMatchingPair = true;
+            break;
+          }
+          await page.waitForTimeout(825);
+        }
+        assert(foundMatchingPair, "A sixteen-card Memory deck must contain a matching pair");
+        await page.getByTestId("game-reset").click();
+        await page.waitForTimeout(450);
+        assert.equal((await page.getByTestId("memory-moves").textContent()).trim(), "Moves: 0");
+        assert.equal(await page.getByTestId("memory-board")
+          .getByRole("button", { name: "?", exact: true }).count(), 16,
+          "A previous turn's matching callback must not reveal cards after Reset");
+      }
+      await page.getByTestId("game-back").click();
+      await page.waitForURL(`${base}/library`);
+      await page.getByTestId("game-card-memory").waitFor();
+    }
+    console.log("PASS: game Back/Share/Reset 44px targets, no overflow, mid-resolution Memory reset and Library return at 320x844, 844x390 and 667x375; share actionability only, no external share");
+  } finally { await context.close(); }
+}
+
+async function verifyAnonymousOnboarding(browser) {
+  // No injected token: guest play must remain available before account creation.
+  for (const [width, height] of [[844, 390], [667, 375]]) {
+    const context = await browser.newContext({ viewport: { width, height }, hasTouch: true });
+    await context.route("**/*", (route) => new URL(route.request().url()).origin === new URL(base).origin
+      ? route.continue() : route.abort());
+    const page = await context.newPage();
+    page.on("pageerror", (error) => errors.push(error.message));
+    let token;
+    try {
+      await page.goto(base);
+      await page.getByTestId("hero-tag").waitFor();
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(700);
+      assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), null);
+      const nav = await page.locator('nav [data-testid="mobile-nav-home"]').boundingBox();
+      for (const id of ["hero-play-btn", "hero-secondary-btn"]) {
+        const control = page.getByTestId(id);
+        const box = await control.boundingBox();
+        assert(box && nav && box.y >= 0 && box.y + box.height <= nav.y && box.height >= 44,
+          `Guest ${id} must fit above bottom navigation at ${width}x${height}`);
+        await control.click({ trial: true });
+      }
+      assert.equal((await page.getByTestId("hero-secondary-btn").textContent()).trim(), "Create account");
+      await page.getByTestId("hero-play-btn").click();
+      await page.waitForURL(`${base}/library`);
+      await page.getByTestId("game-card-spades").click();
+      await page.waitForURL(`${base}/play/spades`);
+      await page.getByTestId("spades-board").waitFor();
+      await page.getByRole("button", { name: "Bid 3", exact: true }).click();
+      // A legal hand interaction proves this is playable, not just a visible board.
+      await page.getByTestId("spades-hand").locator("button:enabled").first().click();
+      assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), null);
+
+      await page.goto(base);
+      await page.getByTestId("hero-secondary-btn").click();
+      await page.waitForURL(`${base}/register`);
+      const email = `guest-${Date.now()}-${width}@example.com`;
+      await page.getByTestId("register-name").fill("Disposable Guest");
+      await page.getByTestId("register-email").fill(email);
+      await page.getByTestId("register-password").fill(password);
+      assert.equal(await page.getByTestId("register-submit").isEnabled(), false,
+        "Account creation requires explicit consent");
+      const popupPromise = page.waitForEvent("popup");
+      await page.locator("form").getByRole("link", { name: "Privacy Policy", exact: true }).click();
+      const privacy = await popupPromise;
+      await privacy.waitForURL((url) => url.origin === new URL(base).origin &&
+        ["/privacy", "/privacy/"].includes(url.pathname) && !url.search && !url.hash);
+      await privacy.getByTestId("legal-title").waitFor();
+      await privacy.close();
+      assert.equal(await page.getByTestId("register-email").inputValue(), email,
+        "Reading privacy policy must preserve the registration form");
+      await page.getByTestId("register-terms-checkbox").check();
+      assert(await page.locator("html").evaluate((el) => el.scrollWidth <= innerWidth),
+        "Landscape registration must not overflow horizontally");
+      const response = page.waitForResponse((r) => r.url().endsWith("/auth/register") && r.request().method() === "POST");
+      await page.getByTestId("register-submit").click();
+      const registered = await response;
+      assert.equal(registered.status(), 200);
+      token = (await registered.json()).token;
+      assert(token, "Registration returns a disposable authenticated session");
+      await page.waitForURL(`${base}/library`);
+      await page.getByTestId("game-card-spades").waitFor();
+      await page.goto(`${base}/profile`);
+      await page.getByTestId("profile-email").filter({ hasText: email }).waitFor();
+    } finally {
+      if (token) {
+        const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ password }) });
+        assert.equal(deleted.status, 200, "Disposable guest account cleanup");
+      }
+      await context.close();
+    }
+  }
+  console.log("PASS: anonymous Home-to-Library-to-Spades play, landscape primary/secondary controls, registration consent/privacy/form preservation, Library return, profile session and account cleanup at 844x390 and 667x375; browser-only");
+}
+
+async function verifyLandscapeLayouts(browser, user) {
+  // Browser viewport resizing is not physical-device rotation or safe-area validation.
+  const context = await browser.newContext();
+  await context.route("**/*", (route) => new URL(route.request().url()).origin === new URL(base).origin
+    ? route.continue() : route.abort());
+  const page = await context.newPage();
+  page.on("pageerror", (error) => errors.push(error.message));
+  try {
+    await page.goto(`${base}/login`);
+    await signIn(page, user.email);
+    await page.waitForURL(`${base}/profile`);
+    for (const [width, height] of [[844, 390], [667, 375], [1376, 1032]]) {
+      await page.setViewportSize({ width, height });
+      for (const [route, ready] of [["/", "hero-tag"], ["/library", "game-card-chess"],
+        ["/privacy", "legal-title"], ["/profile", "profile-name"]]) {
+        const response = await page.goto(`${base}${route}`);
+        assert(response.ok(), "Landscape route must respond");
+        assert.equal(new URL(page.url()).pathname.replace(/\/$/, "") || "/", route);
+        await page.getByTestId(ready).waitFor();
+        await page.evaluate(() => document.fonts.ready);
+        assert(await page.locator("html").evaluate((el) => el.scrollWidth <= innerWidth),
+          `Horizontal overflow on ${route} at ${width}x${height}`);
+        if (route === "/" && height <= 500) {
+          await page.waitForTimeout(700); // Let the hero entrance finish before measuring.
+          const play = page.getByTestId("hero-play-btn");
+          const nav = await page.locator('nav [data-testid="mobile-nav-home"]').boundingBox();
+          const box = await play.boundingBox();
+          assert(box && nav && box.y >= 0 && box.y + box.height <= nav.y,
+            `Landscape play action must be above bottom navigation without scrolling: ${width}x${height} play=${JSON.stringify(box)} nav=${JSON.stringify(nav)}`);
+          assert(box.height >= 44, "Play action retains a 44px touch target");
+          assert(await play.evaluate((el) => {
+            const r = el.getBoundingClientRect();
+            const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+            return hit === el || el.contains(hit);
+          }), "Landscape play action must not be covered");
+        }
+        // Trial clicks scroll and perform Playwright's visibility/stability/hit checks
+        // without triggering purchases, notifications or other side effects.
+        if (route === "/library") await page.getByTestId("game-card-chess").click({ trial: true });
+        if (route === "/profile") {
+          assert.equal(await page.getByTestId("profile-email").textContent(), user.email);
+          await page.getByTestId("reminder-toggle").click({ trial: true });
+        }
+        await page.evaluate(() => scrollTo(0, 0));
+        if (process.env.RMC_APP_CAPTURE_DIR) {
+          const bytes = await page.screenshot({ type: "png", fullPage: false, animations: "disabled" });
+          assert.equal(bytes.readUInt32BE(16), width);
+          assert.equal(bytes.readUInt32BE(20), height);
+          const name = `landscape/${width}x${height}-${route === "/" ? "home" : route.slice(1)}.png`;
+          landscapeCaptures[name] = { bytes, width, height, route };
+        }
+        if (route === "/" && height <= 500) {
+          await page.getByTestId("hero-play-btn").click();
+          await page.waitForURL(`${base}/library`);
+          await page.getByTestId("game-card-chess").waitFor();
+        }
+        const profileNav = page.locator('[data-testid="mobile-nav-profile"]:visible, [data-testid="nav-profile"]:visible').first();
+        await profileNav.click();
+        await page.waitForURL(`${base}/profile`);
+        await page.getByTestId("profile-email").filter({ hasText: user.email }).waitFor();
+      }
+    }
+    console.log("PASS: landscape home/library/privacy/profile at 844x390, 667x375 and 1376x1032; no horizontal overflow; primary controls actionable and profile navigation preserves session; browser-only");
+  } finally { await context.close(); }
+}
+
+async function verifyMobileNavigation(page) {
+  const items = ["home", "library", "battles", "friends", "leaderboard", "profile"];
+  // Check actual rendered labels: document width alone misses clipped fixed nav.
+  for (const width of [320, 360, 390, 428]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.evaluate(() => document.fonts.ready);
+    const links = page.locator('nav [data-testid^="mobile-nav-"]');
+    assert.equal(await links.count(), items.length);
+    let previousRight = 0;
+    for (const link of await links.all()) {
+      const box = await link.boundingBox();
+      assert(box && box.x >= -0.5 && box.x + box.width <= width + 0.5,
+        `Mobile tab outside ${width}px viewport`);
+      assert(box.width >= 44 && box.height >= 44, "Mobile tab touch target must be at least 44px");
+      assert(box.x >= previousRight - 0.5, "Mobile tabs must not overlap");
+      previousRight = box.x + box.width;
+      const visible = await link.evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        const text = [...el.childNodes].filter((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+        const labelsFit = text.every((node) => {
+          const range = document.createRange(); range.selectNodeContents(node);
+          const rect = range.getBoundingClientRect();
+          return rect.left >= box.left - 0.5 && rect.right <= box.right + 0.5;
+        });
+        const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+        return labelsFit && (hit === el || el.contains(hit));
+      });
+      assert(visible, `Mobile tab label clipped or target obscured at ${width}px`);
+    }
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  console.log("PASS: all six mobile navigation labels and touch targets fit 320/360/390/428px");
+}
+
+
+async function verifyChessCheckersTurnCleanup(browser) {
+  for (const game of ["chess", "checkers"]) {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    let scoreRequests = 0;
+    await context.route("**/*", route => {
+      const url = new URL(route.request().url());
+      if (url.origin !== new URL(base).origin) return route.abort();
+      if (url.pathname === "/api/games/submit") scoreRequests++;
+      return route.continue();
+    });
+    const page = await context.newPage();
+    page.on("pageerror", error => errors.push(error.message));
+    try {
+      await page.goto(`${base}/play/${game}`);
+      const board = page.getByTestId(`${game}-board`);
+      await board.waitFor();
+      const snapshot = () => board.locator("button").evaluateAll(nodes => nodes.map(n => n.innerHTML));
+      const initial = await snapshot();
+      assert.equal(initial.length, 64);
+      const status = page.getByTestId(game === "chess" ? "chess-status" : "checkers-turn");
+      const opening = async () => {
+        for (const square of game === "chess" ? ["e2", "e4"] : ["5-0", "4-1"]) {
+          await page.getByTestId(`${game}-cell-${square}`).click();
+        }
+        await status.filter({ hasText: game === "chess" ? "CPU thinking" : "CPU…" }).waitFor();
+        assert.notDeepEqual(await snapshot(), initial, "Legal opening changes the board");
+      };
+      await opening();
+      await page.getByTestId("game-reset").click();
+      await page.waitForTimeout(900);
+      assert.deepEqual(await snapshot(), initial, "Cancelled CPU move cannot alter reset board");
+      assert.match(await status.textContent(), /Your turn/);
+      assert.equal(await page.getByTestId("share-card-modal").count(), 0);
+      await opening();
+      await page.getByTestId("mobile-nav-library").click();
+      await page.waitForURL(`${base}/library`);
+      await page.waitForTimeout(900);
+      assert.equal(await page.getByTestId("share-card-modal").count(), 0);
+      assert.equal(await board.count(), 0);
+      assert.equal(scoreRequests, 0, "Incomplete guest games submit no scores");
+      console.log(`PASS: compiled ${game} legal opening, reset during CPU turn, unchanged reset board after timer deadline, SPA exit without result or score`);
+    } finally { await context.close(); }
+  }
+}
+
+// Legal game from the standard board against the first legal CPU move.
+async function finishCheckersBrowserGame(page, won = false) {
+  const moves = won ? [[[5,0],[4,1]],[[5,4],[4,3]],[[5,6],[4,7]],[[6,1],[5,0]],[[4,3],[2,1]],[[6,7],[5,6]],[[7,2],[6,1]],[[5,6],[4,5]],[[4,5],[2,3]],[[6,5],[5,4]],[[0,1],[1,2]],[[4,1],[2,3]],[[7,6],[6,7]],[[4,7],[2,5]],[[0,5],[2,7]],[[2,5],[0,7]]] : [[[5,2],[4,1]],[[5,6],[4,5]],[[6,3],[4,1]],[[4,5],[3,4]],[[7,4],[5,2]],[[5,2],[4,3]],[[6,5],[5,4]],[[7,2],[6,3]],[[4,3],[3,2]],[[3,2],[2,1]],[[7,6],[6,5]],[[6,7],[4,5]],[[5,0],[4,1]],[[4,5],[3,4]],[[7,0],[6,1]]];
+  for (let i = 0; i < moves.length; i++) {
+    for (const square of moves[i]) await page.getByTestId(`checkers-cell-${square.join("-")}`).click();
+    await page.getByTestId("checkers-turn").filter({ hasText: i === moves.length - 1 ? (won ? "You won" : "CPU won") : "Your turn" }).waitFor();
+  }
+}
+
+// Legal five-move loss against the current CPU with random tie-breaking fixed to zero.
+async function finishChessBrowserGame(page, won = false) {
+  // Legal standard-board sequences; CPU tie-breaking is fixed only in test documents.
+  const moves = won
+    ? [["b2","b3"],["g1","h3"],["g2","h3"],["c2","c3"],["e2","e4"],["f2","e3"],["d1","d2"],["f1","b5"],["d2","d7"]]
+    : [["g2","g4"],["a2","a3"],["f1","h3"],["a3","a4"],["f2","f4"]];
+  for (let i = 0; i < moves.length; i++) {
+    for (const square of moves[i]) await page.getByTestId(`chess-cell-${square}`).click();
+    await page.getByTestId("chess-status").filter({ hasText: i === moves.length - 1 ? (won ? "Checkmate. You win!" : "Checkmate. CPU wins.") : "Your turn." }).waitFor();
+  }
+}
+
+// Use legal moves and the real CPU scoring function in the compiled application.
+// Bias only its random tie-break values; never replace the board or engine state.
+async function finishChessBrowserDraw(page, scoreCount) {
+  const engine = new ChessEngine();
+  const whiteMoves = [["g1", "f3"], ["f3", "g1"], ["g1", "f3"], ["f3", "g1"]];
+  const blackMoves = ["Nf6", "Ng8", "Nf6", "Ng8"];
+  for (let turn = 0; turn < whiteMoves.length; turn++) {
+    const [from, to] = whiteMoves[turn];
+    engine.move({ from, to });
+    const legal = engine.moves({ verbose: true });
+    assert(legal.some(move => move.san === blackMoves[turn]));
+    // 1.998 beats the one-point center preference, with no captures/checks
+    // available in these positions. Install after the player's click sounds.
+    const randomValues = legal.map(move => move.san === blackMoves[turn] ? 0.999 : 0);
+    for (const square of [from, to]) await page.getByTestId(`chess-cell-${square}`).click();
+    await page.evaluate(values => { Math.random = () => values.shift() ?? 0; }, randomValues);
+    engine.move(blackMoves[turn]);
+    const status = page.getByTestId("chess-status");
+    await status.filter({ hasText: turn === 3 ? /^Draw\.$/ : /^Your turn\.$/ }).waitFor();
+    const knightSquare = turn % 2 === 0 ? "f6" : "g8";
+    assert.equal(await page.getByTestId(`chess-cell-${knightSquare}`).textContent(), "♞");
+    if (turn === 1) {
+      assert.equal(engine.isThreefoldRepetition(), false);
+      assert.equal(await page.getByTestId("share-card-modal").count(), 0);
+      assert.equal(scoreCount(), 0, "Second occurrence must not finish or submit");
+    }
+  }
+  assert.equal(engine.isThreefoldRepetition(), true);
+  assert.equal(engine.history().length, 8);
+}
+
+async function verifyChessDrawCompletion(browser) {
+  for (const authenticated of [false, true]) {
+    const email = `draw-${crypto.randomUUID()}@example.com`;
+    const registered = authenticated ? await api("/auth/register", null, {
+      name: "Disposable Draw Player", email, password, accepted_terms: true,
+    }) : null;
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const scores = [], routeErrors = [];
+    await context.route("**/*", async route => {
+      const request = route.request(), url = new URL(request.url());
+      if (url.origin !== new URL(base).origin) return route.abort();
+      if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
+      try {
+        assert(authenticated, "Guest draw must not submit a score");
+        const payload = request.postDataJSON();
+        assert.equal(payload.game_id, "chess");
+        assert.equal(payload.won, false);
+        assert.equal(payload.score, 0);
+        const response = await route.fetch();
+        assert.equal(response.status(), 200);
+        scores.push(await response.json());
+        await route.fulfill({ response });
+      } catch (error) { routeErrors.push(error.message); await route.abort(); }
+    });
+    const page = await context.newPage();
+    page.on("pageerror", error => errors.push(error.message));
+    try {
+      if (authenticated) {
+        await page.goto(`${base}/login`); await signIn(page, email);
+        await page.waitForURL(`${base}/profile`);
+      }
+      await page.goto(`${base}/play/chess`);
+      const board = page.getByTestId("chess-board"); await board.waitFor();
+      const snapshot = () => board.locator("button").allTextContents();
+      const initial = await snapshot();
+      await finishChessBrowserDraw(page, () => scores.length);
+      const modal = page.getByTestId("share-card-modal"); await modal.waitFor();
+      assert.deepEqual(routeErrors, []);
+      assert.equal(scores.length, authenticated ? 1 : 0);
+      assert(await modal.getByText("PLAYED", { exact: true }).isVisible());
+      assert.equal(await modal.getByText("WIN", { exact: true }).count(), 0);
+      if (scores[0]?.xp_gained) assert(await modal.getByText(`+${scores[0].xp_gained}`, { exact: true }).isVisible());
+      await page.getByTestId("share-close-btn").click();
+      const finished = await snapshot();
+      for (const square of ["e2", "e4"]) await page.getByTestId(`chess-cell-${square}`).click();
+      await page.waitForTimeout(700);
+      assert.deepEqual(await snapshot(), finished, "Drawn game rejects further moves");
+      assert.equal(await page.getByTestId("chess-status").textContent(), "Draw.");
+      assert.equal(scores.length, authenticated ? 1 : 0, "No duplicate draw score");
+      await page.getByTestId("game-reset").click();
+      assert.deepEqual(await snapshot(), initial);
+      assert.equal(await page.getByTestId("chess-status").textContent(), "Your turn (White).");
+      assert.equal(await modal.count(), 0);
+      for (const square of ["e2", "e4"]) await page.getByTestId(`chess-cell-${square}`).click();
+      await page.getByTestId("chess-status").filter({ hasText: /^Your turn\.$/ }).waitFor();
+      assert.equal(await modal.count(), 0, "Reset starts a playable game without stale draw");
+      assert.deepEqual(routeErrors, []);
+      assert.equal(scores.length, authenticated ? 1 : 0);
+      console.log(`PASS: compiled Chess ${authenticated ? "signed-in" : "guest"} legal threefold draw, no premature result, non-winning score/result, no duplicate score, reset and fresh play`);
+    } finally {
+      await context.close();
+      if (registered) {
+        const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${registered.token}` },
+          body: JSON.stringify({ password }) });
+        assert.equal(deleted.status, 200, "Disposable draw account cleanup");
+      }
+    }
+  }
+}
+
+async function verifyChessGuestCompletion(browser) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  let scores = 0;
+  await context.route("**/*", route => {
+    const url = new URL(route.request().url());
+    if (url.origin !== new URL(base).origin) return route.abort();
+    if (url.pathname === "/api/games/submit") scores++;
+    return route.continue();
+  });
+  const page = await context.newPage();
+  page.on("pageerror", error => errors.push(error.message));
+  try {
+    await page.goto(`${base}/play/chess`);
+    await page.getByTestId("chess-board").waitFor();
+    await page.evaluate(() => { Math.random = () => 0; });
+    for (const won of [false, true]) {
+      await finishChessBrowserGame(page, won);
+      await page.getByTestId("share-card-modal").waitFor();
+      assert.equal(scores, 0, "Guest completion never submits a score");
+      if (won) assert(await page.getByTestId("share-card-modal").getByText("WIN", { exact: true }).isVisible());
+      await page.getByTestId("share-close-btn").click();
+      await page.getByTestId("game-reset").click();
+      assert.equal(await page.getByTestId("share-card-modal").count(), 0);
+      assert.equal(await page.getByTestId("chess-status").textContent(), "Your turn (White).");
+    }
+    console.log("PASS: compiled Chess guest completes legal loss and win, receives correct local result, submits no score and resets");
+  } finally { await context.close(); }
+}
+
+async function verifyCheckersGuestCompletion(browser) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  let scores = 0;
+  await context.route("**/*", route => {
+    const url = new URL(route.request().url());
+    if (url.origin !== new URL(base).origin) return route.abort();
+    if (url.pathname === "/api/games/submit") scores++;
+    return route.continue();
+  });
+  const page = await context.newPage();
+  page.on("pageerror", error => errors.push(error.message));
+  try {
+    await page.goto(`${base}/play/checkers`);
+    await page.getByTestId("checkers-board").waitFor();
+    await page.evaluate(() => { Math.random = () => 0; });
+    for (const won of [false, true]) {
+    await finishCheckersBrowserGame(page, won);
+    await page.getByTestId("share-card-modal").waitFor();
+    assert.equal(scores, 0, "Guest completion never submits a score");
+    assert(await page.getByTestId("share-card-modal").getByText(won ? "WIN" : "PLAYED", { exact: true }).isVisible());
+    await page.getByTestId("share-close-btn").click();
+    await page.getByTestId("game-reset").click();
+    assert.equal(await page.getByTestId("share-card-modal").count(), 0);
+    assert.equal(await page.getByTestId("checkers-turn").textContent(), "Your turn");
+    }
+    console.log("PASS: compiled Checkers guest completes legal loss and win, receives correct local result, submits no score and resets");
+  } finally { await context.close(); }
+}
+
+// Comparator zero preserves the actual deck order only in this test document.
+// Both starting hands are red number cards: seven legal plays win; drawing one
+// extra card first lets the CPU empty its seven-card hand before the player.
+async function finishUnoBrowserGame(page, won) {
+  if (!won) await page.getByTestId("uno-draw").click();
+  for (let i = 0; i < 7; i++) {
+    await page.getByTestId("uno-card-0").click();
+    await page.getByTestId("uno-turn").filter({ hasText: i === 6 ? (won ? "You won" : "CPU won") : "Your turn" }).waitFor();
+  }
+}
+
+async function verifyUnoGuestResults(browser) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  let scores = 0;
+  await context.route("**/*", route => {
+    const url = new URL(route.request().url());
+    if (url.origin !== new URL(base).origin) return route.abort();
+    if (url.pathname === "/api/games/submit") scores++;
+    return route.continue();
+  });
+  const page = await context.newPage();
+  page.on("pageerror", error => errors.push(error.message));
+  try {
+    await page.goto(`${base}/play/uno`);
+    await page.getByTestId("uno-card-0").waitFor();
+    await page.evaluate(() => { Math.random = () => 0.5; });
+    await page.getByTestId("game-reset").click();
+    for (const won of [false, true]) {
+      await finishUnoBrowserGame(page, won);
+      const modal = page.getByTestId("share-card-modal");
+      await modal.waitFor();
+      assert(await modal.getByText(won ? "WIN" : "PLAYED", { exact: true }).isVisible());
+      assert.equal(scores, 0, "Guest Wild Cards never submits scores");
+      await page.getByTestId("share-close-btn").click();
+      await page.getByTestId("game-reset").click();
+      assert.equal(await modal.count(), 0);
+      assert.equal(await page.getByTestId("uno-turn").textContent(), "Your turn");
+      assert.equal(await page.locator('[data-testid^="uno-card-"]').count(), 7);
+    }
+    console.log("PASS: compiled Wild Cards guest legal loss/win, correct local results, no score requests and reset");
+  } finally { await context.close(); }
+}
+
+// Play the visible first legal request from the real ordered deck, never inject state.
+async function finishGoFishBrowserGame(page, outcome = "win") {
+  let sawTerminalCpuDraw = false;
+  for (let actions = 0; actions < 100; actions++) {
+    const observed = await page.waitForFunction(terminalLoss => {
+      const books = (document.querySelector('[data-testid="gofish-books"]')?.textContent || '').match(/\d+/g)?.map(Number) || [];
+      const canAsk = !!document.querySelector('[data-testid^="gofish-ask-"]');
+      const playerCards = document.querySelector('[data-testid="gofish-you-hand"]')?.children.length;
+      const cpuCards = document.querySelector('[data-testid="gofish-cpu-hand"]')?.querySelectorAll('div').length;
+      const pool = document.querySelector('[data-testid="gofish-pool"]')?.textContent;
+      const terminalCpuDraw = terminalLoss && books[0] === 3 && books[1] === 9 && playerCards === 0 && !canAsk;
+      return books.reduce((a,b) => a+b,0) === 13 || canAsk || terminalCpuDraw
+        ? { books, canAsk, playerCards, cpuCards, pool, terminalCpuDraw } : false;
+    }, outcome === "terminal-loss");
+    const state = await observed.jsonValue();
+    await observed.dispose();
+    const { books } = state;
+    if (state.terminalCpuDraw) {
+      // Observe the real preterminal render before the scheduled CPU action.
+      // No injected position, accelerated timer or forced click is needed.
+      assert.equal(sawTerminalCpuDraw, false);
+      assert.deepEqual(books, [3, 9]);
+      assert.equal(state.playerCards, 0);
+      assert.equal(state.cpuCards, 3);
+      assert.equal(state.pool, "1 cards");
+      assert.equal(state.canAsk, false);
+      sawTerminalCpuDraw = true;
+      await page.waitForFunction(() => {
+        const books = (document.querySelector('[data-testid="gofish-books"]')?.textContent || '').match(/\d+/g)?.map(Number) || [];
+        return books[0] === 3 && books[1] === 10;
+      });
+      continue;
+    }
+    if (books[0] + books[1] === 13) {
+      if (outcome === "win") assert.deepEqual(books, [12, 1]);
+      else {
+        assert.deepEqual(books, [3, 10]);
+        assert.equal(sawTerminalCpuDraw, true, "Must observe the empty-player final CPU draw");
+      }
+      assert.equal(state.pool, "0 cards");
+      assert.equal(state.playerCards, 0);
+      assert.equal(state.cpuCards, 0);
+      return;
+    }
+    // A new rank can replace the hovered button at the same pointer position.
+    // Move off the old hover boundary before normal visibility/stability checks.
+    await page.mouse.move(0, 0);
+    await page.locator('[data-testid^="gofish-ask-"]').first().click();
+  }
+  throw new Error("Go Fish did not finish within 100 legal requests");
+}
+
+
+
+async function resetOldMaidSeed(page, seed) {
+  await page.evaluate(value => {
+    let seed = value;
+    Math.random = () => {
+      seed = (Math.imul(1664525, seed) + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+  }, seed);
+  await page.getByTestId("game-reset").click();
+}
+
+async function finishOldMaidLegalRound(page, won) {
+  let draws = 0;
+  for (; draws < 20;) {
+    const counts = (await page.getByTestId("oldmaid-turn").textContent()).match(/\d+/g).map(Number);
+    if (counts.includes(0)) break;
+    await page.mouse.move(0, 0);
+    await page.getByTestId("oldmaid-cpu-card-0").click();
+    draws++;
+    // Let the real 900ms CPU timer finish; never inject cards or advance the clock.
+    await page.waitForFunction(() => {
+      const counts = document.querySelector('[data-testid="oldmaid-turn"]')?.textContent.match(/\d+/g).map(Number);
+      const button = document.querySelector('[data-testid="oldmaid-cpu-card-0"]');
+      return counts?.includes(0) || (button && !button.disabled);
+    });
+  }
+  assert.equal(draws, won ? 2 : 5, "Audited legal first-card strategy completes the full round");
+  assert.equal(await page.getByTestId("oldmaid-turn").textContent(), won ? "You: 0 · CPU: 1" : "You: 1 · CPU: 0");
+  if (won) {
+    assert(await page.getByTestId("oldmaid-message").textContent().then(text => text.startsWith("CPU took ")),
+      "Seed2 win completes on the CPU's real timed turn");
+    assert(await page.getByTestId("oldmaid-cpu-card-0").isDisabled());
+  } else {
+    assert.equal(await page.getByTestId("oldmaid-you-hand").locator(":scope > div").count(), 1);
+    assert.match(await page.getByTestId("oldmaid-you-hand").textContent(), /Q/);
+  }
+}
+
+// Visible legal actions only; real CPU timers, no game-state injection.
+async function verifyCrazyEightsGuestRounds(browser) {
+  for(const seed of [1,9,2]){
+   const context=await browser.newContext({viewport:{width:390,height:844}});
+   const submissions=[];
+   try {
+   await context.route('**/*',route=>{
+    const u=new URL(route.request().url());
+    if(u.origin!==new URL(base).origin)return route.abort();
+    if(u.pathname==='/api/games/submit')submissions.push(route.request().postData());
+    return route.continue();
+   });
+   const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
+   await page.goto(base+'/play/crazy8');await page.getByTestId('c8-turn').waitFor();
+   await page.evaluate(seed=>{Math.random=()=>{seed=(Math.imul(1664525,seed)+1013904223)>>>0;return seed/4294967296;};},seed);
+   await page.getByTestId('game-reset').click();
+   let actions=0,recycled=false,finalEight=false,previousDeck=37;
+   while(actions<500){
+    const turn=(await page.getByTestId('c8-turn').innerText()).trim();
+    const deck=Number((await page.getByTestId('c8-draw').innerText()).match(/\d+/)[0]);
+    if(deck>previousDeck)recycled=true;previousDeck=deck;
+    if(/won/.test(turn))break;
+    if(turn==='CPU'){
+     await page.waitForFunction(()=>document.querySelector('[data-testid="c8-turn"]')?.textContent.trim()!=='CPU');continue;
+    }
+    const hand=await page.getByTestId('c8-you-hand').locator('button').evaluateAll(els=>els.map(el=>({id:el.dataset.testid,rank:el.children[0].textContent,suit:el.children[1].textContent,enabled:!el.disabled})));
+    const playable=hand.find(c=>c.enabled);
+    await page.mouse.move(0,0);
+    if(playable){
+     await page.getByTestId(playable.id).click();actions++;
+     if(playable.rank==='8'){
+      if(hand.length===1)finalEight=true;
+      const remaining=hand.filter(c=>c.id!==playable.id),counts={};
+      for(const c of remaining)counts[c.suit]=(counts[c.suit]||0)+1;
+      const suit=Object.entries(counts).sort((a,b)=>b[1]-a[1])[0]?.[0]||'♠';
+      await page.getByTestId('c8-pick-'+suit).click();actions++;
+     }
+    }else {await page.getByTestId('c8-draw').click();actions++;}
+   }
+   const outcome=(await page.getByTestId('c8-turn').innerText()).trim();
+   assert(actions<500,'bounded game did not finish');
+   assert.equal(outcome,seed===9?'You won':'CPU won');
+   if(seed===9)assert(finalEight,'win must follow final eight suit selection');
+   if(seed===2)assert(recycled,'previously stalled seed must recycle draw pile');
+   const modal=page.getByTestId('share-card-modal');
+   await modal.waitFor();
+   assert(await modal.getByText(seed===9?'WIN':'PLAYED',{exact:true}).isVisible());
+   assert.equal(await modal.getByText('XP earned',{exact:true}).count(),0);
+   assert.equal(await modal.getByTestId('share-badges').count(),0);
+   assert.equal(submissions.length,0,'guest must not submit score');
+   await page.getByTestId('share-close-btn').click();await page.getByTestId('game-reset').click();
+   assert.equal(await page.getByTestId('c8-you-hand').locator('button').count(),7);
+   assert.equal((await page.getByTestId('c8-turn').innerText()).trim(),'Your turn');
+   assert.equal(await page.getByTestId('share-card-modal').count(),0);
+   console.log('PASS: compiled Crazy Eights guest '+JSON.stringify({seed,actions,outcome,recycled,finalEight,guestSubmissions:submissions.length,reset:'passed'}));
+   } finally { await context.close(); }
+  }
+}
+
+async function verifyOldMaidFullRounds(browser) {
+  for (const mode of ["guest", "authenticated", "http", "network"]) {
+    const authenticated = mode !== "guest";
+    const email = `oldmaid-round-${crypto.randomUUID()}@example.com`;
+    const registered = authenticated ? await api("/auth/register", null, {
+      name: "Disposable Old Maid Round Player", email, password, accepted_terms: true,
+    }) : null;
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const submissions = [], routeErrors = [];
+    let recording = false, expectedWon = false;
+    await context.route("**/*", async route => {
+      const request = route.request(), url = new URL(request.url());
+      if (url.origin !== new URL(base).origin) return route.abort();
+      if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
+      try {
+        assert(authenticated, "Guest must not submit a score");
+        if (!recording) return route.continue();
+        const payload = request.postDataJSON();
+        assert.deepEqual(payload, { game_id: "oldmaid", won: expectedWon, score: expectedWon ? 1 : 0 });
+        const item = { payload }; submissions.push(item);
+        if (mode === "network") return await route.abort("connectionfailed");
+        if (mode === "http") return await route.fulfill({ status: 503, contentType: "application/json",
+          body: JSON.stringify({ detail: "Disposable save failure", xp_gained: 999,
+            challenge_completed: true, newly_unlocked_badges: [{ id: "fake", name: "Fake reward" }] }) });
+        const response = await route.fetch();
+        assert.equal(response.status(), 200);
+        item.data = await response.json();
+        await route.fulfill({ response });
+      } catch (error) { routeErrors.push(error.message); await route.abort(); }
+    });
+    try {
+      const page = await context.newPage();
+      page.on("pageerror", error => errors.push(error.message));
+      if (authenticated) {
+        await page.goto(`${base}/login`);
+        await signIn(page, email); await page.waitForURL(`${base}/profile`);
+      }
+      await page.goto(`${base}/play/oldmaid`);
+      await page.getByTestId("oldmaid-turn").waitFor();
+      const modal = page.getByTestId("share-card-modal");
+      const firstCounts = (await page.getByTestId("oldmaid-turn").textContent()).match(/\d+/g).map(Number);
+      if (firstCounts.includes(0)) {
+        await modal.waitFor(); await page.getByTestId("share-close-btn").click();
+        await modal.waitFor({ state: "detached" });
+      }
+      recording = true;
+      let rounds = 0;
+      for (const won of [false, true]) {
+        expectedWon = won;
+        await resetOldMaidSeed(page, won ? 2 : 1);
+        await finishOldMaidLegalRound(page, won);
+        await modal.waitFor(); rounds++;
+        assert.deepEqual(routeErrors, []);
+        assert(await modal.getByText(won ? "WIN" : "PLAYED", { exact: true }).isVisible());
+        assert.equal(submissions.length, authenticated ? rounds : 0);
+        if (mode === "authenticated") {
+          const data = submissions.at(-1).data;
+          assert(data, "Result uses a completed real API response");
+          if (data.xp_gained) assert(await modal.getByText(`+${data.xp_gained}`, { exact: true }).isVisible());
+        } else {
+          assert.equal(await modal.getByText("XP earned", { exact: true }).count(), 0);
+          assert.equal(await modal.getByText("Daily Challenge complete!", { exact: true }).count(), 0);
+          assert.equal(await modal.getByTestId("share-badges").count(), 0);
+        }
+        await page.getByTestId("share-close-btn").click();
+        await resetOldMaidSeed(page, 1);
+        await page.waitForTimeout(200);
+        assert.equal(await modal.count(), 0);
+        assert(await page.getByTestId("oldmaid-cpu-card-0").isEnabled());
+        assert.equal(submissions.length, authenticated ? rounds : 0);
+      }
+      console.log(`PASS: compiled Old Maid ${mode} legal full-round loss and CPU-turn win, correct result/score, no duplicate submissions, reset and truthful rewards`);
+    } finally {
+      await context.close();
+      if (registered) {
+        const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${registered.token}` },
+          body: JSON.stringify({ password }) });
+        assert.equal(deleted.status, 200, "Disposable Old Maid full-round account cleanup");
+      }
+    }
+  }
+}
+
+async function verifyOldMaidInitialWins(browser) {
+  for (const authenticated of [false, true]) {
+    const email = `oldmaid-initial-${crypto.randomUUID()}@example.com`;
+    const registered = authenticated ? await api("/auth/register", null, {
+      name: "Disposable Old Maid Player", email, password, accepted_terms: true,
+    }) : null;
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const pending = [], routeErrors = [];
+    let recording = false, holdAuth = false, authResponse = null;
+    await context.route("**/*", async route => {
+      const request = route.request(), url = new URL(request.url());
+      if (url.origin !== new URL(base).origin) return route.abort();
+      if (holdAuth && url.pathname === "/api/auth/me" && request.method() === "GET") {
+        try {
+          const response = await route.fetch();
+          assert.equal(response.status(), 200);
+          authResponse = { route, response, released: false };
+        } catch (error) { routeErrors.push(error.message); await route.abort(); }
+        return;
+      }
+      if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
+      try {
+        assert(authenticated, "Guest must never submit a score");
+        // An uncontrolled first deal can also win. Let it settle before the seeded cases.
+        if (!recording) return route.continue();
+        assert.deepEqual(request.postDataJSON(), { game_id: "oldmaid", won: true, score: 1 });
+        const response = await route.fetch();
+        assert.equal(response.status(), 200);
+        pending.push({ route, response, data: await response.json(), released: false });
+      } catch (error) { routeErrors.push(error.message); await route.abort(); }
+    });
+    const page = await context.newPage();
+    page.on("pageerror", error => errors.push(error.message));
+    const reset = async seed => {
+      // Seed only this test document, after navigation. No injected game state or timer changes.
+      await page.evaluate(value => {
+        let seed = value;
+        Math.random = () => {
+          seed = (Math.imul(1664525, seed) + 1013904223) >>> 0;
+          return seed / 4294967296;
+        };
+      }, seed);
+      await page.getByTestId("game-reset").click();
+    };
+    const waitPending = async count => {
+      for (let i = 0; i < 150 && pending.length < count && !routeErrors.length; i++) await page.waitForTimeout(20);
+      assert.deepEqual(routeErrors, []);
+      assert.equal(pending.length, count, "Exactly one real score request per seeded initial win");
+    };
+    const release = async index => {
+      const item = pending[index];
+      const delivered = page.waitForResponse(r => r.url().endsWith("/games/submit") && r.request().method() === "POST");
+      await item.route.fulfill({ response: item.response });
+      item.released = true;
+      await delivered;
+      await page.waitForTimeout(150);
+    };
+    const assertInitialWin = async () => {
+      assert.equal(await page.getByTestId("oldmaid-turn").textContent(), "You: 0 · CPU: 1");
+      assert.equal(await page.getByTestId("oldmaid-you-hand").locator(":scope > div").count(), 0);
+      // Board-state assertion: the result dialog intentionally hides the board from accessibility queries.
+      assert.equal(await page.getByTestId("oldmaid-cpu-hand").getByRole("button", { includeHidden: true }).count(), 1);
+      assert(await page.getByTestId("oldmaid-cpu-card-0").isDisabled(), "Cannot draw lone Queen after winning");
+      assert.equal(await page.getByTestId("oldmaid-message").textContent(), "You paired off every card!");
+    };
+    try {
+      if (authenticated) {
+        await page.goto(`${base}/login`);
+        await signIn(page, email);
+        await page.waitForURL(`${base}/profile`);
+      }
+      holdAuth = authenticated;
+      await page.goto(`${base}/play/oldmaid`);
+      await page.getByTestId("oldmaid-turn").waitFor();
+      const modal = page.getByTestId("share-card-modal");
+      const firstCounts = (await page.getByTestId("oldmaid-turn").textContent()).match(/\d+/g).map(Number);
+      if (!authenticated && firstCounts.includes(0)) {
+        await modal.waitFor();
+        await page.getByTestId("share-close-btn").click();
+        await modal.waitFor({ state: "detached" });
+      }
+      recording = true;
+      for (let round = 1; round <= 2; round++) {
+        await reset(21);
+        if (!authenticated) {
+          // Exercise the modal-open state deterministically, rather than racing its accessibility isolation.
+          await modal.waitFor();
+          await page.waitForFunction(() => !!document.querySelector('[data-testid="oldmaid-cpu-hand"]')?.closest('[aria-hidden="true"]'));
+          assert.equal(await page.getByTestId("oldmaid-cpu-hand").getByRole("button").count(), 0,
+            "Modal must hide background cards from accessible-role queries");
+        }
+        await assertInitialWin();
+        if (authenticated) {
+          if (round === 1) {
+            for (let i = 0; i < 150 && !authResponse && !routeErrors.length; i++) await page.waitForTimeout(20);
+            assert.deepEqual(routeErrors, []);
+            assert(authResponse, "Real saved-session response is held before completing initial win");
+            assert.equal(pending.length, 0, "Unresolved identity must not submit a score");
+            assert.equal(await modal.count(), 0, "Unresolved identity must not consume a guest result");
+            const restored = page.waitForResponse(r => new URL(r.url()).pathname === "/api/auth/me");
+            holdAuth = false;
+            await authResponse.route.fulfill({ response: authResponse.response });
+            authResponse.released = true;
+            await restored;
+          }
+          await waitPending(round);
+          assert.equal(await modal.count(), 0, "Result awaits its score response");
+        } else {
+          await modal.waitFor();
+          assert(await modal.getByText("WIN", { exact: true }).isVisible());
+          assert.equal(await modal.getByText("XP earned", { exact: true }).count(), 0);
+          await page.getByTestId("share-close-btn").click();
+        }
+      }
+      if (authenticated) {
+        await release(1);
+        await modal.waitFor();
+        assert(await modal.getByText("WIN", { exact: true }).isVisible());
+        if (pending[1].data.xp_gained) assert(await modal.getByText(`+${pending[1].data.xp_gained}`, { exact: true }).isVisible());
+        const currentResult = await modal.textContent();
+        await release(0);
+        assert.equal(await modal.textContent(), currentResult, "Old response cannot replace current round rewards");
+        await waitPending(2);
+        await page.getByTestId("share-close-btn").click();
+        await reset(21);
+        await waitPending(3);
+        await reset(1);
+        await release(2);
+        assert.equal(await modal.count(), 0, "Late result cannot reopen after reset to a playable deal");
+        assert(await page.getByTestId("oldmaid-cpu-card-0").isEnabled());
+        await reset(21);
+        await waitPending(4);
+        await page.getByTestId("mobile-nav-library").click();
+        await page.waitForURL(`${base}/library`);
+        await release(3);
+        assert.equal(await modal.count(), 0, "Late result stays silent after SPA exit");
+        await waitPending(4);
+      } else {
+        await reset(1);
+        await page.waitForTimeout(200);
+        assert.equal(await modal.count(), 0);
+        assert(await page.getByTestId("oldmaid-cpu-card-0").isEnabled());
+        assert.equal(pending.length, 0);
+      }
+      assert.deepEqual(routeErrors, []);
+      console.log(`PASS: compiled Old Maid ${authenticated ? "signed-in" : "guest"} seed21 initial wins, repeated same-winner reset, disabled lone Queen, ${authenticated ? "delayed saved-session restoration, real API score/award, reversed responses, reset and SPA exit" : "no score requests or fabricated XP"}`);
+    } finally {
+      if (authResponse && !authResponse.released) await authResponse.route.abort().catch(() => {});
+      for (const item of pending.filter(item => !item.released)) await item.route.abort().catch(() => {});
+      await context.close();
+      if (registered) {
+        const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${registered.token}` },
+          body: JSON.stringify({ password }) });
+        assert.equal(deleted.status, 200, "Disposable Old Maid account cleanup");
+      }
+    }
+  }
+}
+
+async function verifyGoFishGuestResult(browser) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  let scores = 0;
+  await context.route("**/*", route => {
+    const url = new URL(route.request().url());
+    if (url.origin !== new URL(base).origin) return route.abort();
+    if (url.pathname === "/api/games/submit") scores++;
+    return route.continue();
+  });
+  const page = await context.newPage();
+  page.on("pageerror", error => errors.push(error.message));
+  try {
+    await page.goto(`${base}/play/gofish`);
+    await page.getByTestId("gofish-books").waitFor();
+    await page.evaluate(() => { Math.random = () => 0.5; });
+    await page.getByTestId("game-reset").click();
+    await finishGoFishBrowserGame(page);
+    const modal = page.getByTestId("share-card-modal");
+    await modal.waitFor();
+    assert(await modal.getByText("WIN", { exact: true }).isVisible());
+    assert.equal(scores, 0);
+    await page.getByTestId("share-close-btn").click();
+    await page.getByTestId("game-reset").click();
+    assert.equal(await modal.count(), 0);
+    assert.equal(await page.getByTestId("gofish-books").textContent(), "You: 1 · CPU: 1");
+    assert(await page.getByTestId("gofish-ask-2").isVisible());
+    console.log("PASS: compiled Go Fish guest legal full round, 13 books, WIN, no score request and reset");
+  } finally { await context.close(); }
+}
+
+
+
+async function verifyGoFishLosses(browser) {
+  for (const authenticated of [false, true]) {
+    const email = `gofish-loss-${crypto.randomUUID()}@example.com`;
+    const registered = authenticated ? await api("/auth/register", null, {
+      name: "Disposable Go Fish Loss Player", email, password, accepted_terms: true,
+    }) : null;
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const scores = [], routeErrors = [];
+    await context.route("**/*", async route => {
+      const request = route.request(), url = new URL(request.url());
+      if (url.origin !== new URL(base).origin) return route.abort();
+      if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
+      try {
+        assert(authenticated, "Guest must never submit a score");
+        const payload = request.postDataJSON();
+        assert.equal(payload.game_id, "gofish");
+        assert.equal(payload.won, false);
+        const response = await route.fetch();
+        assert.equal(response.status(), 200);
+        scores.push({ payload, data: await response.json() });
+        await route.fulfill({ response });
+      } catch (error) { routeErrors.push(error.message); await route.abort(); }
+    });
+    try {
+      const page = await context.newPage();
+      page.on("pageerror", error => errors.push(error.message));
+      if (authenticated) {
+        await page.goto(`${base}/login`);
+        await signIn(page, email);
+        await page.waitForURL(`${base}/profile`);
+      }
+      await page.goto(`${base}/play/gofish`);
+      await page.getByTestId("gofish-books").waitFor();
+      // Test-document-only seeded shuffle/CPU choices; actual game deck and legal UI requests.
+      await page.evaluate(() => {
+        let seed = 66;
+        Math.random = () => {
+          seed = (Math.imul(1664525, seed) + 1013904223) >>> 0;
+          return seed / 4294967296;
+        };
+      });
+      await page.getByTestId("game-reset").click();
+      await finishGoFishBrowserGame(page, "terminal-loss");
+      const books = (await page.getByTestId("gofish-books").textContent()).match(/\d+/g).map(Number);
+      const modal = page.getByTestId("share-card-modal");
+      await modal.waitFor();
+      assert.deepEqual(routeErrors, []);
+      assert(await modal.getByText("PLAYED", { exact: true }).isVisible());
+      assert.equal(await modal.getByText("WIN", { exact: true }).count(), 0);
+      assert.equal(scores.length, authenticated ? 1 : 0);
+      if (authenticated) {
+        assert.equal(scores[0].payload.score, books[0]);
+        if (scores[0].data.xp_gained) assert(await modal.getByText(`+${scores[0].data.xp_gained}`, { exact: true }).isVisible());
+      } else assert.equal(await modal.getByText("XP earned", { exact: true }).count(), 0);
+      await page.getByTestId("share-close-btn").click();
+      await page.evaluate(() => { Math.random = () => 0.5; });
+      await page.getByTestId("game-reset").click();
+      await page.waitForTimeout(200);
+      assert.equal(await modal.count(), 0);
+      assert.equal(scores.length, authenticated ? 1 : 0);
+      assert(await page.getByTestId("gofish-ask-2").isVisible());
+      console.log(`PASS: compiled Go Fish ${authenticated ? "signed-in" : "guest"} legal final-CPU-card loss ${books}, empty player/CPU3/pool1 transition, all13 books, correct result/score, no duplicates and reset`);
+    } finally {
+      await context.close();
+      if (registered) {
+        const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${registered.token}` },
+          body: JSON.stringify({ password }) });
+        assert.equal(deleted.status, 200, "Disposable Go Fish loss account cleanup");
+      }
+    }
+  }
+}
+
+async function verifyGoFishFailedSaves(browser) {
+  const email = `gofish-save-failure-${crypto.randomUUID()}@example.com`;
+  const registered = await api("/auth/register", null, {
+    name: "Disposable Go Fish Player", email, password, accepted_terms: true,
+  });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const submissions = [];
+  const routeErrors = [];
+  let failure = "http";
+  await context.route("**/*", async route => {
+    const request = route.request(), url = new URL(request.url());
+    if (url.origin !== new URL(base).origin) return route.abort();
+    if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
+    try {
+      const payload = request.postDataJSON();
+      assert.equal(payload.game_id, "gofish");
+      assert.equal(payload.won, true);
+      assert.equal(payload.score, 12);
+      submissions.push(payload);
+      if (failure === "network") return await route.abort("connectionfailed");
+      // Even award-like fields in an unsuccessful response must not become rewards.
+      return await route.fulfill({ status: 503, contentType: "application/json",
+        body: JSON.stringify({ detail: "Disposable save failure", xp_gained: 999,
+          challenge_completed: true, newly_unlocked_badges: [{ id: "fake", name: "Fake reward" }] }) });
+    } catch (error) { routeErrors.push(error.message); await route.abort(); }
+  });
+  try {
+    const page = await context.newPage();
+    page.on("pageerror", error => errors.push(error.message));
+    await page.goto(`${base}/login`);
+    await signIn(page, email);
+    await page.waitForURL(`${base}/profile`);
+    await page.goto(`${base}/play/gofish`);
+    await page.getByTestId("gofish-books").waitFor();
+    await page.evaluate(() => { Math.random = () => 0.5; });
+    for (const mode of ["http", "network"]) {
+      failure = mode;
+      await page.getByTestId("game-reset").click();
+      await finishGoFishBrowserGame(page);
+      const modal = page.getByTestId("share-card-modal");
+      await modal.waitFor();
+      assert.deepEqual(routeErrors, []);
+      assert.equal(submissions.length, mode === "http" ? 1 : 2);
+      assert(await modal.getByText("WIN", { exact: true }).isVisible());
+      assert(await modal.getByText("12", { exact: true }).isVisible());
+      assert.equal(await modal.getByText("XP earned", { exact: true }).count(), 0);
+      assert.equal(await modal.getByText("Daily Challenge complete!", { exact: true }).count(), 0);
+      assert.equal(await modal.getByTestId("share-badges").count(), 0);
+      await page.getByTestId("share-close-btn").click();
+      await page.getByTestId("game-reset").click();
+      await page.waitForTimeout(200);
+      assert.equal(await modal.count(), 0);
+      assert.equal(submissions.length, mode === "http" ? 1 : 2);
+      assert.equal(await page.getByTestId("gofish-books").textContent(), "You: 1 · CPU: 1");
+      assert(await page.getByTestId("gofish-ask-2").isVisible());
+    }
+    console.log("PASS: compiled Go Fish HTTP rejection and network failure preserve legal win/books, award nothing, submit once and reset for fresh play");
+  } finally {
+    await context.close();
+    const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${registered.token}` },
+      body: JSON.stringify({ password }) });
+    assert.equal(deleted.status, 200, "Disposable Go Fish failure account cleanup");
+  }
+}
+
+async function verifyResetScoreLifecycles(browser) {
+  for (const game of ["rps", "connect4", "checkers", "chess", "uno", "gofish"]) {
+    const email = `lifecycle-${game}-${crypto.randomUUID()}@example.com`;
+    const registered = await api("/auth/register", null, {
+      name: "Disposable Lifecycle Player", email, password, accepted_terms: true,
+    });
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const pending = [], routeErrors = [];
+    let completedChessGames = 0;
+    let completedCheckersGames = 0;
+    let completedUnoGames = 0;
+    await context.route("**/*", async route => {
+      const request = route.request(), url = new URL(request.url());
+      if (url.origin !== new URL(base).origin) return route.abort();
+      if (url.pathname !== "/api/games/submit" || request.method() !== "POST") return route.continue();
+      try {
+        assert.equal(request.postDataJSON().game_id, game);
+        if (game === "chess" || game === "checkers" || game === "uno") {
+          assert.equal(request.postDataJSON().won, pending.length > 0);
+          assert.equal(request.postDataJSON().score, pending.length > 0 ? 1 : 0);
+        }
+        if (game === "gofish") {
+          assert.equal(request.postDataJSON().won, true);
+          assert.equal(request.postDataJSON().score, 12);
+        }
+        const response = await route.fetch();
+        assert.equal(response.status(), 200);
+        pending.push({ route, response, data: await response.json(), released: false });
+      } catch (error) { routeErrors.push(error.message); await route.abort(); }
+    });
+    const page = await context.newPage();
+    page.on("pageerror", error => errors.push(error.message));
+    const waitPending = async count => {
+      for (let i = 0; i < 100 && pending.length < count && !routeErrors.length; i++) await page.waitForTimeout(20);
+      assert.deepEqual(routeErrors, []);
+      assert.equal(pending.length, count, "One real score submission per completed game");
+    };
+    const release = async index => {
+      const item = pending[index];
+      const delivered = page.waitForResponse(r => r.url().endsWith("/games/submit") && r.request().method() === "POST");
+      item.released = true;
+      await item.route.fulfill({ response: item.response });
+      await delivered; await page.waitForTimeout(150);
+    };
+    const finish = async () => {
+      if (game === "rps") {
+        for (let i = 0; i < 3; i++) {
+          await page.getByTestId("rps-paper").click();
+          await page.waitForTimeout(750);
+        }
+        await page.getByTestId("rps-finished").filter({ hasText: "You dominated!" }).waitFor();
+      } else if (game === "chess") {
+        await finishChessBrowserGame(page, completedChessGames++ > 0);
+      } else if (game === "checkers") {
+        await finishCheckersBrowserGame(page, completedCheckersGames++ > 0);
+      } else if (game === "uno") {
+        await finishUnoBrowserGame(page, completedUnoGames++ > 0);
+      } else if (game === "gofish") {
+        await finishGoFishBrowserGame(page);
+      } else {
+        for (const col of [0, 1, 0, 1]) {
+          await page.getByTestId(`c4-drop-${col}`).click();
+          await page.waitForTimeout(550);
+        }
+        await page.getByTestId("c4-turn").filter({ hasText: "CPU won" }).waitFor();
+      }
+    };
+    try {
+      await page.goto(`${base}/login`);
+      await signIn(page, email); await page.waitForURL(`${base}/profile`);
+      await page.goto(`${base}/play/${game}`);
+      // Deterministic CPU choices only in this isolated test document.
+      if (game === "rps" || game === "checkers" || game === "chess") await page.evaluate(() => { Math.random = () => 0; });
+      if (game === "uno") {
+        await page.getByTestId("uno-card-0").waitFor();
+        await page.evaluate(() => { Math.random = () => 0.5; });
+        await page.getByTestId("game-reset").click();
+      }
+      if (game === "gofish") {
+        await page.getByTestId("gofish-books").waitFor();
+        await page.evaluate(() => { Math.random = () => 0.5; });
+        await page.getByTestId("game-reset").click();
+      }
+      if (game === "chess") {
+        await page.getByTestId("chess-cell-e2").click();
+        await page.getByTestId("chess-cell-e4").click();
+      } else if (game === "checkers") {
+        await page.getByTestId("checkers-cell-5-0").click();
+        await page.getByTestId("checkers-cell-4-1").click();
+      } else if (game === "uno") {
+        await page.getByTestId("uno-card-0").click();
+      } else if (game === "gofish") {
+        await page.getByTestId("gofish-ask-2").click();
+      } else await page.getByTestId(game === "rps" ? "rps-paper" : "c4-drop-0").click();
+      await page.getByTestId("game-reset").click();
+      await page.waitForTimeout(850);
+      if (game === "rps") {
+        assert.equal(await page.getByTestId("rps-round").textContent(), "Round 1");
+        assert.equal(await page.getByTestId("rps-finished").count(), 0);
+        assert(await page.getByTestId("rps-paper").isEnabled());
+      } else if (game === "chess") {
+        assert.equal(await page.getByTestId("chess-status").textContent(), "Your turn (White).");
+      } else if (game === "checkers") {
+        assert.equal(await page.getByTestId("checkers-turn").textContent(), "Your turn");
+      } else if (game === "uno") {
+        assert.equal(await page.getByTestId("uno-turn").textContent(), "Your turn");
+        assert.equal(await page.locator('[data-testid^="uno-card-"]').count(), 7);
+        assert.equal(await page.getByTestId("uno-cpu-hand").locator('div').count(), 7);
+      } else if (game === "gofish") {
+        assert.equal(await page.getByTestId("gofish-books").textContent(), "You: 1 · CPU: 1");
+        assert.equal(await page.getByTestId("gofish-pool").textContent(), "38 cards");
+        assert(await page.getByTestId("gofish-ask-2").isVisible());
+      } else {
+        assert.equal(await page.getByTestId("c4-cell-you").count(), 0);
+        assert.equal(await page.getByTestId("c4-cell-cpu").count(), 0);
+        assert.equal(await page.getByTestId("c4-turn").textContent(), "Your turn");
+      }
+      assert.equal(pending.length, 0);
+      await finish(); await waitPending(1);
+      assert.equal(await page.getByTestId("share-card-modal").count(), 0);
+      await page.getByTestId("game-reset").click();
+      await finish(); await waitPending(2);
+      await release(1);
+      const modal = page.getByTestId("share-card-modal");
+      await modal.waitFor();
+      if (game === "chess" || game === "checkers" || game === "uno" || game === "gofish") assert(await modal.getByText("WIN", { exact: true }).isVisible());
+      if (pending[1].data.xp_gained) assert(await modal.getByText(`+${pending[1].data.xp_gained}`, { exact: true }).isVisible());
+      await page.getByTestId("share-close-btn").click();
+      await modal.waitFor({ state: "detached" });
+      await release(0);
+      assert.equal(await modal.count(), 0, "Older game response cannot reopen a closed current result");
+      await waitPending(2);
+      // A third completed game's pending response must also remain silent after SPA exit.
+      await page.getByTestId("game-reset").click();
+      await finish(); await waitPending(3);
+      await page.getByTestId("mobile-nav-library").click();
+      await page.waitForURL(`${base}/library`);
+      await release(2);
+      assert.equal(await modal.count(), 0);
+      await waitPending(3);
+      if (game === "chess" || game === "checkers" || game === "uno") console.log(`PASS: compiled ${game} loss then two legal wins, winning score payload and victory result verified`);
+      if (game === "gofish") console.log("PASS: compiled Go Fish three legal wins, book-score payload, current API award, reversed delivery, reset/SPA exit and no duplicate scores");
+      else console.log(`PASS: compiled ${game} reset during pending timer, three real games, reversed score delivery, current award, no obsolete result after reset/SPA exit, no duplicate scores`);
+    } finally {
+      for (const item of pending.filter(item => !item.released)) await item.route.abort().catch(() => {});
+      await context.close();
+      const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${registered.token}` },
+        body: JSON.stringify({ password }) });
+      assert.equal(deleted.status, 200, "Disposable lifecycle account cleanup");
+    }
+  }
+}
+
+async function verifyProfileRefreshOrdering(browser) {
+  const email = `refresh-order-${crypto.randomUUID()}@example.com`;
+  const registered = await api("/auth/register", null, {
+    name: "Disposable Refresh Player", email, password, accepted_terms: true,
+  });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const pending = [], routeErrors = [];
+  let holdRefresh = false;
+  await context.route("**/*", async route => {
+    const request = route.request(), url = new URL(request.url());
+    if (url.origin !== new URL(base).origin) return route.abort();
+    if (!holdRefresh || url.pathname !== "/api/auth/me" || request.method() !== "GET") return route.continue();
+    try {
+      const response = await route.fetch();
+      assert.equal(response.status(), 200);
+      pending.push({ route, response, data: await response.json(), released: false });
+    } catch (error) { routeErrors.push(error.message); await route.abort(); }
+  });
+  const page = await context.newPage();
+  page.on("pageerror", error => errors.push(error.message));
+  const waitPending = async count => {
+    for (let i = 0; i < 100 && pending.length < count && !routeErrors.length; i++) await page.waitForTimeout(20);
+    assert.deepEqual(routeErrors, []);
+    assert.equal(pending.length, count, "Exactly one profile refresh per SPA mount");
+  };
+  const release = async (item, status) => {
+    const delivered = page.waitForResponse(r => r.url().endsWith("/auth/me") && r.request().method() === "GET");
+    item.released = true;
+    await item.route.fulfill(status === 200 ? { response: item.response } : {
+      status, contentType: "application/json", body: JSON.stringify({ detail: "Disposable stale-response fixture" }),
+    });
+    await delivered;
+    await page.waitForTimeout(150);
+  };
+  try {
+    await page.goto(`${base}/login`);
+    await signIn(page, email); await page.waitForURL(`${base}/profile`);
+    await page.getByTestId("profile-email").filter({ hasText: email }).waitFor();
+    await page.waitForTimeout(150);
+    const token = await page.evaluate(() => localStorage.getItem("rmc_token"));
+    for (const staleStatus of [200, 401, 503]) {
+      await page.getByTestId("mobile-nav-library").click();
+      holdRefresh = true;
+      const offset = pending.length;
+      await page.getByTestId("mobile-nav-profile").click();
+      await waitPending(offset + 1);
+      // Advance only this disposable account through the real score API.
+      const score = await api("/games/submit", token, { game_id: "memory", won: true, score: 100 });
+      assert(score.user.xp > pending[offset].data.user.xp, "New profile must have distinguishable real progress");
+      await page.getByTestId("mobile-nav-library").click();
+      await page.getByTestId("mobile-nav-profile").click();
+      await waitPending(offset + 2);
+      const latest = pending[offset + 1];
+      assert.equal(latest.data.user.xp, score.user.xp);
+      await release(latest, 200);
+      const xp = page.getByText("XP", { exact: true }).locator("..").locator("div").first();
+      assert.equal(await xp.textContent(), String(score.user.xp));
+      await release(pending[offset], staleStatus);
+      assert.equal(new URL(page.url()).pathname, "/profile");
+      assert.equal(await page.getByTestId("profile-email").textContent(), email);
+      assert.equal(await xp.textContent(), String(score.user.xp), "Stale refresh cannot roll visible XP back");
+      assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), token, "Stale 401 cannot remove the current session");
+      assert.equal(await page.getByTestId("account-refresh-error").count(), 0, "Stale failure cannot replace successful refresh");
+      assert.deepEqual(routeErrors, []);
+      holdRefresh = false;
+    }
+    console.log("PASS: newer profile refresh survives delayed old success, 401 and 503 with current visible XP and session");
+  } finally {
+    for (const item of pending.filter(item => !item.released)) await item.route.abort().catch(() => {});
+    await context.close();
+    const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${registered.token}` },
+      body: JSON.stringify({ password }) });
+    assert.equal(deleted.status, 200, "Disposable refresh-order account cleanup");
+  }
+}
+
+async function verifyRefreshRecovery(page, user) {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  let failureStatus = 503;
+  const failRefresh = (route) => route.fulfill({ status: failureStatus,
+    contentType: "application/json", body: JSON.stringify({ detail: "Disposable failure fixture" }) });
+  const token = await page.evaluate(() => localStorage.getItem("rmc_token"));
+  // An established session survives a profile refresh outage.
+  await page.route("**/api/auth/me", failRefresh);
+  await page.getByTestId("nav-profile").click();
+  await page.getByTestId("account-refresh-error").waitFor();
+  assert.equal(await page.getByTestId("profile-email").textContent(), user.email);
+  assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), token);
+  await page.unroute("**/api/auth/me", failRefresh);
+  await page.getByTestId("account-refresh-retry").click();
+  await page.getByTestId("account-refresh-error").waitFor({ state: "detached" });
+  // Cold startup must not expose a protected profile before verification. Retry
+  // then uses the real API and original token without asking for credentials.
+  await page.route("**/api/auth/me", failRefresh);
+  await page.reload();
+  await page.getByTestId("account-refresh-error").waitFor();
+  assert.equal(await page.getByTestId("profile-email").count(), 0);
+  assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), token);
+  assert.equal(new URL(page.url()).pathname, "/profile");
+  await page.unroute("**/api/auth/me", failRefresh);
+  await page.getByTestId("account-refresh-retry").click();
+  await page.getByTestId("profile-email").filter({ hasText: user.email }).waitFor();
+  assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), token);
+  for (failureStatus of [401, 403]) {
+    await page.route("**/api/auth/me", failRefresh);
+    await page.reload();
+    await page.waitForURL(`${base}/login`);
+    assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), null);
+    assert.equal(await page.getByTestId("account-refresh-error").count(), 0);
+    await page.unroute("**/api/auth/me", failRefresh);
+    await signIn(page, user.email);
+    await page.waitForURL(`${base}/profile`);
+    await page.getByTestId("profile-email").filter({ hasText: user.email }).waitFor();
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${base}/tables?game=spades`);
+  console.log("PASS: profile outage preserves session, cold-start retry recovers, and 401/403 require sign-in");
+}
+async function verifyStaleProfile(page, users) {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  for (const switchAccount of [false, true]) {
+    // Always mount Profile from a settled, different route. A same-route click
+    // does not promise another refresh.
+    await page.getByTestId("nav-library").click();
+    await page.waitForURL(`${base}/library`);
+    await page.getByTestId("profile-email").waitFor({ state: "detached" });
+    const originalToken = await page.evaluate(() => localStorage.getItem("rmc_token"));
+    let release;
+    const held = new Promise((resolve) => { release = resolve; });
+    let first = true, readyResolve, readyReject, readyTimer;
+    const ready = new Promise((resolve, reject) => {
+      readyResolve = resolve; readyReject = reject;
+    });
+    const handler = async (route) => {
+      if (!first) return route.continue();
+      first = false;
+      try {
+        assert.equal(route.request().headers().authorization, `Bearer ${originalToken}`);
+        // Capture real account A data before logout changes the session.
+        const response = await route.fetch({ timeout: 10000 });
+        assert.equal(response.status(), 200);
+        assert.equal((await response.json()).user.id, users[0].user.id);
+        readyResolve();
+        await held;
+        await route.fulfill({ response });
+      } catch (error) {
+        readyReject(error);
+        await route.abort().catch(() => {});
+      }
+    };
+    await page.route("**/api/auth/me", handler);
+    try {
+      // Observe click and route readiness together: neither rejection is detached.
+      readyTimer = setTimeout(() => readyReject(new Error(
+        "Profile refresh was not captured for account-switch fixture")), 15000);
+      await Promise.all([page.getByTestId("nav-profile").click(), ready]);
+      clearTimeout(readyTimer);
+      await page.getByTestId("profile-logout").click();
+      await page.waitForURL(`${base}/login`);
+      assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), null);
+      let newToken = null;
+      if (switchAccount) {
+        await signIn(page, users[1].email);
+        await page.waitForURL(`${base}/profile`);
+        await page.getByTestId("profile-email").filter({ hasText: users[1].email }).waitFor();
+        newToken = await page.evaluate(() => localStorage.getItem("rmc_token"));
+        assert(newToken && newToken !== originalToken);
+      }
+      const delivered = page.waitForResponse((r) => r.url().endsWith("/api/auth/me") &&
+        r.request().headers().authorization === `Bearer ${originalToken}`);
+      release();
+      await (await delivered).finished();
+      // Allow React to commit the response handler before checking visible identity.
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), newToken);
+      if (switchAccount) {
+        assert.equal(await page.getByTestId("profile-email").textContent(), users[1].email);
+        await page.getByTestId("profile-logout").click();
+      } else {
+        assert.equal(new URL(page.url()).pathname, "/login");
+        await page.getByTestId("header-login").waitFor();
+        assert.equal(await page.getByTestId("profile-email").count(), 0);
+      }
+    } finally {
+      clearTimeout(readyTimer);
+      release();
+      await page.unroute("**/api/auth/me", handler);
+    }
+    await page.waitForURL(`${base}/login`);
+    await signIn(page, users[0].email);
+    await page.waitForURL(`${base}/profile`);
+    await page.getByTestId("profile-email").filter({ hasText: users[0].email }).waitFor();
+    await page.getByTestId("nav-library").click();
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${base}/tables?game=spades`);
+  console.log("PASS: real profile response cannot undo UI logout or replace a newer UI login");
+}
+async function clickMove(page, action) {
+  if (action.type === "bid") await page.getByRole("button", { name: `Bid ${action.bid === 0 ? "nil" : action.bid}`, exact: true }).click();
+  else if (action.card) await page.getByTestId("spades-hand").getByRole("button", { name: cardLabel(action.card), exact: true }).click();
+  else if (action.tile) {
+    await page.getByTestId("dominoes-hand").getByRole("button", { name: `Tile ${action.tile}`, exact: true }).click();
+    await page.getByRole("button", { name: `Play ${action.side}`, exact: true }).click();
+  } else await page.getByRole("button", { name: action.type === "draw" ? "Draw a tile" : action.type === "pass" ? "Pass turn" : "Deal next hand", exact: true }).click();
+}
+
+(async () => {
+  const browser = await chromium.launch({ headless: true,
+    ...(process.env.RMC_CHROMIUM_PATH ? { executablePath: process.env.RMC_CHROMIUM_PATH } : {}) });
+  const pages = [];
+  try {
+    if (process.env.RMC_VERIFY_CONFIGURED_ANALYTICS === "1") {
+      await require("./verify-configured-analytics.cjs").verifyConfiguredAnalytics(browser, base);
+    }
+    await verifyGameHeaderControls(browser);
+    await verifyMemoryScoreResponses(browser);
+    await verifyResetScoreLifecycles(browser);
+    await verifyUnoGuestResults(browser);
+    await verifyGoFishGuestResult(browser);
+    await verifyGoFishFailedSaves(browser);
+    await verifyGoFishLosses(browser);
+    await verifyOldMaidInitialWins(browser);
+    await verifyOldMaidFullRounds(browser);
+    await verifyCrazyEightsGuestRounds(browser);
+    await verifyChessCheckersTurnCleanup(browser);
+    await verifyCheckersGuestCompletion(browser);
+    await verifyChessGuestCompletion(browser);
+    await verifyChessDrawCompletion(browser);
+    await verifyProfileRefreshOrdering(browser);
+    await verifyAnonymousOnboarding(browser);
+    const users = [];
+    const stamp = Date.now();
+    for (let i = 0; i < 4; i += 1) {
+      const email = `table-${stamp}-${i}@example.com`;
+      // Player 3 must create the account through the real invitation UI below.
+      const registered = i === 2 ? {} : await api("/auth/register", null, { name: `Test Player ${i + 1}`, email, password, accepted_terms: true });
+      users.push({ ...registered, email });
+      const context = await browser.newContext({ viewport: i === 0 ? { width: 390, height: 844 } : i === 2 ? { width: 667, height: 375 } : { width: 1280, height: 900 } });
+      // A mistakenly production-bound bundle must fail locally, never call a live API.
+      // External fonts/analytics are also unnecessary for this disposable test.
+      await context.route("**/*", (route) => new URL(route.request().url()).origin === new URL(base).origin
+        ? route.continue() : route.abort());
+      await context.addInitScript(({ token, insert }) => {
+        if (insert) localStorage.setItem("rmc_token", token);
+        const timeout = window.setTimeout.bind(window);
+        // Accelerate thinking/polling in the test, preserving every actual move/API call.
+        window.setTimeout = (fn, delay, ...args) => timeout(fn, delay === 650 ? 15 : delay === 2000 ? 75 : delay, ...args);
+      }, { token: registered.token, insert: i === 3 });
+      const page = await context.newPage();
+      page.on("pageerror", (e) => errors.push(e.message));
+      pages.push(page);
+    }
+    const [first] = pages;
+    await first.goto(`${base}/tables?game=spades`);
+    await first.getByTestId("login-email").fill(users[0].email);
+    await first.getByTestId("login-password").fill(password);
+    await first.getByTestId("login-terms-checkbox").check();
+    await first.getByTestId("login-submit").click();
+    await first.waitForURL("**/tables?game=spades");
+    await verifyMobileNavigation(first);
+    await verifyStaleProfile(first, users);
+    await verifyRefreshRecovery(first, users[0]);
+    await first.getByRole("button", { name: "Create private table", exact: true }).click();
+    await first.waitForURL("**/table/*");
+    const code = new URL(first.url()).pathname.split("/").pop();
+    for (let i = 1; i < 4; i += 1) {
+      const page = pages[i];
+      const invitation = `${base}/table/${code}?ref=player-share#join`;
+      await page.goto(invitation);
+      if (i !== 3) {
+        await page.waitForURL(`${base}/login`);
+        assert.equal(await page.evaluate(() => localStorage.getItem("rmc_token")), null,
+          "Invitation recipient starts without an injected authentication token");
+        // Both links must carry the original invitation through route state.
+        await page.getByTestId("link-register").click();
+        await page.waitForURL(`${base}/register`);
+        await page.getByTestId("link-login").click();
+        await page.waitForURL(`${base}/login`);
+        if (i === 1) {
+          await page.getByTestId("login-email").fill(users[i].email);
+          await page.getByTestId("login-password").fill(password);
+          await page.getByTestId("login-terms-checkbox").check();
+          await page.getByTestId("login-submit").click();
+        } else {
+          await page.getByTestId("link-register").click();
+          await page.getByTestId("register-name").fill(`Test Player ${i + 1}`);
+          await page.getByTestId("register-email").fill(users[i].email);
+          await page.getByTestId("register-password").fill(password);
+          await page.getByTestId("register-terms-checkbox").check();
+          const response = page.waitForResponse((r) => r.url().endsWith("/auth/register") && r.request().method() === "POST");
+          await page.getByTestId("register-submit").click();
+          const registration = await response;
+          assert.equal(registration.status(), 200);
+          users[i] = { ...await registration.json(), email: users[i].email };
+        }
+      }
+      await page.waitForURL(invitation);
+      await page.getByRole("button", { name: "Leave table", exact: true }).waitFor();
+      // Preserve the seat order assumed by the full-hand driver, and prove that
+      // authentication returned to and joined this exact private table.
+      const joined = await api(`/tables/${code}`, users[0].token);
+      assert.equal(joined.members.filter(Boolean).length, i + 1);
+      assert.equal(joined.members[i].id, users[i].user.id);
+    }
+    console.log("PASS: private invitation survives login, UI registration and auth-screen switches with query/fragment intact");
+    await Promise.all(pages.map((p) => p.getByTestId("spades-board").waitFor()));
+    const original = await api(`/tables/${code}`, users[0].token);
+    await first.reload();
+    await first.getByTestId("spades-board").waitFor();
+    assert.deepEqual((await api(`/tables/${code}`, users[0].token)).state.hand, original.state.hand);
+    assert(await first.locator("html").evaluate((el) => el.scrollWidth <= window.innerWidth), "Mobile horizontal overflow");
+    if (process.env.RMC_SCREENSHOT_DIR) await first.screenshot({ path: path.join(process.env.RMC_SCREENSHOT_DIR, "spades-online-mobile.png"), fullPage: true });
+    await captureTableState(first, "09-spades-online-bidding");
+    let onlineMoves = 0;
+    for (; onlineMoves < 60; onlineMoves += 1) {
+      const host = await api(`/tables/${code}`, users[0].token);
+      if (host.state.phase === "round_end") break;
+      const actor = host.state.turn;
+      const view = await api(`/tables/${code}`, users[actor].token);
+      assert(!("hands" in view.state) && !("stock" in view.state));
+      const action = view.state.phase === "bidding" ? { type: "bid", bid: 2 } : view.state.actions[0];
+      const response = pages[actor].waitForResponse((r) => r.url().endsWith(`/tables/${code}/move`) && r.request().method() === "POST");
+      await clickMove(pages[actor], action);
+      assert.equal((await response).status(), 200);
+    }
+    assert.equal(onlineMoves, 56, "Four bids and 52 legal cards complete a Spades hand");
+    await first.getByRole("button", { name: "Deal next hand", exact: true }).waitFor();
+    const mobileScores = first.getByTestId("spades-mobile-scoring");
+    await mobileScores.waitFor();
+    const roundScores = (await api(`/tables/${code}`, users[0].token)).state.last_round;
+    const pointCells = first.getByTestId("spades-mobile-points");
+    assert.equal(await pointCells.count(), 2);
+    for (let i = 0; i < roundScores.length; i += 1) {
+      assert.equal(await pointCells.nth(i).textContent(), `${roundScores[i].delta > 0 ? "+" : ""}${roundScores[i].delta}`);
+      const box = await pointCells.nth(i).boundingBox();
+      assert(box && box.x >= 0 && box.x + box.width <= 390, "Mobile points must fit without sideways scrolling");
+    }
+    await mobileScores.scrollIntoViewIfNeeded();
+    await captureTableState(first, "10-spades-online-scoring");
+    await first.getByRole("button", { name: "Deal next hand", exact: true }).click();
+    await first.getByRole("button", { name: "Leave table", exact: true }).waitFor();
+    first.once("dialog", (dialog) => dialog.accept());
+    await first.getByRole("button", { name: "Leave table", exact: true }).click();
+    await first.waitForURL("**/tables?game=spades");
+    assert.equal((await api(`/tables/${code}`, users[1].token)).status, "ended");
+    console.log("PASS: real login, private invitation, four-player Spades hand/scoring, reconnect, next hand, forfeit, mobile layout");
+
+    await Promise.all(pages.slice(0, 2).map(async (p) => {
+      await p.goto(`${base}/tables?game=dominoes`);
+      await p.getByRole("button", { name: "Find players", exact: true }).click();
+      await p.waitForURL("**/table/*");
+      await p.getByTestId("dominoes-board").waitFor();
+    }));
+    const dominoCode = new URL(first.url()).pathname.split("/").pop();
+    assert.equal(new URL(pages[1].url()).pathname.split("/").pop(), dominoCode);
+    await captureTableState(first, "11-dominoes-online-hand");
+    let finished = false;
+    for (let i = 0; i < 100; i += 1) {
+      const host = await api(`/tables/${dominoCode}`, users[0].token);
+      if (host.status === "ended") { finished = true; break; }
+      // Seats are assigned by the server, not by request arrival assumptions.
+      const participant = host.members[host.state.turn].id;
+      const actor = users.findIndex((u) => u.user.id === participant);
+      const view = await api(`/tables/${dominoCode}`, users[actor].token);
+      const response = pages[actor].waitForResponse((r) => r.url().endsWith(`/tables/${dominoCode}/move`) && r.request().method() === "POST");
+      await clickMove(pages[actor], view.state.actions[0]);
+      assert.equal((await response).status(), 200);
+    }
+    assert(finished, "Online Dominoes must finish");
+    console.log("PASS: simultaneous public matchmaking and complete two-player online Dominoes");
+
+    await first.goto(`${base}/play/spades`);
+    await first.getByTestId("spades-board").waitFor();
+    await first.getByRole("button", { name: "Bid 3", exact: true }).click();
+    for (let i = 0; i < 400; i += 1) {
+      if (await first.getByRole("button", { name: "Deal next hand", exact: true }).count()) break;
+      const legal = first.getByTestId("spades-hand").locator("button:enabled");
+      if (await legal.count()) await legal.first().click();
+      else await first.waitForTimeout(20);
+    }
+    await first.getByRole("button", { name: "Deal next hand", exact: true }).waitFor();
+    console.log("PASS: computer Spades bidding, all 13 tricks, hand scoring");
+    await first.goto(`${base}/play/dominoes`);
+    let localFinished = false;
+    for (let i = 0; i < 500; i += 1) {
+      const turn = await first.getByTestId("table-turn").textContent();
+      if (/wins?|Draw/.test(turn)) { localFinished = true; break; }
+      const tiles = first.getByTestId("dominoes-hand").locator("button:enabled");
+      if (await tiles.count()) {
+        await tiles.first().click();
+        const left = first.getByRole("button", { name: "Play left", exact: true });
+        await (await left.isEnabled() ? left : first.getByRole("button", { name: "Play right", exact: true })).click();
+      } else {
+        const draw = first.getByRole("button", { name: /^(Draw a tile|Pass turn)$/ });
+        if (await draw.count()) await draw.click();
+        else await first.waitForTimeout(20);
+      }
+    }
+    assert(localFinished, "Computer Dominoes must finish");
+    await first.goto(`${base}/tables?game=dominoes`);
+    await first.getByRole("button", { name: "Create private table", exact: true }).click();
+    await first.waitForURL("**/table/*");
+    const safetyCode = new URL(first.url()).pathname.split("/").pop();
+    await pages[1].goto(`${base}/table/${safetyCode}`);
+    await first.getByTestId("dominoes-board").waitFor();
+    await first.getByText("Player safety · Report or block", { exact: true }).click();
+    // Polling and the one-second turn clock must not collapse safety controls.
+    await first.waitForTimeout(1100);
+    assert(await first.getByRole("button", { name: "Report Test Player 2", exact: true }).isVisible());
+    await first.getByRole("button", { name: "Report Test Player 2", exact: true }).click();
+    await first.locator("#table-report").fill("Disposable local test of table safety controls.");
+    const reportResponse = first.waitForResponse((r) => r.url().endsWith("/safety/report") && r.request().method() === "POST");
+    await first.getByRole("button", { name: "Send report", exact: true }).click();
+    assert.equal((await reportResponse).status(), 200);
+    first.once("dialog", (dialog) => dialog.accept());
+    await first.getByRole("button", { name: "Block Test Player 2", exact: true }).click();
+    await first.waitForURL("**/tables");
+    assert.equal((await api("/tables/current", users[0].token)).room, null);
+    assert.equal((await api("/tables/current", users[1].token)).room, null);
+    await verifyUnavailableStore(browser, users[0]);
+    await verifyLandscapeLayouts(browser, users[0]);
+    await captureActualApp(browser, users[0]);
+    const deleted = await fetch(`${base}/api/auth/account`, { method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${users[0].token}` }, body: JSON.stringify({ password }) });
+    assert.equal(deleted.status, 200);
+    const removedTable = await fetch(`${base}/api/tables/${safetyCode}`, { headers: { Authorization: `Bearer ${users[1].token}` } });
+    assert.equal(removedTable.status, 404, "Account deletion removes linked table records");
+    assert.deepEqual(errors, [], "No uncaught browser exceptions");
+    console.log("PASS: complete computer Dominoes, in-table report/block, account-deletion cleanup, no uncaught browser exceptions");
+  } catch (error) {
+    if (pages[0] && process.env.RMC_SCREENSHOT_DIR) {
+      await pages[0].screenshot({ path: path.join(process.env.RMC_SCREENSHOT_DIR, "table-test-failure.png"), fullPage: true });
+      console.error("Browser failure state", JSON.stringify(await pages[0].evaluate(() => ({
+        url: location.pathname,
+        controls: [...document.querySelectorAll('button, summary')].filter((e) => e.textContent.includes('Player safety')).map((e) => ({
+          html: e.outerHTML, rect: e.getBoundingClientRect().toJSON(),
+          ancestors: [...(function* () { for (let p=e;p;p=p.parentElement) yield p; })()].map((p) => ({
+            tag: p.tagName, class: p.className, display: getComputedStyle(p).display,
+            visibility: getComputedStyle(p).visibility, contentVisibility: getComputedStyle(p).contentVisibility,
+            rect: p.getBoundingClientRect().toJSON(),
+          })),
+        })),
+      })), null, 2));
+    }
+    throw error;
+  } finally { await browser.close(); }
+})().catch((error) => { console.error(error); process.exitCode = 1; });
+
+
+

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Chess as ChessEngine } from "chess.js";
 import GameShell from "@/components/rmc/GameShell";
 import ShareCard from "@/components/rmc/ShareCard";
@@ -36,6 +36,14 @@ function pickCpuMove(game) {
   return scored[0].m;
 }
 
+function copyGame(game) {
+  // FEN alone loses prior positions, preventing threefold-repetition draws.
+  // PGN retains the full history and any custom starting-position header.
+  const copy = new ChessEngine();
+  copy.loadPgn(game.pgn());
+  return copy;
+}
+
 export default function Chess() {
   const { user, submitScore } = useAuth();
   const [game, setGame] = useState(() => new ChessEngine());
@@ -46,6 +54,10 @@ export default function Chess() {
   const [shareOpen, setShareOpen] = useState(false);
   const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
 
+  // Invalidate pending score responses when this game is reset or left.
+  const gameGeneration = useRef(0);
+  useEffect(() => () => { gameGeneration.current += 1; }, []);
+
   const legalFrom = useMemo(() => {
     if (!selected) return [];
     return game.moves({ square: selected, verbose: true });
@@ -53,11 +65,21 @@ export default function Chess() {
 
   const board = game.board();
   const submitGameScore = useCallback(async (won) => {
-    if (!user) return;
-    const res = await submitScore({ game_id: "chess", won, score: won ? 1 : 0 });
-    if (res.ok) {
-      setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
+    const generation = gameGeneration.current;
+    if (!user) {
       setShareOpen(true);
+      return;
+    }
+    try {
+      const res = await submitScore({ game_id: "chess", won, score: won ? 1 : 0 });
+      if (generation !== gameGeneration.current) return;
+      if (res.ok) {
+        setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
+      }
+      setShareOpen(true);
+    } catch {
+      // A failed save must not hide the local result or invent an award.
+      if (generation === gameGeneration.current) setShareOpen(true);
     }
   }, [user, submitScore]);
 
@@ -95,7 +117,7 @@ export default function Chess() {
       const t = setTimeout(() => {
         const move = pickCpuMove(game);
         if (!move) return;
-        const g2 = new ChessEngine(game.fen());
+        const g2 = copyGame(game);
         g2.move(move);
         sfx.drop();
         setGame(g2);
@@ -111,7 +133,7 @@ export default function Chess() {
     if (selected) {
       const move = legalFrom.find((m) => m.to === sq);
       if (move) {
-        const g2 = new ChessEngine(game.fen());
+        const g2 = copyGame(game);
         g2.move({ from: selected, to: sq, promotion: "q" });
         sfx.drop();
         setGame(g2);
@@ -129,6 +151,9 @@ export default function Chess() {
   };
 
   const reset = () => {
+    gameGeneration.current += 1;
+    setShareOpen(false);
+    setXpInfo({ xp: 0, done: false });
     setGame(new ChessEngine());
     setSelected(null);
     setFinished(null);

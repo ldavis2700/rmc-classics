@@ -38,7 +38,7 @@ export default function GameShell({ title, subtitle, color = "#FF479A", children
             to="/library"
             data-testid="game-back"
             onClick={() => sfx.click()}
-            className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/5 text-white hover:border-white/20"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 text-white hover:border-white/20"
             aria-label="Back to library"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -55,13 +55,13 @@ export default function GameShell({ title, subtitle, color = "#FF479A", children
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {extraActions}
           <button
             type="button"
             onClick={shareGame}
             data-testid="game-share"
-            className="inline-flex items-center gap-2 rounded-full border border-neon-cyan/40 bg-neon-cyan/10 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-neon-cyan hover:border-neon-cyan/70"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full border border-neon-cyan/40 bg-neon-cyan/10 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-neon-cyan hover:border-neon-cyan/70"
           >
             <Share2 className="h-3.5 w-3.5" /> Share
           </button>
@@ -70,7 +70,7 @@ export default function GameShell({ title, subtitle, color = "#FF479A", children
               type="button"
               onClick={() => { sfx.click(); onReset(); }}
               data-testid="game-reset"
-              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:border-white/20"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:border-white/20"
             >
               <RotateCcw className="h-3.5 w-3.5" /> Reset
             </button>

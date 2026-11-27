@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import GameShell from "@/components/rmc/GameShell";
 import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
@@ -34,6 +34,17 @@ function firstNonEight(deck) {
   return { start, rest };
 }
 
+// Reuse played cards only after the draw pile empties; the active top stays put.
+function refillDrawPile(deck, discard) {
+  if (deck.length || discard.length < 2) return { deck, discard };
+  const recycled = discard.slice(0, -1);
+  for (let i = recycled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [recycled[i], recycled[j]] = [recycled[j], recycled[i]];
+  }
+  return { deck: recycled, discard: discard.slice(-1) };
+}
+
 export default function CrazyEights() {
   const { user, submitScore } = useAuth();
   const [state, setState] = useState(null);
@@ -41,12 +52,15 @@ export default function CrazyEights() {
   const [wildSuit, setWildSuit] = useState(null);
   const [pickSuit, setPickSuit] = useState(false); // player picks after playing 8
   const [winner, setWinner] = useState(null);
-  const [submitted, setSubmitted] = useState(false);
+  const submitted = useRef(false);
   const [message, setMessage] = useState("Play a card that matches suit or rank.");
   const [shareOpen, setShareOpen] = useState(false);
-  const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
+  const [xpInfo, setXpInfo] = useState({ xp: 0, done: false, badges: [] });
+  const generation = useRef(0);
+  useEffect(() => () => { generation.current += 1; }, []);
 
   const init = () => {
+    generation.current += 1;
     let deck = buildDeck();
     const you = deck.slice(0, 7);
     const cpu = deck.slice(7, 14);
@@ -57,7 +71,8 @@ export default function CrazyEights() {
     setWildSuit(null);
     setPickSuit(false);
     setWinner(null);
-    setSubmitted(false);
+    submitted.current = false;
+    setXpInfo({ xp: 0, done: false, badges: [] });
     setShareOpen(false);
     setMessage("Play a card that matches suit or rank.");
   };
@@ -67,21 +82,27 @@ export default function CrazyEights() {
   }, []);
 
   useEffect(() => {
-    if (winner && !submitted) {
-      const won = winner === "you";
-      won ? sfx.win() : sfx.lose();
-      toast[won ? "success" : "error"](won ? "Empty hand — you win!" : "CPU emptied first.");
-      setSubmitted(true);
-      if (user) {
-        submitScore({ game_id: "crazy8", won, score: won ? 1 : 0 }).then((res) => {
+    if (!winner || submitted.current) return;
+    submitted.current = true;
+    const round = generation.current;
+    const won = winner === "you";
+    won ? sfx.win() : sfx.lose();
+    toast[won ? "success" : "error"](won ? "Empty hand — you win!" : "CPU emptied first.");
+    const saveResult = async () => {
+      try {
+        if (user) {
+          const res = await submitScore({ game_id: "crazy8", won, score: won ? 1 : 0 });
+          if (round !== generation.current) return;
           if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
-          setShareOpen(true);
-        });
-      } else {
-        setShareOpen(true);
+        }
+      } catch {
+        // Preserve the local outcome without inventing a reward when saving fails.
+      } finally {
+        if (round === generation.current) setShareOpen(true);
       }
-    }
-  }, [winner, submitted, user, submitScore]);
+    };
+    saveResult();
+  }, [winner, user, submitScore]);
 
   // CPU turn
   useEffect(() => {
@@ -96,7 +117,9 @@ export default function CrazyEights() {
       let idx = hand.findIndex((c) => canPlay(c, top, currentWild));
       // draw until playable, but keep it reasonable
       let safety = 25;
-      while (idx === -1 && deck.length > 0 && safety-- > 0) {
+      while (idx === -1 && safety-- > 0) {
+        ({ deck, discard } = refillDrawPile(deck, discard));
+        if (!deck.length) break;
         const drawn = deck.shift();
         hand.push(drawn);
         idx = hand.findIndex((c) => canPlay(c, top, currentWild));
@@ -166,7 +189,9 @@ export default function CrazyEights() {
 
   const drawCard = () => {
     if (turn !== "you" || pickSuit || winner) return;
-    const deck = state.deck.slice();
+    let deck = state.deck.slice();
+    let discard = state.discard.slice();
+    ({ deck, discard } = refillDrawPile(deck, discard));
     if (deck.length === 0) {
       setMessage("Deck empty — pass.");
       setTurn("cpu");
@@ -174,7 +199,7 @@ export default function CrazyEights() {
     }
     const card = deck.shift();
     sfx.flip();
-    setState({ ...state, deck, you: [...state.you, card] });
+    setState({ ...state, deck, discard, you: [...state.you, card] });
     setMessage(`Drew ${card.rank}${card.suit}. Play if you can, otherwise draw again or the CPU takes over.`);
   };
 
@@ -309,3 +334,5 @@ export default function CrazyEights() {
     </GameShell>
   );
 }
+
+

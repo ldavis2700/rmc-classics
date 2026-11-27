@@ -47,6 +47,8 @@ export default function Jenga() {
   const originalYRef = useRef([]);     // starting Y of each block
   const selectedIdRef = useRef(null);
   const gameOverRef = useRef(false);
+  const generationRef = useRef(0);
+  const pullTimerRef = useRef(null);
 
   const [score, setScore] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
@@ -54,7 +56,7 @@ export default function Jenga() {
   const [busy, setBusy] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
+  const [xpInfo, setXpInfo] = useState({ xp: 0, done: false, badges: [] });
 
   // Recompute which remaining blocks are "safe to pull" and update their stroke color.
   // Safe blocks in real Jenga: (1) any block in the top few rows (no weight above them)
@@ -135,8 +137,13 @@ export default function Jenga() {
   }, [refreshSafetyHints]);
 
   const resetGame = useCallback(() => {
+    const generation = ++generationRef.current;
+    clearTimeout(pullTimerRef.current);
+    pullTimerRef.current = null;
+    if (engineRef.current?.runner) Matter.Runner.stop(engineRef.current.runner);
     if (renderRef.current) Matter.Render.stop(renderRef.current);
     if (engineRef.current) {
+      Matter.Events.off(engineRef.current);
       Matter.Engine.clear(engineRef.current);
       Matter.World.clear(engineRef.current.world);
     }
@@ -147,7 +154,8 @@ export default function Jenga() {
     setGameOver(false);
     setBusy(false);
     setSubmitted(false);
-    setXpInfo({ xp: 0, done: false });
+    setXpInfo({ xp: 0, done: false, badges: [] });
+    setShareOpen(false);
 
     const engine = Matter.Engine.create();
     engine.world.gravity.y = 1.4;
@@ -177,7 +185,7 @@ export default function Jenga() {
 
     // Collapse detector - runs on every tick
     Matter.Events.on(engine, "afterUpdate", () => {
-      if (gameOverRef.current) return;
+      if (generation !== generationRef.current || gameOverRef.current) return;
       const blocks = blocksRef.current;
       const orig = originalYRef.current;
       let fallen = 0;
@@ -205,9 +213,13 @@ export default function Jenga() {
   useEffect(() => {
     resetGame();
     return () => {
+      generationRef.current += 1;
+      clearTimeout(pullTimerRef.current);
+      pullTimerRef.current = null;
       if (renderRef.current) Matter.Render.stop(renderRef.current);
       if (engineRef.current?.runner) Matter.Runner.stop(engineRef.current.runner);
       if (engineRef.current) {
+        Matter.Events.off(engineRef.current);
         Matter.Engine.clear(engineRef.current);
         Matter.World.clear(engineRef.current.world);
       }
@@ -277,7 +289,10 @@ export default function Jenga() {
     );
 
     // After the impulse settles (600ms), score++ and check collapse.
-    setTimeout(() => {
+    const generation = generationRef.current;
+    pullTimerRef.current = setTimeout(() => {
+      if (generation !== generationRef.current) return;
+      pullTimerRef.current = null;
       if (gameOverRef.current) {
         setBusy(false);
         return;
@@ -298,20 +313,24 @@ export default function Jenga() {
     if (!gameOver || submitted) return;
     setSubmitted(true);
     toast.error("Tower fell!");
-    if (user) {
-      submitScore({ game_id: "jenga", won: score >= 10, score }).then((res) => {
-        if (res.ok) {
-          setXpInfo({
+    const generation = generationRef.current;
+    (async () => {
+      try {
+        if (user) {
+          const res = await submitScore({ game_id: "jenga", won: score >= 10, score });
+          if (generation !== generationRef.current) return;
+          if (res.ok) setXpInfo({
             xp: res.xp_gained,
             done: res.challenge_completed,
             badges: res.newly_unlocked_badges,
           });
         }
-        setShareOpen(true);
-      });
-    } else {
-      setShareOpen(true);
-    }
+      } catch {
+        // Keep the local result on save failure without inventing rewards.
+      } finally {
+        if (generation === generationRef.current) setShareOpen(true);
+      }
+    })();
   }, [gameOver, submitted, user, submitScore, score]);
 
   const meta = GAME_MAP.jenga;
@@ -427,3 +446,4 @@ export default function Jenga() {
     </>
   );
 }
+

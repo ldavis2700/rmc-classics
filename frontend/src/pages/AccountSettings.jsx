@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Trash2, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +10,13 @@ export default function AccountSettings() {
   const [confirmText, setConfirmText] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const deleting = useRef(false);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   if (!user) return null;
 
@@ -17,19 +24,27 @@ export default function AccountSettings() {
     confirmText.trim().toUpperCase() === "DELETE" && currentPassword.length > 0;
 
   const onDelete = async () => {
-    if (!confirmed || busy) return;
+    if (!confirmed || deleting.current || !mounted.current) return;
     const finalConfirm = window.confirm(
       "Permanently delete your RMC Classics account and associated account data? This cannot be undone."
     );
     if (!finalConfirm) return;
+    deleting.current = true;
     setBusy(true);
-    const result = await deleteAccount(currentPassword);
-    setBusy(false);
-    if (result.ok) {
-      toast.success("Your account has been permanently deleted.");
-      navigate("/", { replace: true });
-    } else {
-      toast.error(result.error || "Unable to delete account. Please try again.");
+    try {
+      const result = await deleteAccount(currentPassword);
+      if (!mounted.current) return;
+      if (result.ok) {
+        toast.success("Your account has been permanently deleted.");
+        navigate("/", { replace: true });
+      } else {
+        toast.error(result.error || "Unable to delete account. Please try again.");
+      }
+    } catch {
+      if (mounted.current) toast.error("Unable to confirm account deletion. Check your account before trying again.");
+    } finally {
+      deleting.current = false;
+      if (mounted.current) setBusy(false);
     }
   };
 
@@ -104,3 +119,4 @@ export default function AccountSettings() {
     </div>
   );
 }
+

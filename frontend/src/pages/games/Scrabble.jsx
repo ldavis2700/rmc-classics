@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import GameShell from "@/components/rmc/GameShell";
 import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
@@ -45,9 +45,10 @@ function canBuildFromRack(word, rack) {
 }
 
 export default function Scrabble() {
-  const { user, submitScore } = useAuth();
-  const [bag, setBag] = useState(() => drawBag());
-  const [rack, setRack] = useState([]);
+  const { user, submitScore, loading } = useAuth();
+  const initialDeal = useMemo(() => drawTiles(drawBag(), 7), []);
+  const [bag, setBag] = useState(initialDeal.rest);
+  const [rack, setRack] = useState(initialDeal.drawn);
   const [placed, setPlaced] = useState([]); // ordered chosen tile positions (indices into rack)
   const [round, setRound] = useState(1);
   const [totalScore, setTotalScore] = useState(0);
@@ -55,7 +56,9 @@ export default function Scrabble() {
   const [finished, setFinished] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
+  const [xpInfo, setXpInfo] = useState({ xp: 0, done: false, badges: [] });
+  const generationRef = useRef(0);
+  useEffect(() => () => { generationRef.current++; }, []);
   const [note, setNote] = useState("Form the highest scoring word from your 7 tiles.");
 
   const dealRack = useCallback((b) => {
@@ -66,29 +69,28 @@ export default function Scrabble() {
   }, []);
 
   useEffect(() => {
-    dealRack(bag);
-  }, []);
-
-  const finalize = useCallback(
-    async (finalScore) => {
-      const won = finalScore >= PAR_SCORE;
-      won ? sfx.win() : sfx.lose();
-      toast[won ? "success" : "error"](
-        won ? `Beat par! ${finalScore} points.` : `Below par (${finalScore}/${PAR_SCORE}).`
-      );
-      if (user && !submitted) {
-        const res = await submitScore({ game_id: "scrabble", won, score: finalScore });
-        if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
-        setSubmitted(true);
+    if (finished == null || submitted || loading) return;
+    const generation = generationRef.current;
+    const won = finished >= PAR_SCORE;
+    setSubmitted(true);
+    won ? sfx.win() : sfx.lose();
+    toast[won ? "success" : "error"](
+      won ? `Beat par! ${finished} points.` : `Below par (${finished}/${PAR_SCORE}).`
+    );
+    (async () => {
+      try {
+        if (user) {
+          const res = await submitScore({ game_id: "scrabble", won, score: finished });
+          if (generation !== generationRef.current) return;
+          if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
+        }
+      } catch {
+        // The completed local round remains available when saving fails.
+      } finally {
+        if (generation === generationRef.current) setShareOpen(true);
       }
-      setShareOpen(true);
-    },
-    [user, submitted, submitScore]
-  );
-
-  useEffect(() => {
-    if (finished != null) finalize(finished);
-  }, [finished, finalize]);
+    })();
+  }, [finished, submitted, loading, user, submitScore]);
 
   const currentWord = useMemo(() => placed.map((i) => rack[i]).join(""), [placed, rack]);
   const currentLetters = useMemo(() => placed.map((i) => rack[i]), [placed, rack]);
@@ -96,6 +98,7 @@ export default function Scrabble() {
   const isValid = currentWord.length >= 3 && WORDS.has(currentWord.toLowerCase());
 
   const pickTile = (idx) => {
+    if (finished != null) return;
     if (placed.includes(idx)) {
       setPlaced(placed.filter((i) => i !== idx));
     } else {
@@ -105,6 +108,7 @@ export default function Scrabble() {
   };
 
   const submitWord = () => {
+    if (finished != null) return;
     if (!isValid) {
       setNote("Not a valid word. Try another combination.");
       sfx.lose();
@@ -125,6 +129,7 @@ export default function Scrabble() {
   };
 
   const skipRound = () => {
+    if (finished != null) return;
     setLastRoundScore(0);
     setNote("Skipped this round.");
     if (round >= TOTAL_ROUNDS) {
@@ -136,12 +141,15 @@ export default function Scrabble() {
   };
 
   const shuffleRack = () => {
+    if (finished != null) return;
     setRack([...rack].sort(() => Math.random() - 0.5));
     setPlaced([]);
     sfx.flip();
   };
 
   const reset = () => {
+    generationRef.current++;
+    setXpInfo({ xp: 0, done: false, badges: [] });
     const nb = drawBag();
     setBag(nb);
     setRound(1);
@@ -181,6 +189,7 @@ export default function Scrabble() {
               letter={rack[idx]}
               onClick={() => pickTile(idx)}
               active
+              disabled={finished != null}
             />
           ))}
         </div>
@@ -213,7 +222,7 @@ export default function Scrabble() {
               letter={l}
               onClick={() => pickTile(i)}
               active={placed.includes(i)}
-              disabled={placed.includes(i)}
+              disabled={finished != null || placed.includes(i)}
               testId={`scrabble-tile-${i}`}
             />
           ))}
@@ -226,7 +235,7 @@ export default function Scrabble() {
         <button
           type="button"
           onClick={submitWord}
-          disabled={!isValid}
+          disabled={finished != null || !isValid}
           data-testid="scrabble-submit"
           className="btn-arcade rounded-full px-6 py-2 text-xs font-black disabled:opacity-40"
         >
@@ -235,6 +244,7 @@ export default function Scrabble() {
         <button
           type="button"
           onClick={shuffleRack}
+          disabled={finished != null}
           data-testid="scrabble-shuffle"
           className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:border-white/20"
         >
@@ -243,6 +253,7 @@ export default function Scrabble() {
         <button
           type="button"
           onClick={skipRound}
+          disabled={finished != null}
           data-testid="scrabble-skip"
           className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-[#a3a1c6] hover:text-white"
         >
@@ -265,6 +276,7 @@ export default function Scrabble() {
         statValue={totalScore}
         xpGained={xpInfo.xp}
         challengeCompleted={xpInfo.done}
+        newlyUnlockedBadges={xpInfo.badges}
       />
     </GameShell>
   );

@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 const LAST_UPDATED = "August 27, 2026";
 const CONTACT_EMAIL = "hello@rmcclassics.com";
 
-function Shell({ eyebrow, title, children }) {
+function Shell({ eyebrow, title, children, lastUpdated = LAST_UPDATED }) {
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-8 md:px-8 md:pt-14">
       <p className="font-pixel text-xs text-neon-cyan">// {eyebrow}</p>
@@ -14,7 +14,7 @@ function Shell({ eyebrow, title, children }) {
       >
         {title}
       </h1>
-      <p className="mt-2 text-xs text-[#7a789e]">Last updated: {LAST_UPDATED}</p>
+      <p className="mt-2 text-xs text-[#7a789e]">Last updated: {lastUpdated}</p>
       <div className="prose prose-invert mt-8 max-w-none text-sm leading-relaxed text-[#c9c7e6] [&_h2]:mt-8 [&_h2]:font-display [&_h2]:text-lg [&_h2]:font-bold [&_h2]:uppercase [&_h2]:tracking-tight [&_h2]:text-white [&_a]:text-neon-cyan [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-1">
         {children}
         <p className="mt-10 text-xs text-[#7a789e]">
@@ -29,7 +29,7 @@ function Shell({ eyebrow, title, children }) {
 
 export function Privacy() {
   return (
-    <Shell eyebrow="PRIVACY POLICY" title="Your data, in plain English">
+    <Shell eyebrow="PRIVACY POLICY" title="Your data, in plain English" lastUpdated="November 20, 2026">
       <p>
         RMC CLASSICS ("we", "us") builds a nostalgic collection of classic games at{" "}
         <a href="https://rmcclassics.com">rmcclassics.com</a>. This policy explains what we collect,
@@ -47,18 +47,29 @@ export function Privacy() {
           and friend connections — used for leaderboards, daily challenges, and matchmaking.
         </li>
         <li>
+          <b>Online tables:</b> player IDs, display names, hands, bids, turns, and game state
+          keep Dominoes and Spades synchronized and allow reconnecting. Players receive
+          only their own hand. Waiting tables close after 15 minutes; active tables close
+          after an hour without a move. Table records are scheduled for deletion 24 hours
+          after creation or the latest move. Account deletion removes associated table records.
+        </li>
+        <li>
           <b>Device data:</b> anonymous device type and screen size for responsive rendering.
         </li>
         <li>
-          <b>Analytics:</b> aggregated, non-identifying usage counts (page views, game starts,
-          voluntary share completions, and visits from player-shared game links) via
-          privacy-friendly analytics. We do not record who receives a shared link.
+          <b>Analytics:</b> We use PostHog for usage events and Google Analytics when configured. Events help us understand feature use, purchase flows, and app reliability. Analytics providers may receive browser, device, and network metadata and use browser identifiers; these events are not necessarily anonymous. PostHog automatic interaction capture, automatic page views, and session recording are disabled. Google Analytics may record page views when enabled. Events include voluntary share completions
+          and visits from player-shared game links. We do not record who receives a shared link.
         </li>
         <li>
           <b>Advertising preference:</b> whether you selected contextual or personalized advertising.
           Contextual advertising is the default.
         </li>
       </ul>
+
+      <h2>Purchase information</h2>
+      <p>
+        When you use in-app purchases, we share your stable RMC account ID with RevenueCat to associate purchases with your account. We use product and transaction information to verify purchases, credit freeze packs, prevent duplicate credits, and synchronize your balance when you use Restore Purchases. Transaction IDs are recorded with your RMC account, so this purchase information is linked to your account.
+      </p>
 
       <h2>What we do NOT collect</h2>
       <ul>
@@ -72,14 +83,14 @@ export function Privacy() {
       <ul>
         <li>To power leaderboards, friend battles, and daily challenges.</li>
         <li>To save your progress so you can log in on any device.</li>
-        <li>To improve the app and fix bugs (aggregated only).</li>
+        <li>To improve the app and fix bugs using usage events.</li>
         <li>To show contextual sponsor or affiliate offers.</li>
         <li>Only with your opt-in, to personalize offers using activity inside RMC CLASSICS.</li>
       </ul>
 
       <h2>Data storage & security</h2>
       <p>
-        Your data is stored in MongoDB with encryption at rest and in transit (HTTPS/TLS 1.2+).
+        The app uses MongoDB to store account and gameplay data.
         Passwords are hashed with bcrypt. We use industry-standard JWT for session tokens.
       </p>
 
@@ -105,10 +116,10 @@ export function Privacy() {
 
       <h2>Third-party services</h2>
       <ul>
-        <li>MongoDB Atlas (data storage)</li>
-        <li>Cloudflare (CDN + DDoS protection)</li>
+        <li>MongoDB (account and gameplay data storage)</li>
         <li>Apple App Store / Google Play (distribution)</li>
         <li>RevenueCat (in-app purchase processing)</li>
+        <li>PostHog and, when configured, Google Analytics (usage analytics)</li>
         <li>Approved sponsors and affiliate partners, when a clearly labeled offer is active</li>
       </ul>
 

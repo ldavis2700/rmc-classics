@@ -28,4 +28,18 @@ end
 
 post_install do |installer|
   assertDeploymentTarget(installer)
+
+  # Preferences 7.0.4 uses UserDefaults but ships no privacy manifest. With
+  # use_frameworks!, its dynamic library needs a declaration in its own bundle.
+  # This app only uses Preferences for its private reminderEnabled setting.
+  target = installer.pods_project.targets.find { |item| item.name == 'CapacitorPreferences' }
+  raise 'Missing CapacitorPreferences target; review privacy packaging' unless target
+  manifest = File.expand_path('Privacy/CapacitorPreferences/PrivacyInfo.xcprivacy', __dir__)
+  raise 'Missing Preferences privacy manifest' unless File.file?(manifest)
+  reference = installer.pods_project.files.find { |item| item.real_path.to_s == manifest }
+  reference ||= installer.pods_project.main_group.new_file(manifest)
+  phase = target.resources_build_phase
+  unless phase.files_references.include?(reference)
+    phase.add_file_reference(reference)
+  end
 end

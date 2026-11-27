@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import GameShell from "@/components/rmc/GameShell";
 import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
@@ -29,16 +29,27 @@ export default function RockPaperScissors() {
   const [shareOpen, setShareOpen] = useState(false);
   const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
 
+  const roundTimer = useRef(null);
+  const seriesGeneration = useRef(0);
+  useEffect(() => () => {
+    seriesGeneration.current += 1;
+    clearTimeout(roundTimer.current);
+  }, []);
+
   useEffect(() => {
     if (finished && !submitted) {
       const won = finished === "you";
       won ? sfx.win() : sfx.lose();
       toast[won ? "success" : "error"](won ? "Series won!" : "Series lost.");
       setSubmitted(true);
+      const generation = seriesGeneration.current;
       if (user) {
         submitScore({ game_id: "rps", won, score: won ? 1 : 0 }).then((res) => {
+          if (generation !== seriesGeneration.current) return;
           if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
           setShareOpen(true);
+        }).catch(() => {
+          if (generation === seriesGeneration.current) setShareOpen(true);
         });
       } else {
         setShareOpen(true);
@@ -62,7 +73,8 @@ export default function RockPaperScissors() {
     setResult(outcome);
     setYou(ny);
     setCpu(nc);
-    setTimeout(() => {
+    roundTimer.current = setTimeout(() => {
+      roundTimer.current = null;
       if (ny >= WIN_TARGET) setFinished("you");
       else if (nc >= WIN_TARGET) setFinished("cpu");
       else {
@@ -73,6 +85,11 @@ export default function RockPaperScissors() {
   };
 
   const reset = () => {
+    seriesGeneration.current += 1;
+    clearTimeout(roundTimer.current);
+    roundTimer.current = null;
+    setBusy(false);
+    setXpInfo({ xp: 0, done: false });
     setYou(0); setCpu(0); setRound(1); setLastYou(null); setLastCpu(null); setResult(null);
     setFinished(null); setSubmitted(false); setShareOpen(false);
   };

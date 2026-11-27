@@ -164,7 +164,7 @@ export default function SupportRMC() {
                 onClick={() => trackEvent("freeze_pack_store_clicked", { placement: "support_rmc" })}
                 className="mt-4 inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-neon-cyan"
               >
-                <ShoppingBag className="h-3.5 w-3.5" /> Open the iOS store
+                <ShoppingBag className="h-3.5 w-3.5" /> Check availability in Profile
               </Link>
             ) : channel.action === "founding_pilot" ? (
               <a

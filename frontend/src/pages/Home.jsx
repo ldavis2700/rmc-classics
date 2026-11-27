@@ -13,7 +13,7 @@ import SponsorUnit from "@/components/rmc/SponsorUnit";
 import { MONETIZATION } from "@/lib/monetization";
 
 const stats = [
-  { label: "Classic games", value: "14", icon: Gamepad2, color: "#00F0FF" },
+  { label: "Classic games", value: "15", icon: Gamepad2, color: "#00F0FF" },
   { label: "Live leaderboards", value: "∞", icon: Trophy, color: "#FFD100" },
   { label: "Retro sounds", value: "8-bit", icon: Zap, color: "#39FF14" },
 ];
@@ -63,9 +63,9 @@ export default function Home() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 pt-8 md:px-8 md:pt-14">
+    <div className="rmc-home mx-auto max-w-7xl px-4 pt-8 md:px-8 md:pt-14">
       {/* HERO */}
-      <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#16152b] p-6 sm:p-10">
+      <section className="rmc-home-hero relative overflow-hidden rounded-3xl border border-white/10 bg-[#16152b] p-6 sm:p-10">
         <div className="pointer-events-none absolute inset-0 rmc-scanlines opacity-40" />
         <div
           className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full blur-3xl"
@@ -76,7 +76,7 @@ export default function Home() {
           style={{ backgroundColor: "rgba(0,240,255,0.28)" }}
         />
 
-        <div className="relative grid gap-8 md:grid-cols-12">
+        <div className="rmc-home-hero-grid relative grid gap-8 md:grid-cols-12">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -87,18 +87,18 @@ export default function Home() {
               <Sparkles className="h-3.5 w-3.5 text-neon-pink" />
               Remembering My Childhood
             </span>
-            <h1 className="mt-4 font-display text-4xl font-black uppercase leading-[0.95] tracking-tighter text-white sm:text-5xl lg:text-6xl">
-              The <span className="text-neon-pink">arcade</span> that
+            <h1 className="rmc-home-title mt-4 font-display text-4xl font-black uppercase leading-[0.95] tracking-tighter text-white sm:text-5xl lg:text-6xl">
+              The <span className="text-neon-pink">arcade</span> that{" "}
               <br />
               raised us — <span className="text-neon-cyan">reborn.</span>
             </h1>
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-[#c9c8e2]">
+            <p className="rmc-home-description mt-5 max-w-xl text-base leading-relaxed text-[#c9c8e2]">
               RMC CLASSICS is a pocket-sized shrine to the games that filled every
-              rainy afternoon and family road trip. Fourteen timeless classics, real-time
+              rainy afternoon and family road trip. Fifteen timeless classics, real-time
               friend battles, and one global leaderboard — zero downloads.
             </p>
 
-            <div className="mt-8 flex flex-wrap items-center gap-3">
+            <div className="rmc-home-actions mt-8 flex flex-wrap items-center gap-3">
               <Link
                 to="/library"
                 data-testid="hero-play-btn"
@@ -276,7 +276,7 @@ export default function Home() {
               Support RMC Classics
             </h3>
             <p className="mt-2 max-w-2xl text-sm text-[#a3a1c6]">
-              Explore optional ways to support the arcade, including the live iOS Streak Freeze Pack,
+              Explore optional ways to support the arcade, including the in-app Streak Freeze Pack where available,
               the Founding Member pilot, sponsorships, and partnerships. Core games stay playable without paying.
             </p>
           </div>

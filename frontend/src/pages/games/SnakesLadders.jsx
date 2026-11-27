@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import GameShell from "@/components/rmc/GameShell";
 import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
@@ -28,7 +28,7 @@ function applyBoard(pos, roll) {
 }
 
 export default function SnakesLadders() {
-  const { user, submitScore } = useAuth();
+  const { user, submitScore, loading } = useAuth();
   const [you, setYou] = useState(0);
   const [cpu, setCpu] = useState(0);
   const [turn, setTurn] = useState("you");
@@ -40,29 +40,44 @@ export default function SnakesLadders() {
   const [shareOpen, setShareOpen] = useState(false);
   const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
 
+  const generationRef = useRef(0);
+  const cpuTimerRef = useRef(null);
+  useEffect(() => () => {
+    generationRef.current += 1;
+    clearTimeout(cpuTimerRef.current);
+  }, []);
+
   const appendLog = (msg) => setLog((l) => [msg, ...l].slice(0, 6));
 
   useEffect(() => {
-    if (finished && !submitted) {
+    if (finished && !submitted && !loading) {
+      const generation = generationRef.current;
       const won = finished === "you";
       won ? sfx.win() : sfx.lose();
       toast[won ? "success" : "error"](won ? "You won!" : "CPU won");
       setSubmitted(true);
       if (user) {
         submitScore({ game_id: "snakes", won, score: won ? 1 : 0 }).then((res) => {
+          if (generationRef.current !== generation) return;
           if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
-          setShareOpen(true);
+        }).catch(() => {
+          // Keep the local outcome without claiming an unconfirmed award.
+        }).finally(() => {
+          if (generationRef.current === generation) setShareOpen(true);
         });
       } else {
         setShareOpen(true);
       }
     }
-  }, [finished, submitted, user, submitScore]);
+  }, [finished, submitted, user, submitScore, loading]);
 
   useEffect(() => {
-    if (turn === "cpu" && !finished && !busy) {
+    if (turn === "cpu" && !finished) {
+      const generation = generationRef.current;
       setBusy(true);
-      setTimeout(() => {
+      const timer = setTimeout(() => {
+        if (generationRef.current !== generation) return;
+        cpuTimerRef.current = null;
         const r = rollDie();
         sfx.dice();
         setDice(r);
@@ -81,8 +96,10 @@ export default function SnakesLadders() {
         setTurn("you");
         setBusy(false);
       }, 700);
+      cpuTimerRef.current = timer;
+      return () => clearTimeout(timer);
     }
-  }, [turn, cpu, finished, busy]);
+  }, [turn, cpu, finished]);
 
   const rollYou = () => {
     if (turn !== "you" || busy || finished) return;
@@ -109,6 +126,11 @@ export default function SnakesLadders() {
   };
 
   const reset = () => {
+    generationRef.current += 1;
+    clearTimeout(cpuTimerRef.current);
+    cpuTimerRef.current = null;
+    setBusy(false);
+    setXpInfo({ xp: 0, done: false, badges: [] });
     setYou(0); setCpu(0); setTurn("you"); setDice(null); setLog([]); setFinished(null); setSubmitted(false); setShareOpen(false);
   };
 

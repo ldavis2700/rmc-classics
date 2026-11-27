@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import GameShell from "@/components/rmc/GameShell";
 import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
@@ -35,17 +35,21 @@ function pairOff(hand) {
 }
 
 export default function OldMaid() {
-  const { user, submitScore } = useAuth();
+  const { user, loading, submitScore } = useAuth();
   const [state, setState] = useState(null);
   const [turn, setTurn] = useState("you");
   const [message, setMessage] = useState("Draw a card from the CPU. Match its rank to discard a pair.");
   const [winner, setWinner] = useState(null);
-  const [submitted, setSubmitted] = useState(false);
+  const submitted = useRef(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [xpInfo, setXpInfo] = useState({ xp: 0, done: false, badges: [] });
   const [flashCard, setFlashCard] = useState(null);
 
+  const generation = useRef(0);
+  useEffect(() => () => { generation.current += 1; }, []);
+
   const init = () => {
+    generation.current += 1;
     const deck = buildDeckMinusQueen();
     // Deal alternating
     let you = [], cpu = [];
@@ -54,28 +58,42 @@ export default function OldMaid() {
     cpu = pairOff(cpu);
     setState({ you, cpu });
     setTurn("you");
-    setMessage("Pick a card from the CPU's fanned-out hand.");
-    setWinner(null);
-    setSubmitted(false);
+    const initialWinner = you.length === 0 ? "you" : cpu.length === 0 ? "cpu" : null;
+    setMessage(initialWinner === "you" ? "You paired off every card!" : initialWinner === "cpu" ? "CPU paired off every card." : "Pick a card from the CPU's fanned-out hand.");
+    setWinner(initialWinner);
+    submitted.current = false;
+    setXpInfo({ xp: 0, done: false, badges: [] });
     setShareOpen(false);
     setFlashCard(null);
   };
   useEffect(() => { init(); }, []);
 
   const finalize = useCallback(async (won) => {
+    if (submitted.current) return;
+    submitted.current = true;
+    const round = generation.current;
     won ? sfx.win() : sfx.lose();
     toast[won ? "success" : "error"](won ? "You dodged the Old Maid!" : "You're stuck with her!");
-    if (user && !submitted) {
-      const res = await submitScore({ game_id: "oldmaid", won, score: won ? 1 : 0 });
-      if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
-      setSubmitted(true);
+    try {
+      if (user) {
+        const res = await submitScore({ game_id: "oldmaid", won, score: won ? 1 : 0 });
+        if (round !== generation.current) return;
+        if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
+      }
+    } catch {
+      // A failed save must not hide the local outcome or invent rewards.
+    } finally {
+      if (round === generation.current) setShareOpen(true);
     }
-    setShareOpen(true);
-  }, [user, submitted, submitScore]);
+  }, [user, submitScore]);
 
   useEffect(() => {
+    // An immediate deal can finish before a saved session has been restored.
+    // Do not consume this round's result as a guest while identity is unresolved.
+    if (loading) return;
     if (winner === "you" || winner === "cpu") finalize(winner === "you");
-  }, [winner, finalize]);
+  // Reset may deal the same immediate winner; the new hand still needs its own result.
+  }, [winner, finalize, state, loading]);
 
   // If a player has 0 cards after their move, they win (they went out). The other keeps the odd Queen and loses.
   const applyEndCheck = (nextYou, nextCpu) => {
@@ -107,11 +125,17 @@ export default function OldMaid() {
       you.push(taken);
       setMessage(`Drew ${taken.rank}${taken.suit}. No pair — hold it.`);
     }
-    setTimeout(() => setFlashCard(null), 900);
+
     setState({ you, cpu });
     if (applyEndCheck(you, cpu)) return;
     setTurn("cpu");
   };
+
+  useEffect(() => {
+    if (!flashCard) return;
+    const timer = setTimeout(() => setFlashCard(null), 900);
+    return () => clearTimeout(timer);
+  }, [flashCard]);
 
   // CPU turn: pick random card from your hand
   useEffect(() => {
@@ -220,3 +244,5 @@ export default function OldMaid() {
     </GameShell>
   );
 }
+
+

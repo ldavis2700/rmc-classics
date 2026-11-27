@@ -23,8 +23,8 @@ export function setAdPreference(preference) {
 }
 
 export const REVENUE_CHANNELS = [
-  { name: "Streak Freeze Packs", status: "live", detail: "Five one-time streak protections for $0.99 in the iOS app", action: "freeze_pack" },
-  { name: "Founding Membership", status: "testing", detail: "Help shape optional member benefits in the approved interest pilot", action: "founding_pilot" },
+  { name: "Streak Freeze Packs", status: "check in app", detail: "Five one-time streak protections. Check Profile in the mobile app for availability and your store’s price", action: "freeze_pack" },
+  { name: "Founding Membership", status: "testing", detail: "Help shape optional member benefits through our interest pilot", action: "founding_pilot" },
   { name: "Sponsor Placements", status: "ready", detail: "Direct-sold, clearly labeled inventory" },
   { name: "Affiliate Offers", status: "ready", detail: "Commission-earning partner links" },
   { name: "Cosmetic Theme Packs", status: "planned", detail: "Non-competitive visual upgrades" },

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import GameShell from "@/components/rmc/GameShell";
 import ShareCard from "@/components/rmc/ShareCard";
 import { sfx } from "@/lib/sound";
@@ -25,6 +25,17 @@ export default function MemoryMatch() {
   const [shareOpen, setShareOpen] = useState(false);
   const [xpInfo, setXpInfo] = useState({ xp: 0, done: false });
 
+  const roundGeneration = useRef(0);
+  const resolutionTimer = useRef(null);
+  const cancelResolution = () => {
+    clearTimeout(resolutionTimer.current);
+    resolutionTimer.current = null;
+  };
+  useEffect(() => () => {
+    clearTimeout(resolutionTimer.current);
+    roundGeneration.current += 1;
+  }, []);
+
   const won = useMemo(() => deck.every((c) => c.matched), [deck]);
 
   useEffect(() => {
@@ -33,8 +44,14 @@ export default function MemoryMatch() {
       toast.success(`Cleared in ${moves} moves!`);
       setSubmitted(true);
       if (user) {
+        const completedRound = roundGeneration.current;
         submitScore({ game_id: "memory", won: true, score: moves }).then((res) => {
+          if (completedRound !== roundGeneration.current) return;
           if (res.ok) setXpInfo({ xp: res.xp_gained, done: res.challenge_completed, badges: res.newly_unlocked_badges });
+          setShareOpen(true);
+        }).catch(() => {
+          if (completedRound !== roundGeneration.current) return;
+          // Keep the local result available without claiming a saved award.
           setShareOpen(true);
         });
       } else {
@@ -54,15 +71,18 @@ export default function MemoryMatch() {
     if (next.length === 2) {
       setMoves((m) => m + 1);
       const [a, b] = next;
+      setLocked(true);
       if (deck[a].symbol === deck[b].symbol) {
-        setTimeout(() => {
+        resolutionTimer.current = setTimeout(() => {
+          resolutionTimer.current = null;
           setDeck((d) => d.map((c, i) => (i === a || i === b ? { ...c, matched: true } : c)));
           setFlipped([]);
+          setLocked(false);
           sfx.match();
         }, 350);
       } else {
-        setLocked(true);
-        setTimeout(() => {
+        resolutionTimer.current = setTimeout(() => {
+          resolutionTimer.current = null;
           setFlipped([]);
           setLocked(false);
         }, 800);
@@ -71,12 +91,15 @@ export default function MemoryMatch() {
   };
 
   const reset = () => {
+    roundGeneration.current += 1;
+    cancelResolution();
     setDeck(makeDeck());
     setFlipped([]);
     setMoves(0);
     setLocked(false);
     setSubmitted(false);
     setShareOpen(false);
+    setXpInfo({ xp: 0, done: false });
   };
 
   return (
